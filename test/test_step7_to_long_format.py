@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from pandas.util.testing import assert_frame_equal
 import numpy.testing as npt
-from ..step7_to_long_format import parse_column_metadata, transform_row_wide_to_long
+from ..step7_to_long_format import parse_column_metadata, transform_row_wide_to_long, step7_out_to_long_format
 
 # Necessary to specify path this way for tests to run across different platforms
 TEST_DATA_LOCATION = os.getcwd() + os.sep + 'test' + os.sep + 'test_data' + os.sep 
@@ -35,3 +35,7 @@ def test_transform_row_wide_to_long():
             npt.assert_allclose(expanded_row[col], expected_output[col], atol=1e-10)
         else:
             npt.assert_array_equal(expanded_row[col], expected_output[col])
+
+def test_step7_out_to_long_format_length():
+    output = step7_out_to_long_format(TEST_DATA_LOCATION + 'Ania_M3000_percent-engraftment_100818.txt')
+    assert len(output) == (len(TEST_STEP7_DF) * (len(TEST_STEP7_DF.columns) - 1))

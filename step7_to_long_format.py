@@ -37,7 +37,8 @@ def transform_row_wide_to_long(row: pd.DataFrame) -> pd.DataFrame:
     :param row: row from step 7 processed data output
     :returns: data frame expanded to long format
     """
-    long_df: pd.DataFrame = pd.DataFrame(columns=['code', 'user', 'mouse_id', 'day', 'cell_type', 'percent_engraftment'])
+    out_columns: typing.List[str] = ['code', 'user', 'mouse_id', 'day', 'cell_type', 'percent_engraftment']
+    long_df: pd.DataFrame = pd.DataFrame(columns=out_columns)
     code: str = row['code']
     for col in row.index[1:]:
         new_row: typing.Dict = parse_column_metadata(col)
@@ -54,12 +55,23 @@ def step7_out_to_long_format(step7_output: str) -> pd.DataFrame:
     :param step7_output: path to the output from step7 to be transformed
     :returns: data frame of data from step7 in long format
     """
+    out_columns: typing.List[str] = ['code', 'user', 'mouse_id', 'day', 'cell_type', 'percent_engraftment']
+    step7_df = pd.read_csv(step7_output, sep='\t')
+    step7_long_df = pd.DataFrame(columns=out_columns)
+
+    for index_row_tuple in step7_df.iterrows():
+        row_long = transform_row_wide_to_long(index_row_tuple[1])
+        step7_long_df = step7_long_df.append(row_long, ignore_index=True)
+
+    return step7_long_df
+
+
+
 
 def main():
     input_file_path = "/mnt/d/data/aging_proc_03122019/Ania_M3000_percent-engraftment_100818.txt"
-    input_df = pd.read_csv(input_file_path, sep='\t')
-    print(parse_column_metadata(input_df.columns[2]))
-    transform_row_wide_to_long(input_df.loc[1]).to_csv('test/test_data/test_row_to_long.csv',index=False)
+    results = step7_out_to_long_format(input_file_path)
+    print(results)
 
 if __name__ == "__main__":
     main()
