@@ -1,0 +1,12 @@
+# Python Compiled Files
+*.pyc
+__pycache__
+
+# Virtual Environment
+.venv
+
+# VS Code specific files
+*.code-workspace
+
+# Testing cache
+.pytest_cache
