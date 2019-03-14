@@ -36,7 +36,7 @@ def plot_clone_count(clone_counts: typing.Dict, time_points: typing.List[int], t
         axes.append(ax.bar(ind + width * i, clone_counts[cell_type], width, color=colors[i])[0]) # Used for setting legend
         labels.append(cell_type)
 
-    # Plot Total
+    # Plot Total change to clone_counts section
     total_clones=[]
 
     for time_point_index in range(len(time_points)):
