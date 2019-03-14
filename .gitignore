@@ -11,3 +11,6 @@ __pycache__
 
 # Testing cache
 .pytest_cache
+
+# Output Files
+output

@@ -1,5 +1,6 @@
 # Stem Cell Aging Analysis tools
 __Intended for use in the Rong Lu Lab__
+Uses python 3.7.2
 
 ## Usage Instructions
 

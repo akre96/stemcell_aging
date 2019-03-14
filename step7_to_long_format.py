@@ -1,8 +1,18 @@
 """
-Initial exploration of step 7 processed data.
+Takes output of step 7 and converts to long format for easier data manipulation
+Saves output to specified output_directory with same input file name + '_long'
+
+Example Usage:
+python step7_to_long_format.py -i test/test_data -o output122019 -o output
+
 """
 import typing
+import sys
+import os
+import glob
+import multiprocessing as mp
 import re
+import argparse
 import pandas as pd
 
 
@@ -37,7 +47,7 @@ def transform_row_wide_to_long(row: pd.DataFrame) -> pd.DataFrame:
     :param row: row from step 7 processed data output
     :returns: data frame expanded to long format
     """
-    out_columns: typing.List[str] = ['code', 'user', 'mouse_id', 'day', 'cell_type', 'percent_engraftment']
+    out_columns: typing.List[str] = ['mouse_id', 'code', 'user', 'day', 'cell_type', 'percent_engraftment']
     long_df: pd.DataFrame = pd.DataFrame(columns=out_columns)
     code: str = row['code']
     for col in row.index[1:]:
@@ -52,10 +62,11 @@ def step7_out_to_long_format(step7_output: str) -> pd.DataFrame:
     Takes the output of step 7 and transforms it in to long format with for
     code, user, mouse_id, day, cell_type, and percent_engraftment
 
+
     :param step7_output: path to the output from step7 to be transformed
     :returns: data frame of data from step7 in long format
     """
-    out_columns: typing.List[str] = ['code', 'user', 'mouse_id', 'day', 'cell_type', 'percent_engraftment']
+    out_columns: typing.List[str] = ['mouse_id', 'code', 'user', 'day', 'cell_type', 'percent_engraftment']
     step7_df = pd.read_csv(step7_output, sep='\t')
     step7_long_df = pd.DataFrame(columns=out_columns)
 
@@ -65,13 +76,71 @@ def step7_out_to_long_format(step7_output: str) -> pd.DataFrame:
 
     return step7_long_df
 
+def step7_out_to_long_format_write(inputs: typing.Tuple)  -> None:
+    """
+    runs step7_out_to_long_format such that it writes out csv files
+
+    :param inputs: tuple of the input file name and output file dir
+    """
+    step7_output, write_dir = inputs
+
+    print('Transforming file: ' + step7_output)
+    step7_long_df = step7_out_to_long_format(step7_output)
+    step7_output_title = os.path.splitext(os.path.basename(step7_output))[0]
+    step7_long_df.to_csv(write_dir + os.sep + step7_output_title + '_long.csv', index=False)
+    print('Written to: ' + write_dir + os.sep + step7_output_title + '_long.csv')
+
 
 
 
 def main():
-    input_file_path = "/mnt/d/data/aging_proc_03122019/Ania_M3000_percent-engraftment_100818.txt"
-    results = step7_out_to_long_format(input_file_path)
-    print(results)
+    """ Transforms inputted files from wide to long format
+    Parses input arguments and finds either a single file or entire folder.
+    Input is then transformed from wide to long format and saved to specified output directory.
+
+    """
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description="Transform input files from wide to long format")
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing only data to be formatted or a single file to format', required=True)
+    parser.add_argument('-p', '--prefix', dest='prefix', help='Optional prefix to filter by when finding input files from folder', default=False)
+    parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='.')
+
+    args = parser.parse_args()
+
+    # If directory supplied, find all inputs
+    if os.path.isdir(args.input):
+        print('Inputs being parsed from folder: ' + args.input)
+
+        # Filters by prefix if supplied
+        if args.prefix:
+            input_files: typing.List[str] = glob.glob(args.input + os.sep + args.prefix + "*.txt")
+        else:
+            input_files: typing.List[str] = glob.glob(args.input + os.sep + "*.txt")
+
+        # Inputs zipped to allow parallelization
+        input_tuple = zip(input_files, [args.output_dir for i in range(len(input_files))])
+
+        print('Found the following input files: ')
+        for file_name in input_files:
+            print(file_name)
+
+        print('Beginning to transform input files from wide to long format')
+        pool = mp.Pool()
+        pool.map(step7_out_to_long_format_write, input_tuple)
+        print('Done.')
+
+    # If single file, runs just once
+    elif os.path.isfile(args.input):
+        print('Input File: ' + args.input)
+        print('Beginning to transform input files from wide to long format')
+        step7_out_to_long_format_write((args.output_dir, args.input))
+        print('Done.')
+
+    else:
+        print('Error: Input file or folder not found')
+        sys.exit(1)
+
+
 
 if __name__ == "__main__":
     main()
