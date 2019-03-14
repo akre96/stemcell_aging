@@ -3,7 +3,7 @@ Takes output of step 7 and converts to long format for easier data manipulation
 Saves output to specified output_directory with same input file name + '_long'
 
 Example Usage:
-python step7_to_long_format.py -i test/test_data -o output122019 -o output
+python step7_to_long_format.py -i test/test_data -o output_file_or_folder
 
 """
 import typing
