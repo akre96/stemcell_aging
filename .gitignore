@@ -11,6 +11,7 @@ venv
 
 # Testing cache
 .pytest_cache
+*_cache
 
 # Output Files
 output
@@ -18,3 +19,6 @@ output
 # Data files
 *.csv
 *.txt
+
+# Temp Files
+*~
