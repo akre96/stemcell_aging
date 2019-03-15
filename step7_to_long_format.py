@@ -6,7 +6,7 @@ Example Usage:
 python step7_to_long_format.py -i test/test_data -o output_file_or_folder
 
 """
-import typing
+from typing import Match, List, Dict, Any, Tuple
 import sys
 import os
 import glob
@@ -16,7 +16,7 @@ import argparse
 import pandas as pd
 
 
-def parse_column_metadata(col_name: str) -> typing.Dict[str, str]:
+def parse_column_metadata(col_name: str) -> Dict[str, Any]:
     """
     Extracts user, mouse_id, day, and cell_type metadata from column string
 
@@ -24,7 +24,7 @@ def parse_column_metadata(col_name: str) -> typing.Dict[str, str]:
     :returns: Dictionary with user, mouse_id, day, cell_type keys
     """
     match_pattern: str = r'(\w+)_(M\d+)D(\d+)C(\w+)' # Finds [user]_[mouse_id]D[days]C[cell_type]
-    matches: re.match = re.match(match_pattern, col_name)
+    matches: Match[str] = re.match(match_pattern, col_name)
 
     if len(matches.groups()) <= 3:
         print("Error: Did not match all groups")
@@ -47,11 +47,11 @@ def transform_row_wide_to_long(row: pd.DataFrame) -> pd.DataFrame:
     :param row: row from step 7 processed data output
     :returns: data frame expanded to long format
     """
-    out_columns: typing.List[str] = ['mouse_id', 'code', 'user', 'day', 'cell_type', 'percent_engraftment']
+    out_columns: List[str] = ['mouse_id', 'code', 'user', 'day', 'cell_type', 'percent_engraftment']
     long_df: pd.DataFrame = pd.DataFrame(columns=out_columns)
     code: str = row['code']
     for col in row.index[1:]:
-        new_row: typing.Dict = parse_column_metadata(col)
+        new_row: Dict = parse_column_metadata(col)
         new_row['code'] = code
         new_row['percent_engraftment'] = float(row[col])
         long_df = long_df.append(new_row, ignore_index=True)
@@ -66,7 +66,7 @@ def step7_out_to_long_format(step7_output: str) -> pd.DataFrame:
     :param step7_output: path to the output from step7 to be transformed
     :returns: data frame of data from step7 in long format
     """
-    out_columns: typing.List[str] = ['mouse_id', 'code', 'user', 'day', 'cell_type', 'percent_engraftment']
+    out_columns: List[str] = ['mouse_id', 'code', 'user', 'day', 'cell_type', 'percent_engraftment']
     step7_df = pd.read_csv(step7_output, sep='\t')
     step7_long_df = pd.DataFrame(columns=out_columns)
 
@@ -76,7 +76,7 @@ def step7_out_to_long_format(step7_output: str) -> pd.DataFrame:
 
     return step7_long_df
 
-def step7_out_to_long_format_write(inputs: typing.Tuple)  -> None:
+def step7_out_to_long_format_write(inputs: Tuple)  -> None:
     """
     runs step7_out_to_long_format such that it writes out csv files
 
@@ -113,9 +113,9 @@ def main():
 
         # Filters by prefix if supplied
         if args.prefix:
-            input_files: typing.List[str] = glob.glob(args.input + os.sep + args.prefix + "*.txt")
+            input_files: List[str] = glob.glob(args.input + os.sep + args.prefix + "*.txt")
         else:
-            input_files: typing.List[str] = glob.glob(args.input + os.sep + "*.txt")
+            input_files: List[str] = glob.glob(args.input + os.sep + "*.txt")
 
         # Inputs zipped to allow parallelization
         input_tuple = zip(input_files, [args.output_dir for i in range(len(input_files))])

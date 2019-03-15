@@ -6,28 +6,31 @@ Returns:
 
 from typing import List, Tuple
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
-                     threshold_column: str,
-                     analyzed_cell_types: List[str]
+                     analyzed_cell_types: List[str],
+                     threshold_column: str = "percent_engraftment",
                      ) -> pd.DataFrame:
-    """Filter dataframe based on numerical thresholds
+    """Filter dataframe based on numerical thresholds, adds month column
 
     Arguments:
         input_df {pd.DataFrame} -- Input dataframe
         threshold {float} -- minimum value to allowed in output dataframe
+        analyzed_cell_types {List[str]} -- List of cells to filter for
         threshold_column {str} -- column to filter by
 
     Returns:
         pd.DataFrame -- thresholded dataframe
     """
 
-    analyzed_cell_types_df = input_df[input_df.cell_type.isin(analyzed_cell_types)]
+    analyzed_cell_types_df = input_df.loc[input_df.cell_type.isin(analyzed_cell_types)]
     threshold_filtered_df = analyzed_cell_types_df[analyzed_cell_types_df[threshold_column] > threshold]
+    threshold_filtered_df['month'] = pd.to_numeric(round(threshold_filtered_df['day']/30), downcast='integer')
     return threshold_filtered_df
 
 
@@ -52,7 +55,10 @@ def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     return clone_counts
 
 
-def plot_clone_count(clone_counts: pd.DataFrame, threshold: float, analyzed_cell_types: List[str]) -> Tuple:
+def plot_clone_count(clone_counts: pd.DataFrame,
+                     threshold: float,
+                     analyzed_cell_types: List[str]
+                    ) -> Tuple:
     """ Plots clone counts, based on stats from count_clones function
 
     Arguments:
@@ -80,10 +86,42 @@ def plot_clone_count(clone_counts: pd.DataFrame, threshold: float, analyzed_cell
 
     return (fig, axis)
 
+def find_enriched_clones_at_time(input_df: pd.DataFrame,
+                                 enrichement_month: int,
+                                 threshold: float,
+                                 threshold_column: str = 'percent_engraftment',
+                                 ) -> np.array:
+    """ Finds clones enriched at a specific time point
+
+    Arguments:
+        input_df {pd.DataFrame} -- long format data, formatted with filter_threshold()
+        enrichement_month {int} -- month of interest
+        threshold {int} -- threshold for significant engraftment
+        threshold_column {str} -- column on which to apply threshold
+
+    Returns:
+        np.array -- [description]
+    """
+
+    filter_index = (input_df[threshold_column] > threshold) & (input_df['month'] == enrichement_month)
+    enriched_at_month_df = input_df[filter_index]
+    enriched_clones = enriched_at_month_df['code'].unique()
+    return enriched_clones
+
+def plot_clone_engraftment(input_df: pd.DataFrame) -> plt.axis:
+    axis = sns.lineplot(x='month',
+                        y='percent_engraftment',
+                        hue='cell_type',
+                        # units='code',
+                        # estimator=None,
+                        data=input_df,
+                        legend='brief',
+                        sort=True,
+                        )
+    return (axis)
 
 def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                                    thresholds: List[float],
-                                   threshold_column: str,
                                    analysed_cell_types: List[str]
                                   ) -> None:
     """Wrapper of plot_clone_counts to plot multiple for desired threshold values
@@ -100,10 +138,30 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
 
     for thresh in thresholds:
         print('Plotting at threshold: ' + str(thresh))
-        threshold_df = filter_threshold(input_df, thresh, threshold_column, analysed_cell_types)
+        threshold_df = filter_threshold(input_df, thresh, analysed_cell_types)
         clone_counts = count_clones(threshold_df)
 
         plot_clone_count(clone_counts, thresh, analysed_cell_types)
+
+def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
+                                enrichement_month: int,
+                                enrichment_threshold: float
+                                ) -> None:
+    plt.subplot(2,1,1)
+    enriched_clones = find_enriched_clones_at_time(filtered_df, enrichement_month, enrichment_threshold)
+    enriched_df = filtered_df[filtered_df['code'].isin(enriched_clones)]
+    axis = plot_clone_engraftment(enriched_df)
+    axis.set_title('Clones With % Engraftment > '
+                   + str(enrichment_threshold)
+                   + ' At Month: '
+                   + str(enrichement_month))
+    plt.subplot(2,1,2)
+    sns.violinplot(x='month',
+                   y='percent_engraftment',
+                   hue='cell_type',
+                   data=enriched_df,
+                   split=True,
+                   )
 
 
 def main():
@@ -111,13 +169,12 @@ def main():
     """
 
     test_input_df = pd.read_csv('Ania_M_all_percent-engraftment_100818_long.csv')
-    # test_input_df = pd.read_csv('output/step7_to_long.csv')
     analysed_cell_types = ['gr', 'b']
-    thresholds = [0.0, 0.01, 0.05, 0.1, 0.2]
-    thresholds = [.01]
-    threshold_column = 'percent_engraftment'
 
-    plot_clone_count_by_thresholds(test_input_df, thresholds, threshold_column, analysed_cell_types)
+    filtered_df = filter_threshold(test_input_df, 0.0, analysed_cell_types)
+    plot_clone_enriched_at_time(filtered_df, 4, 0.01)
+    # thresholds = [0.0, 0.01, 0.05, 0.1, 0.2]
+    # plot_clone_count_by_thresholds(test_input_df, thresholds, analysed_cell_types)
     plt.show()
 
 
