@@ -14,3 +14,7 @@ venv
 
 # Output Files
 output
+
+# Data files
+*.csv
+*.txt
