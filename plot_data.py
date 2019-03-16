@@ -108,18 +108,6 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
     enriched_clones = enriched_at_month_df['code'].unique()
     return enriched_clones
 
-def plot_clone_engraftment(input_df: pd.DataFrame) -> plt.axis:
-    axis = sns.lineplot(x='month',
-                        y='percent_engraftment',
-                        hue='cell_type',
-                        # units='code',
-                        # estimator=None,
-                        data=input_df,
-                        legend='brief',
-                        sort=True,
-                        )
-    return (axis)
-
 def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                                    thresholds: List[float],
                                    analysed_cell_types: List[str]
@@ -147,21 +135,27 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_month: int,
                                 enrichment_threshold: float
                                 ) -> None:
-    plt.subplot(2,1,1)
+    plt.subplot(2, 1, 1)
     enriched_clones = find_enriched_clones_at_time(filtered_df, enrichement_month, enrichment_threshold)
     enriched_df = filtered_df[filtered_df['code'].isin(enriched_clones)]
-    axis = plot_clone_engraftment(enriched_df)
+    axis = sns.lineplot(x='month',
+                        y='percent_engraftment',
+                        hue='cell_type',
+                        data=enriched_df,
+                        legend='brief',
+                        sort=True,
+                        )
     axis.set_title('Clones With % Engraftment > '
                    + str(enrichment_threshold)
                    + ' At Month: '
                    + str(enrichement_month))
-    plt.subplot(2,1,2)
-    sns.violinplot(x='month',
-                   y='percent_engraftment',
-                   hue='cell_type',
-                   data=enriched_df,
-                   split=True,
-                   )
+    plt.subplot(2, 1, 2)
+    sns.swarmplot(x='month',
+                  y='percent_engraftment',
+                  hue='cell_type',
+                  data=enriched_df,
+                  dodge=True,
+                  )
 
 
 def main():
@@ -173,8 +167,8 @@ def main():
 
     filtered_df = filter_threshold(test_input_df, 0.0, analysed_cell_types)
     plot_clone_enriched_at_time(filtered_df, 4, 0.01)
-    # thresholds = [0.0, 0.01, 0.05, 0.1, 0.2]
-    # plot_clone_count_by_thresholds(test_input_df, thresholds, analysed_cell_types)
+    thresholds = [0.05, 0.1, 0.2]
+    plot_clone_count_by_thresholds(test_input_df, thresholds, analysed_cell_types)
     plt.show()
 
 
