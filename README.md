@@ -2,6 +2,15 @@
 __Intended for use in the Rong Lu Lab__
 Uses python 3.7.2
 
+## Directory Structure
+  - __test:__ Folder for unit testing functions
+    - __test_data:__ Folder for curated data with known output
+  - __step7_to_long_format.py:__ Takes output of step 7 scripts and formats with columns: code, mouse_id, user, cell_type, day, percent_engraftment
+  - __consolidate_data.py:__ takes all long format files specified, and creates single csv output. Used to get all data from all mice in one place
+  - __plot_data.py:__ Collection of functions used for plotting formatted data.
+  - __requirements.txt:__ File of dependencies used to generate  python3 environment able to run scripts
+
+
 ## Usage Instructions
 ### Setting up environment
   1. Load virtual environment manager of choice using python 3.7.x
@@ -42,13 +51,6 @@ Example:
 In the root directory of the repository run:  
 `pytest`
 
-## Directory Structure
-  - __test:__ Folder for unit testing functions
-    - __test_data:__ Folder for curated data with known output
-  - __step7_to_long_format.py:__ Takes output of step 7 scripts and formats with columns: code, mouse_id, user, cell_type, day, percent_engraftment
-  - __consolidate_data.py:__ takes all long format files specified, and creates single csv output. Used to get all data from all mice in one place
-  - __plot_data.py:__ Collection of functions used for plotting formatted data.
-  - __requirements.txt:__ File of dependencies used to generate  python3 environment able to run scripts
   
 
 ---
