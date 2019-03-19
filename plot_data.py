@@ -192,13 +192,13 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
 
         print('Plotting clones enriched at month '+str(month))
 
-        axis = sns.lineplot(x='month',
-                            y='percent_engraftment',
-                            hue='cell_type',
-                            data=enriched_df,
-                            legend='brief',
-                            sort=True,
-                            )
+        sns.lineplot(x='month',
+                     y='percent_engraftment',
+                     hue='cell_type',
+                     data=enriched_df,
+                     legend='brief',
+                     sort=True,
+                    )
         plt.suptitle('Clones With Abundance > '
                        + str(enrichment_threshold)
                        + ' % WBC At Month: '
@@ -313,14 +313,6 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
 
 
 def append_mouse_id_group_info(input_df: pd.DataFrame, group_info_df: pd.DataFrame) -> pd.DataFrame:
-    print(group_info_df.mouse_id)
-    print(input_df.mouse_id)
-    #def return_group(row):
-        #if group_info_df.loc[group_info_df.mouse_id == row.mouse_id].empty:
-            #print('no_group')
-            #return 'no_group'
-        #return group_info_df.loc[group_info_df.mouse_id == row.mouse_id].group
-    #appended_df = input_df.assign(group=lambda row: return_group(row))
     appended_df = pd.merge(input_df, group_info_df, how='left', on=['mouse_id'])
     return appended_df
 
@@ -330,12 +322,11 @@ def main():
 
 
     input_df = pd.read_csv('Ania_M_all_percent-engraftment_100818_long.csv')
-    group_info_df = pd.read_csv('~/Data/mouse_id_group.csv')
 
     analysed_cell_types = ['gr', 'b']
 
-    with_group_info_df = append_mouse_id_group_info(input_df, group_info_df)
-    present_clones_df = filter_threshold(with_group_info_df, 0.01, analysed_cell_types)
+    presence_threshold = 0.01
+    present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
     
     # Venn diagram of present clones
     #venn_barcode_in_time(present_clones_df,
@@ -354,22 +345,22 @@ def main():
                         #)
 
     # heatmap present clones
-    clustermap_clone_abundance(present_clones_df,
-                               analysed_cell_types,
-                               normalize=True,
-                               save=True,
-                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
-                               save_format='png',
-                               group='aging_phenotype',
-                              )
-    clustermap_clone_abundance(present_clones_df,
-                               analysed_cell_types,
-                               normalize=True,
-                               save=True,
-                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
-                               save_format='png',
-                               group='no_change',
-                              )
+    #clustermap_clone_abundance(present_clones_df,
+                               #analysed_cell_types,
+                               #normalize=True,
+                               #save=True,
+                               #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
+                               #save_format='png',
+                               #group='aging_phenotype',
+                              #)
+    #clustermap_clone_abundance(present_clones_df,
+                               #analysed_cell_types,
+                               #normalize=True,
+                               #save=True,
+                               #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
+                               #save_format='png',
+                               #group='no_change',
+                              #)
 
     # Count clones by threshold
     #clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
