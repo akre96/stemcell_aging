@@ -11,49 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pyvenn import venn
-
-def filter_threshold(input_df: pd.DataFrame,
-                     threshold: float,
-                     analyzed_cell_types: List[str],
-                     threshold_column: str = "percent_engraftment",
-                     ) -> pd.DataFrame:
-    """Filter dataframe based on numerical thresholds, adds month column
-
-    Arguments:
-        input_df {pd.DataFrame} -- Input dataframe
-        threshold {float} -- minimum value to allowed in output dataframe
-        analyzed_cell_types {List[str]} -- List of cells to filter for
-        threshold_column {str} -- column to filter by
-
-    Returns:
-        pd.DataFrame -- thresholded dataframe
-    """
-
-    analyzed_cell_types_df = input_df.loc[input_df.cell_type.isin(analyzed_cell_types)]
-    threshold_filtered_df = analyzed_cell_types_df[analyzed_cell_types_df[threshold_column] > threshold]
-    threshold_filtered_df['month'] = pd.to_numeric(round(threshold_filtered_df['day']/30), downcast='integer')
-    return threshold_filtered_df
-
-
-def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
-    """ Count unique clones per cell type
-
-    Arguments:
-        input_df {pd.DataFrame} -- long formatted step7 output
-
-    Returns:
-        pd.DataFrame -- DataFrame with columns 'mouse_id','day', 'cell_type', 'code' where
-        'code' contains count of unique barcodes
-    """
-
-    clone_counts = pd.DataFrame(
-        input_df.groupby(['mouse_id', 'day', 'cell_type'])['code'].nunique()
-        ).reset_index()
-    total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', 'day'])['code'].nunique()).reset_index()
-    total_clone_counts['cell_type'] = 'Total'
-    clone_counts = clone_counts.append(total_clone_counts, sort=True)
-
-    return clone_counts
+from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -94,48 +52,12 @@ def plot_clone_count(clone_counts: pd.DataFrame,
     plt.xlabel('Month')
     plt.ylabel('Number of Clones')
     if save:
-        fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.','-') + '_' + group + '.' + save_format
+        fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
         plt.savefig(fname, format=save_format)
 
     return (fig, axis)
 
-def find_enriched_clones_at_time(input_df: pd.DataFrame,
-                                 enrichment_month: int,
-                                 enrichment_threshold: float,
-                                 cell_type: str,
-                                 threshold_column: str = 'percent_engraftment',
-                                 ) -> pd.DataFrame:
-    """ Finds clones enriched at a specific time point
 
-    Arguments:
-        input_df {pd.DataFrame} -- long format data, formatted with filter_threshold()
-        enrichment_month {int} -- month of interest
-        threshold {int} -- threshold for significant engraftment
-        cell_type {str} -- Cell type to select for
-        threshold_column {str} -- column on which to apply threshold
-
-    Returns:
-        pd.DataFrame -- [description]
-    """
-
-    filter_index = (input_df[threshold_column] > enrichment_threshold) & (input_df['month'] == enrichment_month) & (input_df['cell_type'] == cell_type)
-    enriched_at_month_df = input_df.loc[filter_index]
-    enriched_clones = enriched_at_month_df['code']
-
-    cell_df = input_df.loc[input_df.cell_type == cell_type]
-    should_be_empty_index = (cell_df.month == enrichment_month) & (cell_df.percent_engraftment < enrichment_threshold)
-    stray_clones = cell_df[should_be_empty_index]['code'].unique()
-
-    enriched_clones_df = cell_df.loc[(~cell_df['code'].isin(stray_clones)) & (cell_df['code'].isin(enriched_clones))]
-    return enriched_clones_df
-
-
-def combine_enriched_clones_at_time(input_df: pd.DataFrame, enrichement_month: int, threshold: float, analyzed_cell_types: List[str]) -> pd.DataFrame:
-    all_enriched_df = pd.DataFrame()
-    for cell_type in analyzed_cell_types:
-        enriched_cell_df = find_enriched_clones_at_time(input_df, enrichement_month, threshold, cell_type)
-        all_enriched_df = all_enriched_df.append(enriched_cell_df)
-    return all_enriched_df
         
 
 def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
@@ -311,11 +233,6 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
             fname = fname_prefix + '_median.' + save_format
             plt.savefig(fname, format=save_format)
 
-
-def append_mouse_id_group_info(input_df: pd.DataFrame, group_info_df: pd.DataFrame) -> pd.DataFrame:
-    appended_df = pd.merge(input_df, group_info_df, how='left', on=['mouse_id'])
-    return appended_df
-
 def main():
     """ Create plots
     """
@@ -328,6 +245,25 @@ def main():
     presence_threshold = 0.01
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
     
+    lineage_bias_df = pd.read_csv('lineage_bias.csv')
+    lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.has_null == False]
+
+    plt.figure()
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='code', legend=False)
+    plt.title('Myeloid (+) / Lymphoid (-) Bias in All Mice')
+
+    plt.figure()
+    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='code', legend=False)
+    plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
+
+    plt.figure()
+    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='code', legend=False)
+    plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
+
+    plt.show()
+
     # Venn diagram of present clones
     #venn_barcode_in_time(present_clones_df,
                          #analysed_cell_types,
