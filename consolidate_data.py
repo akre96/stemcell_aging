@@ -36,6 +36,7 @@ def main():
             all_data_df = all_data_df.append(mouse_data_df, ignore_index=True)
 
         appended_df = pd.merge(all_data_df, group_info_df, how='left', on=['mouse_id'])
+        appended_df['month'] = pd.to_numeric(round(appended_df['day']/30), downcast='integer')
     else:
         print('No Input Files Found at: ' + args.input)
         sys.exit(1)
