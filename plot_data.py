@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pyvenn import venn
-from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time
+from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -301,10 +301,57 @@ def main():
     presence_threshold = 0.01
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
     
-    lineage_bias_df = pd.read_csv('lineage_bias.csv')
-    print(lineage_bias_df[lineage_bias_df.has_null])
-    lineage_bias_df = lineage_bias_df.loc[~lineage_bias_df.has_null]
+    lineage_bias_df = pd.read_csv('lineage_bias_from_counts.csv')
 
+    threshold = .2
+    b_threshod= .5 
+    plt.figure()
+    dominant_b_4m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  enrichment_month=4,
+                                                  enrichment_threshold=threshold,
+                                                  cell_type='b',
+                                                  threshold_column='b_percent_engraftment',
+                                                  lineage_bias=True,
+                                                 )
+    sns.lineplot(x='month', y='lineage_bias', data=dominant_b_4m, hue='mouse_id', units='code',style='group', estimator=None)
+    plt.title('abundant at 4 month in b cells, threshold: ' + str(threshold))
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    plt.figure()
+    dominant_gr_4m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  enrichment_month=4,
+                                                  enrichment_threshold=threshold,
+                                                  cell_type='gr',
+                                                  threshold_column='gr_percent_engraftment',
+                                                  lineage_bias=True,
+                                                 )
+    sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_4m, hue='mouse_id', units='code',style='group', estimator=None)
+    plt.title('abundant at 4 month in gr cells, threshold: ' + str(threshold))
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    plt.figure()
+    dominant_b_12m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  enrichment_month=12,
+                                                  enrichment_threshold=threshold,
+                                                  cell_type='b',
+                                                  threshold_column='b_percent_engraftment',
+                                                  lineage_bias=True,
+                                                 )
+    sns.lineplot(x='month', y='lineage_bias', data=dominant_b_12m, hue='mouse_id', units='code',style='group', estimator=None)
+    plt.title('abundant at 12 month in b cells, threshold: ' + str(threshold))
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    plt.figure()
+    dominant_gr_12m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  enrichment_month=12,
+                                                  enrichment_threshold=threshold,
+                                                  cell_type='gr',
+                                                  threshold_column='gr_percent_engraftment',
+                                                  lineage_bias=True,
+                                                 )
+    sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_12m, hue='mouse_id', units='code',style='group', estimator=None)
+    plt.title('abundant at 12 month in gr cells, threshold: ' + str(threshold))
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     # Lineage Bias Line Plots
     #plt.figure()
     #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group') 

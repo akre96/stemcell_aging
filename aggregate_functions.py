@@ -54,8 +54,9 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
                                  enrichment_threshold: float,
                                  cell_type: str,
                                  threshold_column: str = 'percent_engraftment',
+                                 lineage_bias: bool = False,
                                  ) -> pd.DataFrame:
-    """ Finds clones enriched at a specific time point
+    """ Finds clones enriched at a specific time point for a cell type
 
     Arguments:
         input_df {pd.DataFrame} -- long format data, formatted with filter_threshold()
@@ -63,23 +64,46 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
         threshold {int} -- threshold for significant engraftment
         cell_type {str} -- Cell type to select for
         threshold_column {str} -- column on which to apply threshold
+    
+    Keyword Arguments:
+        lineage_bias {bool} -- Checks if running lineage bias data (default: False)
 
     Returns:
-        pd.DataFrame -- [description]
+        pd.DataFrame -- DataFrame with only clones enriched at specified timepoint
     """
 
-    filter_index = (input_df[threshold_column] > enrichment_threshold) & (input_df['month'] == enrichment_month) & (input_df['cell_type'] == cell_type)
+    if lineage_bias:
+        filter_index = (input_df[threshold_column] > enrichment_threshold) & (input_df['month'] == enrichment_month)
+    else:
+        filter_index = (input_df[threshold_column] > enrichment_threshold) & (input_df['month'] == enrichment_month) & (input_df['cell_type'] == cell_type)
+
     enriched_at_month_df = input_df.loc[filter_index]
     enriched_clones = enriched_at_month_df['code']
 
-    cell_df = input_df.loc[input_df.cell_type == cell_type]
-    should_be_empty_index = (cell_df.month == enrichment_month) & (cell_df.percent_engraftment < enrichment_threshold)
+    if lineage_bias:
+        cell_df = input_df
+    else:
+        cell_df = input_df.loc[input_df.cell_type == cell_type]
+
+    should_be_empty_index = (cell_df.month == enrichment_month) & (cell_df[threshold_column] < enrichment_threshold)
     stray_clones = cell_df[should_be_empty_index]['code'].unique()
 
     enriched_clones_df = cell_df.loc[(~cell_df['code'].isin(stray_clones)) & (cell_df['code'].isin(enriched_clones))]
     return enriched_clones_df
 
 def combine_enriched_clones_at_time(input_df: pd.DataFrame, enrichement_month: int, threshold: float, analyzed_cell_types: List[str]) -> pd.DataFrame:
+    """ wrapper of find_enriched_clones_at_time() to combine entries from multiple cell types
+    
+    Arguments:
+        input_df {pd.DataFrame} -- data frame with month value
+        enrichement_month {int} -- month to check enrichment at
+        threshold {float} -- threshold for enrichment
+        analyzed_cell_types {List[str]} -- cell types to analyze
+    
+    Returns:
+        pd.DataFrame -- data frame of enriched clones in specified cell types and timepoint
+    """
+
     all_enriched_df = pd.DataFrame()
     for cell_type in analyzed_cell_types:
         enriched_cell_df = find_enriched_clones_at_time(input_df, enrichement_month, threshold, cell_type)
