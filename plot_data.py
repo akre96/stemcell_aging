@@ -246,21 +246,44 @@ def main():
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
     
     lineage_bias_df = pd.read_csv('lineage_bias.csv')
-    lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.has_null == False]
+    print(lineage_bias_df[lineage_bias_df.has_null])
+    lineage_bias_df = lineage_bias_df.loc[~lineage_bias_df.has_null]
 
-    plt.figure()
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='code', legend=False)
-    plt.title('Myeloid (+) / Lymphoid (-) Bias in All Mice')
+    # Lineage Bias Line Plots
+    #plt.figure()
+    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group') 
+    #plt.title('Myeloid (+) / Lymphoid (-) Bias in All Mice')
 
-    plt.figure()
-    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='code', legend=False)
-    plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
+    #plt.figure()
+    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='mouse_id', units='code', estimator=None)
+    #plt.title('Myeloid (+) / Lymphoid (-) Bias in All Mice')
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-    plt.figure()
-    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='code', legend=False)
-    plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
+    #plt.figure()
+    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
+    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    #plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    #plt.figure()
+    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
+    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    #plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    # Lineage Bias Swarmplots
+
+    #plt.figure()
+    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
+    #ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id',dodge=True)
+    #ax.legend_.remove()
+    #plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
+
+    #plt.figure()
+    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
+    #ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', dodge=True)
+    #ax.legend_.remove()
+    #plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
 
     plt.show()
 
