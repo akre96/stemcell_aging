@@ -4,7 +4,7 @@ Returns:
     None - Shows plots
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import os
 import pandas as pd
 import numpy as np
@@ -287,6 +287,46 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
             fname = fname_prefix + '_median.' + save_format
             plt.savefig(fname, format=save_format)
 
+def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame, title_addon: str = ''):
+    plt.figure()
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group') 
+    plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
+    plt.title(title_addon)
+
+    plt.figure()
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='mouse_id', style='group', units='code', estimator=None)
+    plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice by Clone')
+    plt.title(title_addon)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    plt.figure()
+    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
+    plt.title(title_addon)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+    plt.figure()
+    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in no_change')
+    plt.title(title_addon)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
+def plot_lineage_bias_swarm_by_group(lineage_bias_df: pd.DataFrame) -> None:
+    plt.figure()
+    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
+    ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id',dodge=True)
+    ax.legend_.remove()
+    plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
+
+    plt.figure()
+    lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
+    ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', dodge=True)
+    ax.legend_.remove()
+    plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
+
+
 def main():
     """ Create plots
 
@@ -303,90 +343,60 @@ def main():
     
     lineage_bias_df = pd.read_csv('lineage_bias_from_counts.csv')
 
-    threshold = .2
-    b_threshod= .5 
-    plt.figure()
-    dominant_b_4m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  enrichment_month=4,
-                                                  enrichment_threshold=threshold,
-                                                  cell_type='b',
-                                                  threshold_column='b_percent_engraftment',
-                                                  lineage_bias=True,
-                                                 )
-    sns.lineplot(x='month', y='lineage_bias', data=dominant_b_4m, hue='mouse_id', units='code',style='group', estimator=None)
-    plt.title('abundant at 4 month in b cells, threshold: ' + str(threshold))
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    #threshold = .2
+    #plt.figure()
+    #dominant_b_4m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  #enrichment_month=4,
+                                                  #enrichment_threshold=threshold,
+                                                  #cell_type=None,
+                                                  #threshold_column='b_percent_engraftment',
+                                                  #lineage_bias=True,
+                                                 #)
+    #sns.lineplot(x='month', y='lineage_bias', data=dominant_b_4m, hue='mouse_id', units='code',style='group', estimator=None)
+    #plt.title('abundant at 4 month in b cells, threshold: ' + str(threshold))
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-    plt.figure()
-    dominant_gr_4m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  enrichment_month=4,
-                                                  enrichment_threshold=threshold,
-                                                  cell_type='gr',
-                                                  threshold_column='gr_percent_engraftment',
-                                                  lineage_bias=True,
-                                                 )
-    sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_4m, hue='mouse_id', units='code',style='group', estimator=None)
-    plt.title('abundant at 4 month in gr cells, threshold: ' + str(threshold))
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    #plt.figure()
+    #dominant_gr_4m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  #enrichment_month=4,
+                                                  #enrichment_threshold=threshold,
+                                                  #cell_type=None,
+                                                  #threshold_column='gr_percent_engraftment',
+                                                  #lineage_bias=True,
+                                                 #)
+    #sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_4m, hue='mouse_id', units='code',style='group', estimator=None)
+    #plt.title('abundant at 4 month in gr cells, threshold: ' + str(threshold))
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-    plt.figure()
-    dominant_b_12m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  enrichment_month=12,
-                                                  enrichment_threshold=threshold,
-                                                  cell_type='b',
-                                                  threshold_column='b_percent_engraftment',
-                                                  lineage_bias=True,
-                                                 )
-    sns.lineplot(x='month', y='lineage_bias', data=dominant_b_12m, hue='mouse_id', units='code',style='group', estimator=None)
-    plt.title('abundant at 12 month in b cells, threshold: ' + str(threshold))
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    #plt.figure()
+    #dominant_b_12m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  #enrichment_month=12,
+                                                  #enrichment_threshold=threshold,
+                                                  #cell_type='b',
+                                                  #threshold_column='b_percent_engraftment',
+                                                  #lineage_bias=True,
+                                                 #)
+    #sns.lineplot(x='month', y='lineage_bias', data=dominant_b_12m, hue='mouse_id', units='code',style='group', estimator=None)
+    #plt.title('abundant at 12 month in b cells, threshold: ' + str(threshold))
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
-    plt.figure()
-    dominant_gr_12m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  enrichment_month=12,
-                                                  enrichment_threshold=threshold,
-                                                  cell_type='gr',
-                                                  threshold_column='gr_percent_engraftment',
-                                                  lineage_bias=True,
-                                                 )
-    sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_12m, hue='mouse_id', units='code',style='group', estimator=None)
-    plt.title('abundant at 12 month in gr cells, threshold: ' + str(threshold))
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    #plt.figure()
+    #dominant_gr_12m = find_enriched_clones_at_time(lineage_bias_df,
+                                                  #enrichment_month=12,
+                                                  #enrichment_threshold=threshold,
+                                                  #cell_type='gr',
+                                                  #threshold_column='gr_percent_engraftment',
+                                                  #lineage_bias=True,
+                                                 #)
+    #sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_12m, hue='mouse_id', units='code',style='group', estimator=None)
+    #plt.title('abundant at 12 month in gr cells, threshold: ' + str(threshold))
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+
     # Lineage Bias Line Plots
-    #plt.figure()
-    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group') 
-    #plt.title('Myeloid (+) / Lymphoid (-) Bias in All Mice')
-
-    #plt.figure()
-    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='mouse_id', units='code', estimator=None)
-    #plt.title('Myeloid (+) / Lymphoid (-) Bias in All Mice')
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    #plt.figure()
-    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
-    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
-    #plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    #plt.figure()
-    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
-    #sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
-    #plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    plot_lineage_bias_line(lineage_bias_df)
 
     # Lineage Bias Swarmplots
-
-    #plt.figure()
-    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
-    #ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id',dodge=True)
-    #ax.legend_.remove()
-    #plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
-
-    #plt.figure()
-    #lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
-    #ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', dodge=True)
-    #ax.legend_.remove()
-    #plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
+    #plot_lineage_bias_swarm_by_group(lineage_bias_df)
 
     plt.show()
 

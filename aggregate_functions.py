@@ -134,6 +134,14 @@ def long_to_wide_data(input_df: pd.DataFrame, data_col: str) -> pd.DataFrame:
         output_df = output_df.append(new_row, ignore_index=True)
     return output_df
 
+def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, threshold: float, cell_type: str = 'any', lineage_bias: bool = False) -> pd.DataFrame:
+# TODO: this function
+    groupby_cols = ['mouse_id','code']
+    if not lineage_bias:
+        groupby_cols.append('cell_type')
+    grouped_df = pd.DataFrame(input_df.groupby(by=groupby_cols).month.min()).reset_index()
+    print(grouped_df)
+
 def main():
     """ Outputs clone count csv file at multiple thresholds.
     """
