@@ -2,50 +2,112 @@
 """
 from typing import List
 from math import pi, sin, atan
-import sys
 import pandas as pd
 from aggregate_functions import filter_threshold
 
-def calc_angle(gr: float, b: float) -> float:
-    if b == 0.0:
-        if gr == 0.0:
+def calc_angle(gr_value: float, b_value: float) -> float:
+    """ Calculates angle towards myeloid bias
+
+    Arguments:
+        gr_value {float} -- gr normalized percent engraftment
+        b_value {float} -- b normalized percent engraftment
+
+    Returns:
+        float -- angle in radians towards myeloid bias, range [0,pi/2]
+    """
+
+    if b_value == 0.0:
+        if gr_value == 0.0:
             return pi/4
         return pi/2
 
-    towards_myloid_angle = atan(gr/b)
+    towards_myloid_angle = atan(gr_value/b_value)
     return towards_myloid_angle
 
 def calc_bias_from_angle(theta: float) -> float:
+    """ Calculates myeloid (+) lymhoid (-) bias from myeloid bias angle
+    Output ranges from -1 (lymphoid) to +1 (myloid).
+
+    Arguments:
+        theta {float} -- angle of bias towards myeloid range [0, pi/2]
+
+    Returns:
+        float -- angle transformed to range [-1, 1]
+    """
+
     myloid_bias = sin(2 * (theta - (pi/4)))
     return myloid_bias
 
-def calc_bias(gr: float, b: float) -> float:
-    return calc_bias_from_angle(calc_angle(gr, b))
+def calc_bias(gr_value: float, b_value: float) -> float:
+    """ Calculates myeloid (+) lymhoid (-) bias from normalized percent engraftment
 
-def calculate_baseline(input_df: pd.DataFrame, baseline_timepoint: int = 4, baseline_column: str = 'month') -> pd.DataFrame:
+    Arguments:
+        gr_value {float} -- gr normalized percent engraftment
+        b_value {float} -- b normalized percent engraftment
+
+    Returns:
+        float -- bias from [-1, 1] with myeloid (+) and lymphoid (-)
+    """
+
+    return calc_bias_from_angle(calc_angle(gr_value, b_value))
+
+def calculate_baseline(present_df: pd.DataFrame, baseline_timepoint: int = 4, baseline_column: str = 'month') -> pd.DataFrame:
+    """ Calculates baseline maximum for normalizing percent engraftment
+
+    For a cell_type and mouse, its percent engraftment is divided by the
+    maximum value for that cell_type/mouse_id at the baseline_timepoint.
+
+    If there is no value for the cell_type-mouse_id, raises a ValueError
+
+    Arguments:
+        present_df {pd.DataFrame} -- long step7_output filtered for present clones by
+                                     filter_threshold()
+
+    Keyword Arguments:
+        baseline_timepoint {int} -- time at which to calculate baseline (default: {4})
+        baseline_column {str} --  column to look for timepoint (default: {'month'})
+
+    Raises:
+        ValueError -- if no baseline found for a clone
+
+    Returns:
+        pd.DataFrame -- present_df with column for baseline_max
+    """
+
     # Filter by timepoint
-    timepoint_df = input_df.loc[input_df[baseline_column] == baseline_timepoint]
-    baseline_months_df = pd.DataFrame(input_df.groupby(['mouse_id', 'cell_type'])[baseline_column].min()).reset_index()
+    timepoint_df = present_df.loc[present_df[baseline_column] == baseline_timepoint]
 
+    # group by mouse_id cell_type, find min month
+    baseline_months_df = pd.DataFrame(present_df.groupby(['mouse_id', 'cell_type'])[baseline_column].min()).reset_index()
+
+    # Check that all min_months for a cell_type/mouse are the desired baseline timepoint
     if not baseline_months_df[baseline_months_df.month != baseline_timepoint].empty:
-        print(baseline_months_df[baseline_months_df.month != 4].empty)
         print('Error: No baseline value establishable')
         print('The following data lacks baseline information:')
         print(baseline_months_df[baseline_months_df.month != baseline_timepoint])
         raise ValueError('Error: No baseline value establishable')
 
-    # Find max
+    # Find max percent engraftment to normalize by
     baseline_max_df = pd.DataFrame(timepoint_df.groupby(['mouse_id', 'cell_type']).percent_engraftment.max()).reset_index()
 
     # Rename max column to baseline_max --> current columns are 'mouse_id', 'cell_type', 'baseline_max'
     baseline_max_df = baseline_max_df.rename({'percent_engraftment': 'baseline_max'}, axis='columns')
 
     #Append to input, each row should have 'baseline_max' column
-    with_baseline_df = input_df.merge(baseline_max_df, how='outer', on=['mouse_id', 'cell_type'])
+    with_baseline_df = present_df.merge(baseline_max_df, how='outer', on=['mouse_id', 'cell_type'])
 
     return with_baseline_df
 
-def normalize_to_baseline(with_baseline_df: pd.DataFrame):
+def normalize_to_baseline(with_baseline_df: pd.DataFrame) -> pd.DataFrame:
+    """ uses baseline_max to add another column for normalized percent engraftment
+
+    Arguments:
+        with_baseline_df {pd.DataFrame} -- present_df with column for baseline_max
+
+    Returns:
+        pd.DataFrame -- dataframe with norm_percent_engraftment column calculated from baseline_max
+    """
+
     norm_data_df = with_baseline_df.assign(norm_percent_engraftment=lambda row: row.percent_engraftment/row.baseline_max)
     return norm_data_df
 
@@ -55,6 +117,21 @@ def normalize_input(input_df: pd.DataFrame,
                     analyzed_cell_types: List[str] = ['gr', 'b'],
                     present_threshold: float = 0.01,
                    ) -> pd.DataFrame:
+    """ Wrapper function handling filtering, baseline calculation, and normalization of input
+
+    Arguments:
+        input_df {pd.DataFrame} -- unfiltered step7 long format
+
+    Keyword Arguments:
+        baseline_timepoint {int} -- timepoint to use for baseline (default: {4})
+        baseline_column {str} --  column to find timepoint in (default: {'month'})
+        analyzed_cell_types {List[str]} -- cell_types to filter for (default: {['gr', 'b']})
+        present_threshold {float} -- threshold to mark clones present (default: {0.01})
+
+    Returns:
+        pd.DataFrame -- filtered data frame with normalized percent engraftment
+    """
+
 
     # Filter for only present clones
     present_df = filter_threshold(input_df,
@@ -71,22 +148,38 @@ def normalize_input(input_df: pd.DataFrame,
     return norm_data_df
 
 def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
+    """ Calculates Lineage Bias for all present clones
+
+    Arguments:
+        norm_data_df {pd.DataFrame} -- long format input with percent engraftments normalized
+
+    Raises:
+        ValueError -- Raises error if ant clone-mouse-day has more than expected (2) cell types
+        ValueError -- Raises error if multiple clones found after groupby mouse-code-day
+        (should never happen)
+
+    Returns:
+        pd.DataFrame -- DataFrame of lineage bias for clones over time
+    """
+
     lineage_bias_columns = ['user', 'mouse_id', 'code', 'day', 'month', 'lineage_bias', 'has_null']
     lineage_bias_df = pd.DataFrame(columns=lineage_bias_columns)
 
+    # analyze based on each pair of cells for a mouse-code-day
     for _, group in norm_data_df.groupby(['mouse_id', 'code', 'day']):
 
+        # If cell_type not found (filtered out), uses 0 as normalized percent engraftment
         if group[group.cell_type == 'gr'].empty:
             gr_value = 0.0
         else:
             gr_value = group[group.cell_type == 'gr'].norm_percent_engraftment.values[0]
-
         if group[group.cell_type == 'b'].empty:
             b_value = 0.0
         else:
             b_value = group[group.cell_type == 'b'].norm_percent_engraftment.values[0]
 
-        if len(group) > 3:
+        # Check no more than 2 cell types (gr and b)
+        if len(group) > 2:
             raise ValueError('More cell types than expected')
 
         new_row = pd.DataFrame(columns=lineage_bias_columns)
@@ -99,21 +192,25 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
         new_row['mouse_id'] = group.mouse_id.unique()
         new_row['group'] = group['group'].unique()
 
-        if(len(new_row.code) > 1):
+        # Ensures row added for unique clone
+        if len(new_row.code) > 1:
             raise ValueError('Multiple codes found for group')
 
         lineage_bias_df = lineage_bias_df.append(new_row, sort=False, ignore_index=True)
+
     return lineage_bias_df
 
 def main():
+    """ Calculate and save lineage bias
+    """
+
     input_df = pd.read_csv('Ania_M_all_percent-engraftment_100818_long.csv')
-    present_df = filter_threshold(input_df, .01, ['gr', 'b'])
 
     norm_data_df = normalize_input(input_df)
     lineage_bias_df = create_lineage_bias_df(norm_data_df)
     print(lineage_bias_df)
     lineage_bias_df.to_csv('lineage_bias.csv', index=False)
-            
+
 
 if __name__ == '__main__':
     main()

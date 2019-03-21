@@ -58,8 +58,6 @@ def plot_clone_count(clone_counts: pd.DataFrame,
     return (fig, axis)
 
 
-        
-
 def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                                    thresholds: List[float],
                                    analysed_cell_types: List[str],
@@ -104,6 +102,25 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 save_path: str = './output',
                                 save_format: str = 'png',
                                 ) -> None:
+    """ Create a Line + Swarm plot of clones dominant at specified time
+    
+    Arguments:
+        filtered_df {pd.DataFrame} -- Step7 output put through filter_threshold()
+        enrichement_months {List[int]} -- Months too look at for enrichment at,
+        creates one set of plots per month
+        enrichment_threshold {float} -- Cutoff for dominant cell percent_engraftment
+    
+    Keyword Arguments:
+        analyzed_cell_types {List[str]} -- Cell types to categorize by (default: {['gr', 'b']})
+        group {str} -- Phenotypic group to filter by (default: {'all'})
+        save {bool} --  True to save a figure (default: {False})
+        save_path {str} -- Path of saved output (default: {'./output'})
+        save_format {str} -- Format to save output figure (default: {'png'})
+    
+    Returns:
+        None -- Run plt.show() to display figures created
+    """
+
     if group != 'all':
         filtered_df = filtered_df.loc[filtered_df.group == group]
     print('Plotting group: ' + group)
@@ -145,7 +162,24 @@ def clustermap_clone_abundance(filtered_df: pd.DataFrame,
                                save: bool = False,
                                save_path: str = './output',
                                save_format: str = 'png',
-                              ) -> plt.axis:
+                              ) -> None:
+    """ Plots a clustered heatmap of clone engraftment over time by cell type
+
+    Arguments:
+        filtered_df {pd.DataFrame} -- long format output of step7 passed through filter_threshold()
+        cell_types {List[str]} -- cell_types to filter by, one plot per cell_type
+
+    Keyword Arguments:
+        normalize {bool} --  Whether to normalize by rows or not (default: {False})
+        group {str} -- Phenotypic group to filter by (default: {'all'})
+        save {bool} --  True to save a figure (default: {False})
+        save_path {str} -- Path of saved output (default: {'./output'})
+        save_format {str} -- Format to save output figure (default: {'png'})
+
+    Returns:
+        None -- plt.show() to view plot
+    """
+
     if group != 'all':
         filtered_df = filtered_df.loc[filtered_df.group == group]
 
@@ -164,13 +198,16 @@ def clustermap_clone_abundance(filtered_df: pd.DataFrame,
                                              values='percent_engraftment',
                                              fill_value=0
                                             )
-        clustergrid = sns.clustermap(pivot_filtered, col_cluster=False, z_score=norm_val, method='ward')
+        clustergrid = sns.clustermap(pivot_filtered,
+                                     col_cluster=False,
+                                     z_score=norm_val,
+                                     method='ward')
+
         clustergrid.fig.suptitle(norm_title + 'Clone Abundance Change in ' + cell + ' cells, Group: ' + group)
+
         if save:
             fname = save_path + os.sep + 'abundance_heatmap_' + norm_label + cell + '_' + group + '.' + save_format
             plt.savefig(fname, format=save_format)
-
-    return clustergrid
 
 
 def venn_barcode_in_time(present_clones_df: pd.DataFrame,
@@ -179,7 +216,24 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
                          save: bool = False,
                          save_path: str = './output',
                          save_format: str = 'png',
-                        ) -> plt.axis:
+                        ) -> None:
+    """ Create venn diagrams of barcode existance in seperate time points.
+
+    Presence counted by total, mean, and median across mice
+    
+    Arguments:
+        present_clones_df {pd.DataFrame} -- Clones filtered for presence by filter_threshold()
+        analysed_cell_types {List[str]} -- Cell types to filter by, one plot set per cell_type
+    
+    Keyword Arguments:
+        group {str} -- Phenotypic group to filter by (default: {'all'})
+        save {bool} --  True to save a figure (default: {False})
+        save_path {str} -- Path of saved output (default: {'./output'})
+        save_format {str} -- Format to save output figure (default: {'png'})
+    
+    Returns:
+        None -- run plt.show() to view plots
+    """
 
     if group != 'all':
         present_clones_df = present_clones_df.loc[present_clones_df.group == group]
@@ -235,6 +289,8 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
 
 def main():
     """ Create plots
+
+    Contains many commented out templates for generating different types of plots
     """
 
 
