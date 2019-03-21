@@ -1,0 +1,11 @@
+user,mouse_id,code,day,month,lineage_bias_expected
+one,M1,A,120,4,0
+one,M1,A,270,9,0
+one,M3,C,120,4,0
+one,M3,C,270,9,0.600000004
+one,M3,C,365,12,0.882352938
+one,M4,D,120,4,1
+one,M4,D,270,9
+one,M4,D,270,12
+one,M6,G,120,4,0
+one,M6,G,270,9,-1
