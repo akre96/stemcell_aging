@@ -169,10 +169,3 @@ def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_pe
         wide_counts = wide_counts[columns]
         fname = outdir + os.sep + 'clone_counts_t' + str(threshold).replace('.', '-') + '.csv'
         wide_counts.to_csv(fname, index=False)
-
-def main():
-    input_df = pd.read_csv('lineage_bias_from_counts.csv')
-    clones_enriched_at_last_timepoint(input_df, threshold=.5 ,lineage_bias=True)
-
-if __name__ == '__main__':
-    main()
