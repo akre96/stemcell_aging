@@ -6,6 +6,7 @@ Returns:
 
 from typing import List, Tuple, Dict
 import os
+import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -328,157 +329,126 @@ def plot_lineage_bias_swarm_by_group(lineage_bias_df: pd.DataFrame) -> None:
 
 
 def main():
-    """ Create plots
+    """ Create plots set options via command line arguments
 
-    Contains many commented out templates for generating different types of plots
+    Available graph types:
+        default:            Subject to change based on what is being actively developed
+        cluster:            Clustered heatmap of present clone engraftment
+        venn:               Venn Diagram of clone existance at timepoint
+        clone_count:        Bar charts of clone counts by cell type at different thresholds
+        lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
+        engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
+
     """
 
+    parser = argparse.ArgumentParser(description="Plot input data")
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default = 'Ania_M_all_percent-engraftment_100818_long.csv')
+    parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='lineage_bias_from_counts.csv')
+    parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/Graphs')
+    parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
+    parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
 
-    input_df = pd.read_csv('Ania_M_all_percent-engraftment_100818_long.csv')
+    args = parser.parse_args()
+    input_df = pd.read_csv(args.input)
+    lineage_bias_df = pd.read_csv(args.lineage_bias)
+    clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5 ,lineage_bias=True)
 
     analysed_cell_types = ['gr', 'b']
 
     presence_threshold = 0.01
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
-    
-    lineage_bias_df = pd.read_csv('lineage_bias_from_counts.csv')
-
-    #threshold = .2
-    #plt.figure()
-    #dominant_b_4m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  #enrichment_month=4,
-                                                  #enrichment_threshold=threshold,
-                                                  #cell_type=None,
-                                                  #threshold_column='b_percent_engraftment',
-                                                  #lineage_bias=True,
-                                                 #)
-    #sns.lineplot(x='month', y='lineage_bias', data=dominant_b_4m, hue='mouse_id', units='code',style='group', estimator=None)
-    #plt.title('abundant at 4 month in b cells, threshold: ' + str(threshold))
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    #plt.figure()
-    #dominant_gr_4m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  #enrichment_month=4,
-                                                  #enrichment_threshold=threshold,
-                                                  #cell_type=None,
-                                                  #threshold_column='gr_percent_engraftment',
-                                                  #lineage_bias=True,
-                                                 #)
-    #sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_4m, hue='mouse_id', units='code',style='group', estimator=None)
-    #plt.title('abundant at 4 month in gr cells, threshold: ' + str(threshold))
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    #plt.figure()
-    #dominant_b_12m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  #enrichment_month=12,
-                                                  #enrichment_threshold=threshold,
-                                                  #cell_type='b',
-                                                  #threshold_column='b_percent_engraftment',
-                                                  #lineage_bias=True,
-                                                 #)
-    #sns.lineplot(x='month', y='lineage_bias', data=dominant_b_12m, hue='mouse_id', units='code',style='group', estimator=None)
-    #plt.title('abundant at 12 month in b cells, threshold: ' + str(threshold))
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    #plt.figure()
-    #dominant_gr_12m = find_enriched_clones_at_time(lineage_bias_df,
-                                                  #enrichment_month=12,
-                                                  #enrichment_threshold=threshold,
-                                                  #cell_type='gr',
-                                                  #threshold_column='gr_percent_engraftment',
-                                                  #lineage_bias=True,
-                                                 #)
-    #sns.lineplot(x='month', y='lineage_bias', data=dominant_gr_12m, hue='mouse_id', units='code',style='group', estimator=None)
-    #plt.title('abundant at 12 month in gr cells, threshold: ' + str(threshold))
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    # Lineage Bias Line Plots
-    #filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
-    #plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with 1% WBC last time point in any cell type')
-
-
-    #filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.2, lineage_bias=True, cell_type='gr')
-    #plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.2 engraftment last time point in gr cell type')
-
-    #filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5, lineage_bias=True, cell_type='b')
-    #plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.5 engraftment last time point in b cell type')
+    graph_type = args.graph_type
 
     # Lineage Bias Swarmplots
-    filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
-    #plot_lineage_bias_swarm_by_group(lineage_bias_df)
-    sns.scatterplot(x='month', y='lineage_bias', data=filt_lineage_bias_df, size='sum_percent_engraftment', hue='mouse_id', style='group')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-
-    plt.show()
-
+    if graph_type == 'default':
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
+        #plot_lineage_bias_swarm_by_group(lineage_bias_df)
+        sns.scatterplot(x='month', y='lineage_bias', data=filt_lineage_bias_df, size='sum_percent_engraftment', hue='mouse_id', style='group')
+        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    
     # Venn diagram of present clones
-    #venn_barcode_in_time(present_clones_df,
-                         #analysed_cell_types,
-                         #save=True,
-                         #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
-                         #save_format='png',
-                         #group='no_change'
-                        #)
-    #venn_barcode_in_time(present_clones_df,
-                         #analysed_cell_types,
-                         #save=True,
-                         #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
-                         #save_format='png',
-                         #group='aging_phenotype'
-                        #)
-
+    if graph_type == 'venn':
+        venn_barcode_in_time(present_clones_df,
+                            analysed_cell_types,
+                            save=args.save,
+                            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
+                            save_format='png',
+                            group='no_change'
+                            )
+        venn_barcode_in_time(present_clones_df,
+                            analysed_cell_types,
+                            save=args.save,
+                            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
+                            save_format='png',
+                            group='aging_phenotype'
+                            )
     # heatmap present clones
-    #clustermap_clone_abundance(present_clones_df,
-                               #analysed_cell_types,
-                               #normalize=True,
-                               #save=True,
-                               #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
-                               #save_format='png',
-                               #group='aging_phenotype',
-                              #)
-    #clustermap_clone_abundance(present_clones_df,
-                               #analysed_cell_types,
-                               #normalize=True,
-                               #save=True,
-                               #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
-                               #save_format='png',
-                               #group='no_change',
-                              #)
+    if graph_type == 'cluster':
+        clustermap_clone_abundance(present_clones_df,
+                                analysed_cell_types,
+                                normalize=True,
+                                save=args.save,
+                                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
+                                save_format='png',
+                                group='aging_phenotype',
+                                )
+        clustermap_clone_abundance(present_clones_df,
+                                analysed_cell_types,
+                                normalize=True,
+                                save=args.save,
+                                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
+                                save_format='png',
+                                group='no_change',
+                                )
 
     # Count clones by threshold
-    #clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
-    #plot_clone_count_by_thresholds(present_clones_df,
-                                   #clone_count_thresholds,
-                                   #analysed_cell_types,
-                                   #save=True,
-                                   #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                   #group='aging_phenotype')
-    #plot_clone_count_by_thresholds(present_clones_df,
-                                   #clone_count_thresholds,
-                                   #analysed_cell_types,
-                                   #save=True,
-                                   #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                   #group='no_change')
+    if graph_type == 'clone_count':
+        clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
+        plot_clone_count_by_thresholds(present_clones_df,
+                                    clone_count_thresholds,
+                                    analysed_cell_types,
+                                    save=args.save,
+                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                    group='aging_phenotype')
+        plot_clone_count_by_thresholds(present_clones_df,
+                                    clone_count_thresholds,
+                                    analysed_cell_types,
+                                    save=args.save,
+                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                    group='no_change')
 
+    # Lineage Bias Line Plots
+    if graph_type =='lineage_bias_line':
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold = 1, lineage_bias=True, cell_type='any')
+        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with 1% WBC last time point in any cell type')
+
+
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.2, lineage_bias=True, cell_type='gr')
+        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.2 engraftment last time point in gr cell type')
+
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5, lineage_bias=True, cell_type='b')
+        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.5 engraftment last time point in b cell type')
+    
     # Abundant clones at specific time
-    #plot_clone_enriched_at_time(present_clones_df,
-                                #[4, 14],
-                                #0.2,
-                                #save=True,
-                                #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
-                                #save_format='png',
-                                #group='no_change',
-                               #)
-    #plot_clone_enriched_at_time(present_clones_df,
-                                #[4, 14],
-                                #0.2,
-                                #save=True,
-                                #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
-                                #save_format='png',
-                                #group='aging_phenotype',
-                               #)
-
-    #plt.show()
+    if graph_type == 'engraftment_time':
+        plot_clone_enriched_at_time(present_clones_df,
+                                    [4, 14],
+                                    0.2,
+                                    save=True,
+                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
+                                    save_format='png',
+                                    group='no_change',
+                                )
+        plot_clone_enriched_at_time(present_clones_df,
+                                    [4, 14],
+                                    0.2,
+                                    save=True,
+                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
+                                    save_format='png',
+                                    group='aging_phenotype',
+                                )
+    
+    plt.show()
 
 
 if __name__ == "__main__":
