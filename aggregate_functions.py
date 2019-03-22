@@ -135,22 +135,31 @@ def long_to_wide_data(input_df: pd.DataFrame, data_col: str) -> pd.DataFrame:
     return output_df
 
 def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, threshold: float, cell_type: str = 'any', lineage_bias: bool = False) -> pd.DataFrame:
-# TODO: this function
-    groupby_cols = ['mouse_id','code']
-    if not lineage_bias:
-        groupby_cols.append('cell_type')
-    grouped_df = pd.DataFrame(input_df.groupby(by=groupby_cols).month.min()).reset_index()
-    print(grouped_df)
+    groupby_cols = ['mouse_id', 'code']
+    if lineage_bias:
+        if cell_type == 'any':
+            filtered_df = input_df.loc[(input_df['gr_percent_engraftment'] >= threshold) | (input_df['b_percent_engraftment'] >= threshold)]
+        else:
+            filtered_df = input_df.loc[(input_df[cell_type + '_percent_engraftment'] >= threshold)]
 
-def main():
+    else:
+        filtered_df = filter_threshold(input_df, threshold, [cell_type])
+        groupby_cols.append('cell_type')
+
+    # get max month for clones
+    grouped_df = pd.DataFrame(filtered_df.groupby(by=groupby_cols).month.max()).reset_index()
+    filtered_for_enrichment = input_df.merge(grouped_df['code'], how='inner', on=['code'])
+
+    return filtered_for_enrichment
+
+def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_percent-engraftment_100818_long.csv',
+                                       thresholds: List[float] = [0.0, 0.01, 0.02, 0.2, 0.5],
+                                       outdir: str = '/home/sakre/Data/clone_counts_long',
+                                       analyzed_cell_types: List[str] = ['gr', 'b'],
+                                      ):
     """ Outputs clone count csv file at multiple thresholds.
     """
-
-    input_df = pd.read_csv('Ania_M_all_percent-engraftment_100818_long.csv')
-    thresholds = [0.0, 0.01, 0.02, 0.2, 0.5]
-    analyzed_cell_types = ['gr', 'b']
-    outdir = '/home/sakre/Data/clone_counts_long'
-
+    input_df = pd.read_csv(input_file)
     for threshold in thresholds:
         filter_df = filter_threshold(input_df, threshold, analyzed_cell_types)
         clone_counts = count_clones(filter_df)
@@ -160,6 +169,10 @@ def main():
         wide_counts = wide_counts[columns]
         fname = outdir + os.sep + 'clone_counts_t' + str(threshold).replace('.', '-') + '.csv'
         wide_counts.to_csv(fname, index=False)
+
+def main():
+    input_df = pd.read_csv('lineage_bias_from_counts.csv')
+    clones_enriched_at_last_timepoint(input_df, threshold=.5 ,lineage_bias=True)
 
 if __name__ == '__main__':
     main()

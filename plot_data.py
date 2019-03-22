@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pyvenn import venn
-from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time
+from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time, clones_enriched_at_last_timepoint
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -393,10 +393,21 @@ def main():
     #plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
     # Lineage Bias Line Plots
-    plot_lineage_bias_line(lineage_bias_df)
+    #filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
+    #plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with 1% WBC last time point in any cell type')
+
+
+    #filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.2, lineage_bias=True, cell_type='gr')
+    #plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.2 engraftment last time point in gr cell type')
+
+    #filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5, lineage_bias=True, cell_type='b')
+    #plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.5 engraftment last time point in b cell type')
 
     # Lineage Bias Swarmplots
+    filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
     #plot_lineage_bias_swarm_by_group(lineage_bias_df)
+    sns.scatterplot(x='month', y='lineage_bias', data=filt_lineage_bias_df, size='sum_percent_engraftment', hue='mouse_id', style='group')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
 
     plt.show()
 

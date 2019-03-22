@@ -203,6 +203,7 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
         new_row['lineage_bias'] = [calc_bias(gr_value, b_value)]
         new_row['gr_percent_engraftment'] = gr_engraftment
         new_row['b_percent_engraftment'] = b_engraftment
+        new_row['sum_percent_engraftment'] = gr_engraftment + b_engraftment
         new_row['code'] = group.code.unique()
         new_row['user'] = group.user.unique()
         new_row['day'] = group.day.unique()
