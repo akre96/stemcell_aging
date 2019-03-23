@@ -115,11 +115,11 @@ def normalize_to_baseline_max(with_baseline_max_df: pd.DataFrame) -> pd.DataFram
     return norm_data_df
 
 def normalize_input_to_baseline_max(input_df: pd.DataFrame,
-                    baseline_timepoint: int = 4,
-                    baseline_column: str = 'month',
-                    analyzed_cell_types: List[str] = ['gr', 'b'],
-                    present_threshold: float = 0.01,
-                   ) -> pd.DataFrame:
+                                    baseline_timepoint: int = 4,
+                                    baseline_column: str = 'month',
+                                    analyzed_cell_types: List[str] = ['gr', 'b'],
+                                    present_threshold: float = 0.01,
+                                   ) -> pd.DataFrame:
     """ Wrapper function handling filtering, baseline calculation, and normalization of input
 
     Arguments:
@@ -143,8 +143,8 @@ def normalize_input_to_baseline_max(input_df: pd.DataFrame,
 
     # Add baseline information for normalization
     with_baseline_max_df = calculate_baseline_max(present_df,
-                                          baseline_timepoint=baseline_timepoint,
-                                          baseline_column=baseline_column)
+                                                  baseline_timepoint=baseline_timepoint,
+                                                  baseline_column=baseline_column)
 
     # Add normalized percent engraftment
     norm_data_df = normalize_to_baseline_max(with_baseline_max_df)
@@ -242,7 +242,7 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
             cell_type_timepoint_data['day'] = day
             cell_type_timepoint_data['month'] = month
             cell_type_timepoint_data['cell_type'] = cell_type
-            cell_type_col = one_timepoint_cols[[re.match(cell_type.upper(), x) != None for x in one_timepoint_cols]]
+            cell_type_col = one_timepoint_cols[[re.match(cell_type.upper(), x) is not None for x in one_timepoint_cols]]
             cell_type_timepoint_data['cell_count'] = one_timepoint_data[cell_type_col]
             parsed_timepoint_data = parsed_timepoint_data.append(cell_type_timepoint_data, ignore_index=True)
 
@@ -256,7 +256,6 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
                               baseline_timepoint: int = 4,
                               baseline_column: str = 'month'
                              ) -> pd.DataFrame:
-    
 
     timepoint_df = cell_counts_df.loc[cell_counts_df[baseline_column] == baseline_timepoint]
     with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])

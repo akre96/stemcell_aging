@@ -152,6 +152,13 @@ def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, threshold: float, 
 
     return filtered_for_enrichment
 
+def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4) -> pd.DataFrame:
+    output_df = pd.DataFrame()
+    for _, group in input_df.groupby(['mouse_id']):
+        if group.month.nunique() >= n_timepoints:
+            output_df = output_df.append(group)
+    return output_df
+
 def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_percent-engraftment_100818_long.csv',
                                        thresholds: List[float] = [0.0, 0.01, 0.02, 0.2, 0.5],
                                        outdir: str = '/home/sakre/Data/clone_counts_long',
@@ -169,3 +176,7 @@ def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_pe
         wide_counts = wide_counts[columns]
         fname = outdir + os.sep + 'clone_counts_t' + str(threshold).replace('.', '-') + '.csv'
         wide_counts.to_csv(fname, index=False)
+
+INPUT_DF = pd.read_csv('/home/sakre/Code/stemcell_aging/Ania_M_all_percent-engraftment_100818_long.csv')
+FILTER_DF = filter_threshold(INPUT_DF, 0.01, ['gr','b'])
+filter_mice_with_n_timepoints(FILTER_DF)

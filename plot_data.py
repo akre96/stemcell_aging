@@ -12,13 +12,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pyvenn import venn
-from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time, clones_enriched_at_last_timepoint
+from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time, clones_enriched_at_last_timepoint, filter_mice_with_n_timepoints
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
                      threshold: float,
                      analyzed_cell_types: List[str],
                      group: str = 'all',
+                     line: bool = False,
                      save: bool = False,
                      save_path: str = './output',
                      save_format: str = 'png',
@@ -36,25 +37,45 @@ def plot_clone_count(clone_counts: pd.DataFrame,
         Tuple -- fig,ax for further modification if required
     """
 
-    fig, axis = plt.subplots()
     clone_counts['month'] = pd.to_numeric(round(clone_counts['day']/30), downcast='integer')
-    sns.barplot(x='month',
-                y='code',
-                hue='cell_type',
-                hue_order=analyzed_cell_types + ['Total'],
-                data=clone_counts,
-                ax=axis,
-                capsize=.08,
-                errwidth=0.5
-               )
-    plt.suptitle('Clone Counts By Cell Type with Abundance > ' + str(threshold) + ' % WBC')
-    label = 'Group: ' + group
-    plt.title(label)
-    plt.xlabel('Month')
-    plt.ylabel('Number of Clones')
-    if save:
-        fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
-        plt.savefig(fname, format=save_format)
+    if line:
+        for cell_type in clone_counts.cell_type.unique():
+            fig, axis = plt.subplots()
+            clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
+            sns.lineplot(x='month',
+                        y='code',
+                        hue='mouse_id',
+                        data=clone_counts_cell,
+                        ax=axis,
+                        legend=False
+                        )
+            plt.suptitle('Clone Counts in '+ cell_type +' Cells with Abundance > ' + str(threshold) + ' % WBC')
+            label = 'Group: ' + group
+            plt.title(label)
+            plt.xlabel('Month')
+            plt.ylabel('Number of Clones')
+            if save:
+                fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
+                plt.savefig(fname, format=save_format)
+    else:
+        fig, axis = plt.subplots()
+        sns.barplot(x='month',
+                    y='code',
+                    hue='cell_type',
+                    hue_order=analyzed_cell_types + ['Total'],
+                    data=clone_counts,
+                    ax=axis,
+                    capsize=.08,
+                    errwidth=0.5
+                )
+        plt.suptitle('Clone Counts By Cell Type with Abundance > ' + str(threshold) + ' % WBC')
+        label = 'Group: ' + group
+        plt.title(label)
+        plt.xlabel('Month')
+        plt.ylabel('Number of Clones')
+        if save:
+            fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
+            plt.savefig(fname, format=save_format)
 
     return (fig, axis)
 
@@ -63,6 +84,7 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                                    thresholds: List[float],
                                    analysed_cell_types: List[str],
                                    group: str = 'all',
+                                   line: bool = False,
                                    save: bool = False,
                                    save_path: str = './output/'
                                   ) -> None:
@@ -92,6 +114,7 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                          analysed_cell_types,
                          group=group,
                          save=save,
+                         line=line,
                          save_path=save_path)
 
 def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
@@ -210,7 +233,6 @@ def clustermap_clone_abundance(filtered_df: pd.DataFrame,
             fname = save_path + os.sep + 'abundance_heatmap_' + norm_label + cell + '_' + group + '.' + save_format
             plt.savefig(fname, format=save_format)
 
-
 def venn_barcode_in_time(present_clones_df: pd.DataFrame,
                          analysed_cell_types: List[str],
                          group: str = 'all',
@@ -235,7 +257,10 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
     Returns:
         None -- run plt.show() to view plots
     """
-
+    print('Filtering for only mice with 4 timepoints')
+    print('Length of input before: '+str(len(present_clones_df)))
+    present_clones_df = filter_mice_with_n_timepoints(present_clones_df, n_timepoints=4)
+    print('Length of input after: '+str(len(present_clones_df)))
     if group != 'all':
         present_clones_df = present_clones_df.loc[present_clones_df.group == group]
 
@@ -342,7 +367,7 @@ def main():
     """
 
     parser = argparse.ArgumentParser(description="Plot input data")
-    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default = 'Ania_M_all_percent-engraftment_100818_long.csv')
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='lineage_bias_from_counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
@@ -351,13 +376,16 @@ def main():
     args = parser.parse_args()
     input_df = pd.read_csv(args.input)
     lineage_bias_df = pd.read_csv(args.lineage_bias)
-    clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5 ,lineage_bias=True)
+    clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5, lineage_bias=True)
 
     analysed_cell_types = ['gr', 'b']
 
     presence_threshold = 0.01
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
+    all_clones_df = filter_threshold(input_df, 0.0, analysed_cell_types)
     graph_type = args.graph_type
+    if args.save:
+        print('\n **Saving Plots Enabled** \n')
 
     # Lineage Bias Swarmplots
     if graph_type == 'default':
@@ -402,7 +430,7 @@ def main():
                                 )
 
     # Count clones by threshold
-    if graph_type == 'clone_count':
+    if graph_type == 'clone_count_bar':
         clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
         plot_clone_count_by_thresholds(present_clones_df,
                                     clone_count_thresholds,
@@ -414,6 +442,24 @@ def main():
                                     clone_count_thresholds,
                                     analysed_cell_types,
                                     save=args.save,
+                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                    group='no_change')
+
+    # Clone counts by threshold as lineplot
+    if graph_type == 'clone_count_line':
+        clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
+        plot_clone_count_by_thresholds(present_clones_df,
+                                    clone_count_thresholds,
+                                    analysed_cell_types,
+                                    save=args.save,
+                                    line=True,
+                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                    group='aging_phenotype')
+        plot_clone_count_by_thresholds(present_clones_df,
+                                    clone_count_thresholds,
+                                    analysed_cell_types,
+                                    save=args.save,
+                                    line=True,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
                                     group='no_change')
 
@@ -431,24 +477,25 @@ def main():
     
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
-        plot_clone_enriched_at_time(present_clones_df,
+        plot_clone_enriched_at_time(all_clones_df,
                                     [4, 14],
-                                    0.2,
+                                    0.5,
                                     save=True,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
                                     group='no_change',
                                 )
-        plot_clone_enriched_at_time(present_clones_df,
-                                    [4, 14],
-                                    0.2,
+        plot_clone_enriched_at_time(all_clones_df,
+                                    [4, 12, 14],
+                                    0.5,
                                     save=True,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
                                     group='aging_phenotype',
                                 )
     
-    plt.show()
+    if not args.save:
+        plt.show()
 
 
 if __name__ == "__main__":
