@@ -220,6 +220,18 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
     return lineage_bias_df
 
 def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b']) -> pd.DataFrame:
+    """ Parses white blood cell count file to format as dataframe
+    
+    Arguments:
+        wbc_count_file_path {str} -- path to count file
+    
+    Keyword Arguments:
+        analyzed_cell_types {List[str]} -- cell types to parse for (default: {['gr', 'b']})
+    
+    Returns:
+        pd.DataFrame -- dataframe of mouse_id, cell_type, day, cell_count
+    """
+
     count_data_raw = pd.read_csv(wbc_count_file_path, sep='\t')
     parsed_counts = pd.DataFrame()
     col_names = count_data_raw.columns
@@ -256,6 +268,20 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
                               baseline_timepoint: int = 4,
                               baseline_column: str = 'month'
                              ) -> pd.DataFrame:
+    """ Appends column of cell counts to step7 long form data 
+    
+    Arguments:
+        present_df {pd.DataFrame} -- Dataframe of step7 data filtered for presence
+        cell_counts_df {pd.DataFrame} -- Dataframe from FACS cell count data
+    
+    Keyword Arguments:
+        baseline_timepoint {int} -- timepoint to use as reference (default: {4})
+        baseline_column {str} --  column to look for timepoint in (default: {'month'})
+    
+    Returns:
+        pd.DataFrame -- present_df with column of cell_count used in normalization 
+    """
+
 
     timepoint_df = cell_counts_df.loc[cell_counts_df[baseline_column] == baseline_timepoint]
     with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])
@@ -263,6 +289,15 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
     return with_baseline_counts_df
 
 def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.DataFrame:
+    """ Use count information to normalize percent engraftment
+    
+    Arguments:
+        with_baseline_counts_df {pd.DataFrame} -- dataframe output of calculate_baseline_counts
+    
+    Returns:
+        pd.DataFrame -- dataframe with norm_percent_engraftment column
+    """
+
     norm_data_df = with_baseline_counts_df.assign(norm_percent_engraftment=lambda row: row.percent_engraftment/row.cell_count)
     return norm_data_df
 
