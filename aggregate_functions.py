@@ -148,13 +148,16 @@ def long_to_wide_data(input_df: pd.DataFrame, data_col: str) -> pd.DataFrame:
         output_df = output_df.append(new_row, ignore_index=True)
     return output_df
 
-def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, threshold: float, cell_type: str = 'any', lineage_bias: bool = False) -> pd.DataFrame:
+def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, lineage_bias_df: pd.DataFrame, threshold: float = 0, cell_type: str = 'any', lineage_bias: bool = False, percentile: float = 0) -> pd.DataFrame:
     groupby_cols = ['mouse_id', 'code']
     if lineage_bias:
-        if cell_type == 'any':
-            filtered_df = input_df.loc[(input_df['gr_percent_engraftment'] >= threshold) | (input_df['b_percent_engraftment'] >= threshold)]
+        if percentile:
+            thresholds = find_top_percentile_threshold(input_df, percentile, ['gr', 'b'])
+            filtered_df = filter_cell_type_threshold(input_df, thresholds, ['gr', 'b'])
+        elif cell_type == 'any':
+            filtered_df = lineage_bias_df.loc[(lineage_bias_df['gr_percent_engraftment'] >= threshold) | (lineage_bias_df['b_percent_engraftment'] >= threshold)]
         else:
-            filtered_df = input_df.loc[(input_df[cell_type + '_percent_engraftment'] >= threshold)]
+            filtered_df = lineage_bias_df.loc[(lineage_bias_df[cell_type + '_percent_engraftment'] >= threshold)]
 
     else:
         filtered_df = filter_threshold(input_df, threshold, [cell_type])
@@ -162,7 +165,10 @@ def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, threshold: float, 
 
     # get max month for clones
     grouped_df = pd.DataFrame(filtered_df.groupby(by=groupby_cols).month.max()).reset_index()
-    filtered_for_enrichment = input_df.merge(grouped_df['code'], how='inner', on=['code'])
+    if lineage_bias:
+        filtered_for_enrichment = lineage_bias_df.merge(grouped_df['code'], how='inner', on=['code'])
+    else:
+        filtered_for_enrichment = input_df.merge(grouped_df['code'], how='inner', on=['code'])
 
     return filtered_for_enrichment
 

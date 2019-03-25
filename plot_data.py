@@ -439,7 +439,6 @@ def main():
     args = parser.parse_args()
     input_df = pd.read_csv(args.input)
     lineage_bias_df = pd.read_csv(args.lineage_bias)
-    clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5, lineage_bias=True)
 
     analysed_cell_types = ['gr', 'b']
 
@@ -450,7 +449,7 @@ def main():
     if args.save:
         print('\n **Saving Plots Enabled** \n')
 
-    if graph_type == 'default' or graph_type == 'counts_at_perc':
+    if graph_type == 'counts_at_perc':
         percentile = 0.90
         line = True
         plot_counts_at_percentile(present_clones_df,
@@ -548,15 +547,19 @@ def main():
                                        group='no_change')
 
     # Lineage Bias Line Plots
-    if graph_type =='lineage_bias_line':
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold = 1, lineage_bias=True, cell_type='any')
+    if graph_type == 'top_percentile_bias' or graph_type == 'default':
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any', percentile=.995)
+        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones in top 99.5 Percentile at last time point in any cell type')
+
+    if graph_type == 'lineage_bias_line':
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
         plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with 1% WBC last time point in any cell type')
 
 
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.2, lineage_bias=True, cell_type='gr')
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=.2, lineage_bias=True, cell_type='gr')
         plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.2 engraftment last time point in gr cell type')
 
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=.5, lineage_bias=True, cell_type='b')
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=.5, lineage_bias=True, cell_type='b')
         plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.5 engraftment last time point in b cell type')
     
     # Abundant clones at specific time
