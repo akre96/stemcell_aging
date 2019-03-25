@@ -1,7 +1,7 @@
 """ Commonly used data transform functions for analysis of step7 output data
 
 """
-from typing import List
+from typing import List, Dict
 import os
 import pandas as pd
 
@@ -27,6 +27,20 @@ def filter_threshold(input_df: pd.DataFrame,
     threshold_filtered_df['month'] = pd.to_numeric(round(threshold_filtered_df['day']/30), downcast='integer')
     return threshold_filtered_df
 
+def filter_cell_type_threshold(input_df: pd.DataFrame,
+                               thresholds: Dict[str, float],
+                               analyzed_cell_types: List[str],
+                               threshold_column: str = "percent_engraftment",
+                              ) -> pd.DataFrame:
+    filtered_df = pd.DataFrame()
+    for cell_type in analyzed_cell_types:
+        cell_df = filter_threshold(input_df,
+                                   threshold=thresholds[cell_type],
+                                   analyzed_cell_types=[cell_type],
+                                   threshold_column=threshold_column
+                                  )
+        filtered_df = filtered_df.append(cell_df)
+    return filtered_df
 
 def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     """ Count unique clones per cell type
@@ -40,9 +54,9 @@ def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     """
 
     clone_counts = pd.DataFrame(
-        input_df.groupby(['mouse_id', 'day', 'cell_type'])['code'].nunique()
+        input_df.groupby(['mouse_id', 'day','month', 'cell_type'])['code'].nunique()
         ).reset_index()
-    total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', 'day'])['code'].nunique()).reset_index()
+    total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', 'day', 'month'])['code'].nunique()).reset_index()
     total_clone_counts['cell_type'] = 'Total'
     clone_counts = clone_counts.append(total_clone_counts, sort=True)
 
@@ -64,7 +78,7 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
         threshold {int} -- threshold for significant engraftment
         cell_type {str} -- Cell type to select for
         threshold_column {str} -- column on which to apply threshold
-    
+
     Keyword Arguments:
         lineage_bias {bool} -- Checks if running lineage bias data (default: False)
 
@@ -159,6 +173,14 @@ def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4)
             output_df = output_df.append(group)
     return output_df
 
+def find_top_percentile_threshold(input_df: pd.DataFrame, percentile: float, cell_types: List[str] = ['gr', 'b']) -> Dict[str, float]:
+    cell_type_thresholds = {}
+    for cell_type in cell_types:
+        cell_df = input_df.loc[input_df.cell_type == cell_type]
+        cell_type_thresholds[cell_type] = cell_df.quantile(percentile).percent_engraftment
+    return cell_type_thresholds
+
+
 def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_percent-engraftment_100818_long.csv',
                                        thresholds: List[float] = [0.0, 0.01, 0.02, 0.2, 0.5],
                                        outdir: str = '/home/sakre/Data/clone_counts_long',
@@ -177,6 +199,10 @@ def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_pe
         fname = outdir + os.sep + 'clone_counts_t' + str(threshold).replace('.', '-') + '.csv'
         wide_counts.to_csv(fname, index=False)
 
-INPUT_DF = pd.read_csv('/home/sakre/Code/stemcell_aging/Ania_M_all_percent-engraftment_100818_long.csv')
-FILTER_DF = filter_threshold(INPUT_DF, 0.01, ['gr','b'])
-filter_mice_with_n_timepoints(FILTER_DF)
+def count_clones_at_percentile(input_df: pd.DataFrame, percentile: float, analyzed_cell_types: List[str] = ['gr','b']) -> pd.DataFrame:
+    thresholds = find_top_percentile_threshold(input_df, percentile, cell_types=analyzed_cell_types)
+    filtered_df = filter_cell_type_threshold(input_df, thresholds=thresholds, threshold_column='percent_engraftment', analyzed_cell_types=analyzed_cell_types)
+    return count_clones(filtered_df)
+
+#INPUT_DF = pd.read_csv('/home/sakre/Code/stemcell_aging/Ania_M_all_percent-engraftment_100818_long.csv')
+#FILTER_DF = filter_threshold(INPUT_DF, 0.01, ['gr', 'b'])

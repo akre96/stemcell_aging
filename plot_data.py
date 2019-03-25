@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pyvenn import venn
-from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time, clones_enriched_at_last_timepoint, filter_mice_with_n_timepoints
+from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time, clones_enriched_at_last_timepoint, filter_mice_with_n_timepoints, find_top_percentile_threshold, count_clones_at_percentile
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -163,9 +163,9 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                      sort=True,
                     )
         plt.suptitle('Clones With Abundance > '
-                       + str(enrichment_threshold)
-                       + ' % WBC At Month: '
-                       + str(month))
+                     + str(enrichment_threshold)
+                     + ' % WBC At Month: '
+                     + str(month))
         plt.title('Group: ' + group)
         plt.xlabel('')
         plt.subplot(2, 1, 2)
@@ -352,6 +352,68 @@ def plot_lineage_bias_swarm_by_group(lineage_bias_df: pd.DataFrame) -> None:
     ax.legend_.remove()
     plt.title('Myeloid (+) / Lymphoid (-) Bias in no_change')
 
+def plot_counts_at_percentile(input_df: pd.DataFrame,
+                              percentile: float = 0.9,
+                              analyzed_cell_types: List[str] = ['gr', 'b'],
+                              group: str = 'all',
+                              line: bool = False,
+                              save: bool = False,
+                              save_path: str = 'output',
+                              save_format: str = 'png',
+                             ) -> None:
+    if group != 'all':
+        input_df = input_df.loc[input_df.group == group]
+
+    thresholds = find_top_percentile_threshold(input_df, percentile, analyzed_cell_types)
+    clone_counts = count_clones_at_percentile(input_df, percentile, analyzed_cell_types=analyzed_cell_types)
+
+    if line:
+        for cell_type in clone_counts.cell_type.unique():
+            fig, axis = plt.subplots()
+            clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
+            sns.lineplot(x='month',
+                        y='code',
+                        hue='mouse_id',
+                        data=clone_counts_cell,
+                        ax=axis,
+                        legend=False
+                        )
+            if cell_type == 'Total':
+                title_string = 'Total Clone Counts for Cells Filtered Above Percentile Based Threshold'
+            else:
+                title_string = 'Clone Counts in ' + cell_type + ' > ' + str(round(thresholds[cell_type], ndigits=2)) + '% WBC'
+            plt.suptitle(title_string)
+            label = 'Group: ' + group + ', Percentile: ' + str(round(100 * percentile, ndigits=2))
+            plt.title(label)
+            plt.xlabel('Month')
+            plt.ylabel('Number of Clones')
+
+            if save:
+                fname = save_path + os.sep + 'clone_count_p' + str(percentile).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
+                plt.savefig(fname, format=save_format)
+    else:
+        _, axis = plt.subplots()
+        sns.barplot(x='month',
+                    y='code',
+                    hue='cell_type',
+                    hue_order=analyzed_cell_types + ['Total'],
+                    data=clone_counts,
+                    ax=axis,
+                    capsize=.08,
+                    errwidth=0.5
+                )
+        title_string = 'Clone Counts by Cell Type'
+        for cell_type in analyzed_cell_types:
+            title_string += ' ' + cell_type + ' > ' + str(round(thresholds[cell_type], ndigits=2)) + '% WBC'
+        plt.suptitle(title_string)
+        label = 'Group: ' + group + ', Percentile: ' + str(round(100 * percentile, ndigits=2))
+        plt.title(label)
+        plt.xlabel('Month')
+        plt.ylabel('Number of Clones')
+        if save:
+            fname = save_path + os.sep + 'clone_count_p' + str(percentile).replace('.', '-') + '_' + group + '.' + save_format
+            plt.savefig(fname, format=save_format)
+
 
 def main():
     """ Create plots set options via command line arguments
@@ -387,81 +449,102 @@ def main():
     if args.save:
         print('\n **Saving Plots Enabled** \n')
 
-    # Lineage Bias Swarmplots
     if graph_type == 'default':
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
-        #plot_lineage_bias_swarm_by_group(lineage_bias_df)
-        sns.scatterplot(x='month', y='lineage_bias', data=filt_lineage_bias_df, size='sum_percent_engraftment', hue='mouse_id', style='group')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    
+        percentile = 0.90
+        line = True
+        plot_counts_at_percentile(present_clones_df,
+                                  percentile=percentile,
+                                  analyzed_cell_types=analysed_cell_types,
+                                  save=args.save,
+                                  line=line,
+                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                  group='aging_phenotype',
+                                 )
+        plot_counts_at_percentile(present_clones_df,
+                                  percentile=percentile,
+                                  analyzed_cell_types=analysed_cell_types,
+                                  save=args.save,
+                                  line=line,
+                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                  group='no_change',
+                                 )
+        plot_counts_at_percentile(present_clones_df,
+                                  percentile=percentile,
+                                  analyzed_cell_types=analysed_cell_types,
+                                  save=args.save,
+                                  line=line,
+                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                  group='all',
+                                 )
+
     # Venn diagram of present clones
     if graph_type == 'venn':
         venn_barcode_in_time(present_clones_df,
-                            analysed_cell_types,
-                            save=args.save,
-                            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
-                            save_format='png',
-                            group='no_change'
+                             analysed_cell_types,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
+                             save_format='png',
+                             group='no_change'
                             )
         venn_barcode_in_time(present_clones_df,
-                            analysed_cell_types,
-                            save=args.save,
-                            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
-                            save_format='png',
-                            group='aging_phenotype'
+                             analysed_cell_types,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
+                             save_format='png',
+                             group='aging_phenotype'
                             )
     # heatmap present clones
     if graph_type == 'cluster':
         clustermap_clone_abundance(present_clones_df,
-                                analysed_cell_types,
-                                normalize=True,
-                                save=args.save,
-                                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
-                                save_format='png',
-                                group='aging_phenotype',
-                                )
+                                   analysed_cell_types,
+                                   normalize=True,
+                                   save=args.save,
+                                   save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
+                                   save_format='png',
+                                   group='aging_phenotype',
+                                  )
         clustermap_clone_abundance(present_clones_df,
-                                analysed_cell_types,
-                                normalize=True,
-                                save=args.save,
-                                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
-                                save_format='png',
-                                group='no_change',
-                                )
+                                   analysed_cell_types,
+                                   normalize=True,
+                                   save=args.save,
+                                   save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Heatmap_Clone_Abundance',
+                                   save_format='png',
+                                   group='no_change',
+                                  )
 
     # Count clones by threshold
     if graph_type == 'clone_count_bar':
         clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
         plot_clone_count_by_thresholds(present_clones_df,
-                                    clone_count_thresholds,
-                                    analysed_cell_types,
-                                    save=args.save,
-                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                    group='aging_phenotype')
+                                       clone_count_thresholds,
+                                       analysed_cell_types,
+                                       save=args.save,
+                                       save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                       group='aging_phenotype')
         plot_clone_count_by_thresholds(present_clones_df,
-                                    clone_count_thresholds,
-                                    analysed_cell_types,
-                                    save=args.save,
-                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                    group='no_change')
+                                       clone_count_thresholds,
+                                       analysed_cell_types,
+                                       save=args.save,
+                                       save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                       group='no_change')
 
     # Clone counts by threshold as lineplot
     if graph_type == 'clone_count_line':
         clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
         plot_clone_count_by_thresholds(present_clones_df,
-                                    clone_count_thresholds,
-                                    analysed_cell_types,
-                                    save=args.save,
-                                    line=True,
-                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                    group='aging_phenotype')
+                                       clone_count_thresholds,
+                                       analysed_cell_types,
+                                       save=args.save,
+                                       line=True,
+                                       save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                       group='aging_phenotype')
         plot_clone_count_by_thresholds(present_clones_df,
-                                    clone_count_thresholds,
-                                    analysed_cell_types,
-                                    save=args.save,
-                                    line=True,
-                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                    group='no_change')
+                                       clone_count_thresholds,
+                                       analysed_cell_types,
+                                       save=args.save,
+                                       line=True,
+                                       save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                       group='no_change')
 
     # Lineage Bias Line Plots
     if graph_type =='lineage_bias_line':
