@@ -425,6 +425,7 @@ def main():
         clone_count:        Bar charts of clone counts by cell type at different thresholds
         lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
         engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
+        counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
 
     """
 
@@ -449,7 +450,7 @@ def main():
     if args.save:
         print('\n **Saving Plots Enabled** \n')
 
-    if graph_type == 'default':
+    if graph_type == 'default' or graph_type == 'counts_at_perc':
         percentile = 0.90
         line = True
         plot_counts_at_percentile(present_clones_df,

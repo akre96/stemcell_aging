@@ -44,18 +44,28 @@ Example:
   M_all in the file name
 
 ### Calculating Lineage Bias
-  2. In the root directory of the repository run:
+  1. In the root directory of the repository run:
   `python lineage_bias.py`  
   - Outputs file `lineage_bias.csv` in root directory of repository.
   - Currently requires manually changing variable in main() function to change path of input file
   - TODO: Add argument variables for output directory/filename and input file
 
 ### Plotting Data
-  1. Open plot_data.py
-  2. Edit main() function to change input file to desired file to analyze 
-  3. Call different plotting functions from above as desired
+  1. In the root directory of the repository run:
+  `python plot_data.py`
+    - By default this will plot whatever the most recently created/worked on graph was 
+  2. add a `-s` flag to save plot outputs
+  3. add a `-g GRAPH_TYPE` to change graph type, the following GRAPH_TYPEs availabale
+    -  cluster:            Clustered heatmap of present clone engraftment
+    -  venn:               Venn Diagram of clone existance at timepoint
+    -  clone_count:        Bar charts of clone counts by cell type at different thresholds
+    -  lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
+    -  engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
+    -  counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
+  4. add a `-i` flag to specify location of long format step7 output
+  5. add `-o` flag to specify where to output graphs [NOT IMPLEMENTED YET]
+  7. add `-l` flag to specify location of lineage_bias file
 
-  - TODO: Refactor to just be a command line called script
 
 
 ### Testing
