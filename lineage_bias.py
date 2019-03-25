@@ -221,13 +221,13 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
 
 def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b']) -> pd.DataFrame:
     """ Parses white blood cell count file to format as dataframe
-    
+
     Arguments:
         wbc_count_file_path {str} -- path to count file
-    
+
     Keyword Arguments:
         analyzed_cell_types {List[str]} -- cell types to parse for (default: {['gr', 'b']})
-    
+
     Returns:
         pd.DataFrame -- dataframe of mouse_id, cell_type, day, cell_count
     """
@@ -268,18 +268,18 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
                               baseline_timepoint: int = 4,
                               baseline_column: str = 'month'
                              ) -> pd.DataFrame:
-    """ Appends column of cell counts to step7 long form data 
-    
+    """ Appends column of cell counts to step7 long form data
+
     Arguments:
         present_df {pd.DataFrame} -- Dataframe of step7 data filtered for presence
         cell_counts_df {pd.DataFrame} -- Dataframe from FACS cell count data
-    
+
     Keyword Arguments:
         baseline_timepoint {int} -- timepoint to use as reference (default: {4})
         baseline_column {str} --  column to look for timepoint in (default: {'month'})
-    
+
     Returns:
-        pd.DataFrame -- present_df with column of cell_count used in normalization 
+        pd.DataFrame -- present_df with column of cell_count used in normalization
     """
 
 
@@ -290,10 +290,10 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
 
 def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.DataFrame:
     """ Use count information to normalize percent engraftment
-    
+
     Arguments:
         with_baseline_counts_df {pd.DataFrame} -- dataframe output of calculate_baseline_counts
-    
+
     Returns:
         pd.DataFrame -- dataframe with norm_percent_engraftment column
     """

@@ -43,11 +43,11 @@ def plot_clone_count(clone_counts: pd.DataFrame,
             fig, axis = plt.subplots()
             clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
             sns.lineplot(x='month',
-                        y='code',
-                        hue='mouse_id',
-                        data=clone_counts_cell,
-                        ax=axis,
-                        legend=False
+                         y='code',
+                         hue='mouse_id',
+                         data=clone_counts_cell,
+                         ax=axis,
+                         legend=False
                         )
             plt.suptitle('Clone Counts in '+ cell_type +' Cells with Abundance > ' + str(threshold) + ' % WBC')
             label = 'Group: ' + group
@@ -67,7 +67,7 @@ def plot_clone_count(clone_counts: pd.DataFrame,
                     ax=axis,
                     capsize=.08,
                     errwidth=0.5
-                )
+                   )
         plt.suptitle('Clone Counts By Cell Type with Abundance > ' + str(threshold) + ' % WBC')
         label = 'Group: ' + group
         plt.title(label)
@@ -127,20 +127,20 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 save_format: str = 'png',
                                 ) -> None:
     """ Create a Line + Swarm plot of clones dominant at specified time
-    
+
     Arguments:
         filtered_df {pd.DataFrame} -- Step7 output put through filter_threshold()
         enrichement_months {List[int]} -- Months too look at for enrichment at,
         creates one set of plots per month
         enrichment_threshold {float} -- Cutoff for dominant cell percent_engraftment
-    
+
     Keyword Arguments:
         analyzed_cell_types {List[str]} -- Cell types to categorize by (default: {['gr', 'b']})
         group {str} -- Phenotypic group to filter by (default: {'all'})
         save {bool} --  True to save a figure (default: {False})
         save_path {str} -- Path of saved output (default: {'./output'})
         save_format {str} -- Format to save output figure (default: {'png'})
-    
+
     Returns:
         None -- Run plt.show() to display figures created
     """
@@ -176,7 +176,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                       dodge=True,
                      )
         if save:
-            fname = save_path + os.sep + 'dominant_clones_t' + str(enrichment_threshold).replace('.','-') + '_' + 'm' + str(month) + '_' + group + '.' + save_format
+            fname = save_path + os.sep + 'dominant_clones_t' + str(enrichment_threshold).replace('.', '-') + '_' + 'm' + str(month) + '_' + group + '.' + save_format
             plt.savefig(fname, format=save_format)
 
 def clustermap_clone_abundance(filtered_df: pd.DataFrame,
@@ -243,17 +243,17 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
     """ Create venn diagrams of barcode existance in seperate time points.
 
     Presence counted by total, mean, and median across mice
-    
+
     Arguments:
         present_clones_df {pd.DataFrame} -- Clones filtered for presence by filter_threshold()
         analysed_cell_types {List[str]} -- Cell types to filter by, one plot set per cell_type
-    
+
     Keyword Arguments:
         group {str} -- Phenotypic group to filter by (default: {'all'})
         save {bool} --  True to save a figure (default: {False})
         save_path {str} -- Path of saved output (default: {'./output'})
         save_format {str} -- Format to save output figure (default: {'png'})
-    
+
     Returns:
         None -- run plt.show() to view plots
     """
@@ -368,7 +368,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
 def plot_lineage_bias_swarm_by_group(lineage_bias_df: pd.DataFrame) -> None:
     plt.figure()
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
-    ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id',dodge=True)
+    ax = sns.swarmplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', dodge=True)
     ax.legend_.remove()
     plt.title('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
 
@@ -395,7 +395,7 @@ def plot_counts_at_percentile(input_df: pd.DataFrame,
 
     if line:
         for cell_type in clone_counts.cell_type.unique():
-            fig, axis = plt.subplots()
+            _, axis = plt.subplots()
             clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
             sns.lineplot(x='month',
                         y='code',
@@ -450,6 +450,7 @@ def main():
         venn:               Venn Diagram of clone existance at timepoint
         clone_count:        Bar charts of clone counts by cell type at different thresholds
         lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
+        top_perc_bias:      line plot of lineage bias over time with top percentile of clones by abundance during last time point
         engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
         counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
 
@@ -580,7 +581,7 @@ def main():
                                        group='no_change')
 
     # Lineage Bias Line Plots by percentile
-    if graph_type == 'top_percentile_bias' or graph_type == 'default':
+    if graph_type == 'top_perc_bias' or graph_type == 'default':
         percentile = .95
         filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df,
                                                                  lineage_bias_df=lineage_bias_df,
@@ -609,7 +610,7 @@ def main():
                                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot',
                                save_format='png',
                               )
-    
+
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
         plot_clone_enriched_at_time(all_clones_df,
@@ -619,7 +620,7 @@ def main():
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
                                     group='no_change',
-                                )
+                                   )
         plot_clone_enriched_at_time(all_clones_df,
                                     [4, 12, 14],
                                     0.2,
@@ -627,7 +628,7 @@ def main():
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
                                     group='aging_phenotype',
-                                )
+                                   )
     
     if not args.save:
         plt.show()

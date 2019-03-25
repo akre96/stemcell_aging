@@ -32,6 +32,20 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
                                analyzed_cell_types: List[str],
                                threshold_column: str = "percent_engraftment",
                               ) -> pd.DataFrame:
+    """ Fitlers input by threshold on one cell type
+
+    Arguments:
+        input_df {pd.DataFrame} -- Step 7 long format data
+        thresholds {Dict[str, float]} -- dictionary of cell_type: threshold
+        analyzed_cell_types {List[str]} -- cell types to search for
+
+    Keyword Arguments:
+        threshold_column {str} --  column on which to search (default: {"percent_engraftment"})
+
+    Returns:
+        pd.DataFrame -- Data Frame filtered by threshold column for each cell type
+    """
+
     filtered_df = pd.DataFrame()
     for cell_type in analyzed_cell_types:
         cell_df = filter_threshold(input_df,
@@ -54,7 +68,7 @@ def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     """
 
     clone_counts = pd.DataFrame(
-        input_df.groupby(['mouse_id', 'day','month', 'cell_type'])['code'].nunique()
+        input_df.groupby(['mouse_id', 'day', 'month', 'cell_type'])['code'].nunique()
         ).reset_index()
     total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', 'day', 'month'])['code'].nunique()).reset_index()
     total_clone_counts['cell_type'] = 'Total'
@@ -196,13 +210,13 @@ def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, lineage_bias_df: p
 def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4) -> pd.DataFrame:
     """ Finds mice with desired number of timepoints.
     Used primarily to only select mice with all four time points
-    
+
     Arguments:
         input_df {pd.DataFrame} -- Step 7 long format data
-    
+
     Keyword Arguments:
         n_timepoints {int} -- number of timepoints desired (default: {4})
-    
+
     Returns:
         pd.DataFrame -- [description]
     """
@@ -215,14 +229,14 @@ def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4)
 
 def find_top_percentile_threshold(input_df: pd.DataFrame, percentile: float, cell_types: List[str] = ['gr', 'b']) -> Dict[str, float]:
     """ Finds threshold to ge top percentile of each cell type
-    
+
     Arguments:
         input_df {pd.DataFrame} -- step 7 long format output
         percentile {float} -- percentile to apply
-    
+
     Keyword Arguments:
         cell_types {List[str]} -- cell types to group by (default: {['gr', 'b']})
-    
+
     Returns:
         Dict[str, float] -- dictionary of format cell_type: threshold
     """
@@ -254,14 +268,14 @@ def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_pe
 
 def count_clones_at_percentile(input_df: pd.DataFrame, percentile: float, analyzed_cell_types: List[str] = ['gr','b']) -> pd.DataFrame:
     """ Wrapper function to count clones when applying a percentile based threshold
-    
+
     Arguments:
         input_df {pd.DataFrame} -- step 7 long form data
         percentile {float} -- percentile to threshold for
-    
+
     Keyword Arguments:
         analyzed_cell_types {List[str]} -- cell_types to analyze (default: {['gr','b']})
-    
+
     Returns:
         pd.DataFrame -- clone_counts dataframe
     """
