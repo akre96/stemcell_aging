@@ -313,17 +313,37 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
             fname = fname_prefix + '_median.' + save_format
             plt.savefig(fname, format=save_format)
 
-def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame, title_addon: str = ''):
+def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
+                           title_addon: str = '',
+                           percentile: float = 0,
+                           threshold: float = 0,
+                           save: bool = False,
+                           save_path: str = './output',
+                           save_format: str = 'png'
+                          ) -> None:
+    fname_prefix = save_path + os.sep + 'lineplot_bias'
+    if percentile:
+        fname_prefix += '_p' + str(round(percentile, ndigits=2)).replace('.','-')
+    elif threshold:
+        fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.','-')
+
     plt.figure()
     sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group') 
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
     plt.title(title_addon)
+
+    fname = fname_prefix + '_all_average.' + save_format
+    if save:
+        plt.savefig(fname, format=save_format)
 
     plt.figure()
     sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='mouse_id', style='group', units='code', estimator=None)
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice by Clone')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    fname = fname_prefix + '_all.' + save_format
+    if save:
+        plt.savefig(fname, format=save_format)
 
     plt.figure()
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
@@ -331,6 +351,9 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame, title_addon: str = '')
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    fname = fname_prefix + '_aging-phenotype.' + save_format
+    if save:
+        plt.savefig(fname, format=save_format)
 
     plt.figure()
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
@@ -338,6 +361,9 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame, title_addon: str = '')
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in no_change')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    fname = fname_prefix + '_no-change.' + save_format
+    if save:
+        plt.savefig(fname, format=save_format)
 
 def plot_lineage_bias_swarm_by_group(lineage_bias_df: pd.DataFrame) -> None:
     plt.figure()
@@ -553,28 +579,43 @@ def main():
                                        save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
                                        group='no_change')
 
-    # Lineage Bias Line Plots
+    # Lineage Bias Line Plots by percentile
     if graph_type == 'top_percentile_bias' or graph_type == 'default':
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any', percentile=.95)
-        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones in top 95 Percentile at last time point in any cell type')
+        percentile = .95
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df,
+                                                                 lineage_bias_df=lineage_bias_df,
+                                                                 threshold=1,
+                                                                 lineage_bias=True,
+                                                                 cell_type='any',
+                                                                 percentile=percentile)
+        plot_lineage_bias_line(filt_lineage_bias_df,
+                               title_addon='Filtered by clones in top ' + str(round(100*percentile, 2)) + 'th Percentile by % WBC abundance per cell type at last timepoint',
+                               save=args.save,
+                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot',
+                               save_format='png',
+                              )
 
+    # Lineage Bias Line Plots by threshold
     if graph_type == 'lineage_bias_line':
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
-        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with 1% WBC last time point in any cell type')
-
-
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=.2, lineage_bias=True, cell_type='gr')
-        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.2 engraftment last time point in gr cell type')
-
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=.5, lineage_bias=True, cell_type='b')
-        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones with >.5 engraftment last time point in b cell type')
+        threshold = 1
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df,
+                                                                 lineage_bias_df=lineage_bias_df,
+                                                                 threshold=threshold,
+                                                                 lineage_bias=True,
+                                                                 cell_type='any')
+        plot_lineage_bias_line(filt_lineage_bias_df,
+                               title_addon='Filtered by clones with Abundance >' + str(round(threshold, 2)) + '% WBC at last timepoint',
+                               save=args.save,
+                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot',
+                               save_format='png',
+                              )
     
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
         plot_clone_enriched_at_time(all_clones_df,
                                     [4, 12, 14],
                                     0.2,
-                                    save=True,
+                                    save=args.save,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
                                     group='no_change',
@@ -582,7 +623,7 @@ def main():
         plot_clone_enriched_at_time(all_clones_df,
                                     [4, 12, 14],
                                     0.2,
-                                    save=True,
+                                    save=args.save,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
                                     group='aging_phenotype',

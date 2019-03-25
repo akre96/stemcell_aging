@@ -149,19 +149,40 @@ def long_to_wide_data(input_df: pd.DataFrame, data_col: str) -> pd.DataFrame:
     return output_df
 
 def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, lineage_bias_df: pd.DataFrame, threshold: float = 0, cell_type: str = 'any', lineage_bias: bool = False, percentile: float = 0) -> pd.DataFrame:
+    """ Finds clones enriched at last timepoint for clone
+    
+    Arguments:
+        input_df {pd.DataFrame} -- long format step 7 output
+        lineage_bias_df {pd.DataFrame} -- lineage bias data output,
+        set to empty dataframe if not analyzing lineage bias data
+    
+    Keyword Arguments:
+        threshold {float} -- if analyzing absolute threshold values set (default: {0})
+        cell_type {str} --  which cell type to apply threshold agains (default: {'any'})
+        lineage_bias {bool} --  set true if analyzing lineage bias data(default: {False})
+        percentile {float} --  if not 0, looks for top percentile instead of absolute threshold (default: {0})
+    
+    Returns:
+        pd.DataFrame -- [description]
+    """
+
     groupby_cols = ['mouse_id', 'code']
-    if lineage_bias:
-        if percentile:
+    if percentile:
+        if lineage_bias:
             thresholds = find_top_percentile_threshold(input_df, percentile, ['gr', 'b'])
             filtered_df = filter_cell_type_threshold(input_df, thresholds, ['gr', 'b'])
-        elif cell_type == 'any':
-            filtered_df = lineage_bias_df.loc[(lineage_bias_df['gr_percent_engraftment'] >= threshold) | (lineage_bias_df['b_percent_engraftment'] >= threshold)]
         else:
-            filtered_df = lineage_bias_df.loc[(lineage_bias_df[cell_type + '_percent_engraftment'] >= threshold)]
-
+            filtered_df = find_top_percentile_threshold(input_df, percentile, ['gr','b'])
+            groupby_cols.append('cell_type')
     else:
-        filtered_df = filter_threshold(input_df, threshold, [cell_type])
-        groupby_cols.append('cell_type')
+        if lineage_bias:
+            if cell_type == 'any':
+                filtered_df = lineage_bias_df.loc[(lineage_bias_df['gr_percent_engraftment'] >= threshold) | (lineage_bias_df['b_percent_engraftment'] >= threshold)]
+            else:
+                filtered_df = lineage_bias_df.loc[(lineage_bias_df[cell_type + '_percent_engraftment'] >= threshold)]
+        else:
+            filtered_df = filter_threshold(input_df, threshold, [cell_type])
+            groupby_cols.append('cell_type')
 
     # get max month for clones
     grouped_df = pd.DataFrame(filtered_df.groupby(by=groupby_cols).month.max()).reset_index()
@@ -173,6 +194,19 @@ def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, lineage_bias_df: p
     return filtered_for_enrichment
 
 def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4) -> pd.DataFrame:
+    """ Finds mice with desired number of timepoints.
+    Used primarily to only select mice with all four time points
+    
+    Arguments:
+        input_df {pd.DataFrame} -- Step 7 long format data
+    
+    Keyword Arguments:
+        n_timepoints {int} -- number of timepoints desired (default: {4})
+    
+    Returns:
+        pd.DataFrame -- [description]
+    """
+
     output_df = pd.DataFrame()
     for _, group in input_df.groupby(['mouse_id']):
         if group.month.nunique() >= n_timepoints:
@@ -180,6 +214,19 @@ def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4)
     return output_df
 
 def find_top_percentile_threshold(input_df: pd.DataFrame, percentile: float, cell_types: List[str] = ['gr', 'b']) -> Dict[str, float]:
+    """ Finds threshold to ge top percentile of each cell type
+    
+    Arguments:
+        input_df {pd.DataFrame} -- step 7 long format output
+        percentile {float} -- percentile to apply
+    
+    Keyword Arguments:
+        cell_types {List[str]} -- cell types to group by (default: {['gr', 'b']})
+    
+    Returns:
+        Dict[str, float] -- dictionary of format cell_type: threshold
+    """
+
     cell_type_thresholds = {}
     for cell_type in cell_types:
         cell_df = input_df.loc[input_df.cell_type == cell_type]
@@ -206,6 +253,19 @@ def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_pe
         wide_counts.to_csv(fname, index=False)
 
 def count_clones_at_percentile(input_df: pd.DataFrame, percentile: float, analyzed_cell_types: List[str] = ['gr','b']) -> pd.DataFrame:
+    """ Wrapper function to count clones when applying a percentile based threshold
+    
+    Arguments:
+        input_df {pd.DataFrame} -- step 7 long form data
+        percentile {float} -- percentile to threshold for
+    
+    Keyword Arguments:
+        analyzed_cell_types {List[str]} -- cell_types to analyze (default: {['gr','b']})
+    
+    Returns:
+        pd.DataFrame -- clone_counts dataframe
+    """
+
     thresholds = find_top_percentile_threshold(input_df, percentile, cell_types=analyzed_cell_types)
     filtered_df = filter_cell_type_threshold(input_df, thresholds=thresholds, threshold_column='percent_engraftment', analyzed_cell_types=analyzed_cell_types)
     return count_clones(filtered_df)
