@@ -493,6 +493,13 @@ def main():
                              save_format='png',
                              group='aging_phenotype'
                             )
+        venn_barcode_in_time(present_clones_df,
+                             analysed_cell_types,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
+                             save_format='png',
+                             group='all'
+                            )
     # heatmap present clones
     if graph_type == 'cluster':
         clustermap_clone_abundance(present_clones_df,
@@ -548,8 +555,8 @@ def main():
 
     # Lineage Bias Line Plots
     if graph_type == 'top_percentile_bias' or graph_type == 'default':
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any', percentile=.995)
-        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones in top 99.5 Percentile at last time point in any cell type')
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any', percentile=.95)
+        plot_lineage_bias_line(filt_lineage_bias_df, title_addon='Filtered by clones in top 95 Percentile at last time point in any cell type')
 
     if graph_type == 'lineage_bias_line':
         filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df, lineage_bias_df=lineage_bias_df, threshold=1, lineage_bias=True, cell_type='any')
@@ -565,8 +572,8 @@ def main():
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
         plot_clone_enriched_at_time(all_clones_df,
-                                    [4, 14],
-                                    0.5,
+                                    [4, 12, 14],
+                                    0.2,
                                     save=True,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
@@ -574,7 +581,7 @@ def main():
                                 )
         plot_clone_enriched_at_time(all_clones_df,
                                     [4, 12, 14],
-                                    0.5,
+                                    0.2,
                                     save=True,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
