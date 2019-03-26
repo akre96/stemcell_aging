@@ -10,6 +10,7 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
@@ -484,6 +485,24 @@ def plot_counts_at_percentile(input_df: pd.DataFrame,
             print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
+def plot_lineage_bias_abundance_3d(lineage_bias_df: pd.DataFrame, analyzed_cell_types: List[str] = ['gr','b'], group: str = 'all'):
+    fig = plt.figure()
+    fig.suptitle('Group: ' + group)
+    if group != 'all':
+        lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.group == group]
+    ax = fig.add_subplot(121, projection='3d')
+    ax.scatter(lineage_bias_df.month, lineage_bias_df.lineage_bias, lineage_bias_df[analyzed_cell_types[0]+ '_percent_engraftment'])
+    ax.set_xlabel('Month')
+    ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
+    ax.set_zlabel('Abundance in '+analyzed_cell_types[0])
+    plt.title(analyzed_cell_types[0])
+    ax = fig.add_subplot(122, projection='3d')
+    ax.scatter(lineage_bias_df.month, lineage_bias_df.lineage_bias, lineage_bias_df[analyzed_cell_types[1]+ '_percent_engraftment'])
+    ax.set_xlabel('Month')
+    ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
+    ax.set_zlabel('Abundance in '+analyzed_cell_types[1])
+    plt.title(analyzed_cell_types[1])
+    
 
 def main():
     """ Create plots set options via command line arguments
@@ -497,6 +516,7 @@ def main():
         top_perc_bias:      line plot of lineage bias over time with top percentile of clones by abundance during last time point
         engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
         counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
+        bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
 
     """
 
@@ -522,6 +542,11 @@ def main():
 
     if args.save:
         print('\n **Saving Plots Enabled** \n')
+
+    if graph_type == 'bias_time_abund':
+        plot_lineage_bias_abundance_3d(lineage_bias_df)
+        plot_lineage_bias_abundance_3d(lineage_bias_df, group='aging_phenotype')
+        plot_lineage_bias_abundance_3d(lineage_bias_df, group='no_change')
 
     if graph_type == 'counts_at_perc':
         percentile = .95
@@ -603,7 +628,13 @@ def main():
 
     # Count clones by threshold
     if graph_type == 'clone_count_bar':
-        clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
+        clone_count_thresholds = [0.01]
+        plot_clone_count_by_thresholds(present_clones_df,
+                                       clone_count_thresholds,
+                                       analysed_cell_types,
+                                       save=args.save,
+                                       save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                       group='all')
         plot_clone_count_by_thresholds(present_clones_df,
                                        clone_count_thresholds,
                                        analysed_cell_types,
@@ -619,7 +650,13 @@ def main():
 
     # Clone counts by threshold as lineplot
     if graph_type == 'clone_count_line':
-        clone_count_thresholds = [0.01, 0.02, 0.05, 0.2, 0.5]
+        clone_count_thresholds = [0.01]
+        plot_clone_count_by_thresholds(present_clones_df,
+                                       clone_count_thresholds,
+                                       analysed_cell_types,
+                                       save=args.save,
+                                       line=True,
+                                       save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time')
         plot_clone_count_by_thresholds(present_clones_df,
                                        clone_count_thresholds,
                                        analysed_cell_types,
