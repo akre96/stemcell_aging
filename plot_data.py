@@ -12,7 +12,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pyvenn import venn
-from aggregate_functions import filter_threshold, count_clones, combine_enriched_clones_at_time, find_enriched_clones_at_time, clones_enriched_at_last_timepoint, filter_mice_with_n_timepoints, find_top_percentile_threshold, count_clones_at_percentile
+from aggregate_functions import filter_threshold, count_clones, \
+     combine_enriched_clones_at_time, count_clones_at_percentile, \
+     clones_enriched_at_last_timepoint, filter_mice_with_n_timepoints, \
+     find_top_percentile_threshold
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -56,6 +59,7 @@ def plot_clone_count(clone_counts: pd.DataFrame,
             plt.ylabel('Number of Clones')
             if save:
                 fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
+                print('Saving to: ' + fname)
                 plt.savefig(fname, format=save_format)
     else:
         fig, axis = plt.subplots()
@@ -75,6 +79,7 @@ def plot_clone_count(clone_counts: pd.DataFrame,
         plt.ylabel('Number of Clones')
         if save:
             fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
+            print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
     return (fig, axis)
@@ -119,7 +124,7 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
 
 def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_months: List[int],
-                                enrichment_threshold: float,
+                                enrichment_thresholds: Dict[str, float],
                                 analyzed_cell_types: List[str] = ['gr', 'b'],
                                 group: str = 'all',
                                 save: bool = False,
@@ -151,7 +156,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
     for month in enrichement_months:
         plt.figure()
         plt.subplot(2, 1, 1)
-        enriched_df = combine_enriched_clones_at_time(filtered_df, month, enrichment_threshold, analyzed_cell_types)
+        enriched_df = combine_enriched_clones_at_time(filtered_df, month, enrichment_thresholds, analyzed_cell_types)
 
         print('Plotting clones enriched at month '+str(month))
 
@@ -162,8 +167,11 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                      legend='brief',
                      sort=True,
                     )
-        plt.suptitle('Clones With Abundance > '
-                     + str(enrichment_threshold)
+        plt.suptitle('Clones with Abundance > '
+                     + str(round(enrichment_thresholds['gr'], 2))
+                     + ' gr,'
+                     + str(round(enrichment_thresholds['b'], 2))
+                     + ' b'
                      + ' % WBC At Month: '
                      + str(month))
         plt.title('Group: ' + group)
@@ -176,7 +184,14 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                       dodge=True,
                      )
         if save:
-            fname = save_path + os.sep + 'dominant_clones_t' + str(enrichment_threshold).replace('.', '-') + '_' + 'm' + str(month) + '_' + group + '.' + save_format
+            fname = save_path \
+                    + os.sep \
+                    + 'dominant_clones_bt' \
+                    + str(round(enrichment_thresholds['b'], 2)).replace('.', '-') \
+                    + '_grt' \
+                    + str(round(enrichment_thresholds['gr'], 2)).replace('.', '-')  \
+                    + '_' + 'm' + str(month) + '_' + group + '.' + save_format
+            print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
 def clustermap_clone_abundance(filtered_df: pd.DataFrame,
@@ -231,6 +246,7 @@ def clustermap_clone_abundance(filtered_df: pd.DataFrame,
 
         if save:
             fname = save_path + os.sep + 'abundance_heatmap_' + norm_label + cell + '_' + group + '.' + save_format
+            print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
 def venn_barcode_in_time(present_clones_df: pd.DataFrame,
@@ -299,18 +315,21 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
         axis_total.set_title(cell_type + ' Total Present Clones at Time Point, Group: '+group)
         if save:
             fname = fname_prefix + '_total.' + save_format
+            print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
         _, axis_mean = venn.venn4(mean_labels, names=['4 Month', '9 Month', '12 Month', '14 Month'])
         axis_mean.set_title(cell_type + ' Mean Present Clones at Time Point, Group: ' + group)
         if save:
             fname = fname_prefix + '_mean.' + save_format
+            print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
         _, axis_median = venn.venn4(median_labels, names=['4 Month', '9 Month', '12 Month', '14 Month'])
         axis_median.set_title(cell_type + ' Median Present Clones at Time Point, Group: ' + group)
         if save:
             fname = fname_prefix + '_median.' + save_format
+            print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
 def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
@@ -323,9 +342,9 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
                           ) -> None:
     fname_prefix = save_path + os.sep + 'lineplot_bias'
     if percentile:
-        fname_prefix += '_p' + str(round(percentile, ndigits=2)).replace('.','-')
+        fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
     elif threshold:
-        fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.','-')
+        fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
 
     plt.figure()
     sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group') 
@@ -334,6 +353,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
 
     fname = fname_prefix + '_all_average.' + save_format
     if save:
+        print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)
 
     plt.figure()
@@ -343,6 +363,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     fname = fname_prefix + '_all.' + save_format
     if save:
+        print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)
 
     plt.figure()
@@ -353,6 +374,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
     fname = fname_prefix + '_aging-phenotype.' + save_format
     if save:
+        print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)
 
     plt.figure()
@@ -380,6 +402,7 @@ def plot_lineage_bias_swarm_by_group(lineage_bias_df: pd.DataFrame) -> None:
 
 def plot_counts_at_percentile(input_df: pd.DataFrame,
                               percentile: float = 0.9,
+                              thresholds: Dict[str,float] = None,
                               analyzed_cell_types: List[str] = ['gr', 'b'],
                               group: str = 'all',
                               line: bool = False,
@@ -390,10 +413,29 @@ def plot_counts_at_percentile(input_df: pd.DataFrame,
     if group != 'all':
         input_df = input_df.loc[input_df.group == group]
 
-    thresholds = find_top_percentile_threshold(input_df, percentile, analyzed_cell_types)
-    clone_counts = count_clones_at_percentile(input_df, percentile, analyzed_cell_types=analyzed_cell_types)
+    if not thresholds:
+        thresholds = find_top_percentile_threshold(input_df, percentile, analyzed_cell_types)
+    clone_counts = count_clones_at_percentile(input_df, percentile, analyzed_cell_types=analyzed_cell_types, thresholds=thresholds)
 
     if line:
+        _, axis = plt.subplots()
+        sns.lineplot(x='month',
+                    y='code',
+                    hue='cell_type',
+                    data=clone_counts,
+                    ax=axis,
+                    )
+        title_string = 'Average/Mouse Clone Counts for Cells Filtered Above Percentile Based Threshold'
+        plt.suptitle(title_string)
+        label = 'Group: ' + group + ', Percentile: ' + str(round(100 * percentile, ndigits=2))
+        plt.title(label)
+        plt.xlabel('Month')
+        plt.ylabel('Number of Clones')
+
+        if save:
+            fname = save_path + os.sep + 'clone_count_p' + str(percentile).replace('.', '-') + '_' + 'Average' + '_' + group + '.' + save_format
+            print('Saving to: ' + fname)
+            plt.savefig(fname, format=save_format)
         for cell_type in clone_counts.cell_type.unique():
             _, axis = plt.subplots()
             clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
@@ -416,6 +458,7 @@ def plot_counts_at_percentile(input_df: pd.DataFrame,
 
             if save:
                 fname = save_path + os.sep + 'clone_count_p' + str(percentile).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
+                print('Saving to: ' + fname)
                 plt.savefig(fname, format=save_format)
     else:
         _, axis = plt.subplots()
@@ -438,6 +481,7 @@ def plot_counts_at_percentile(input_df: pd.DataFrame,
         plt.ylabel('Number of Clones')
         if save:
             fname = save_path + os.sep + 'clone_count_p' + str(percentile).replace('.', '-') + '_' + group + '.' + save_format
+            print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
 
 
@@ -462,6 +506,7 @@ def main():
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
+    parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
 
     args = parser.parse_args()
     input_df = pd.read_csv(args.input)
@@ -473,14 +518,22 @@ def main():
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
     all_clones_df = filter_threshold(input_df, 0.0, analysed_cell_types)
     graph_type = args.graph_type
+
+
     if args.save:
         print('\n **Saving Plots Enabled** \n')
 
     if graph_type == 'counts_at_perc':
-        percentile = 0.90
-        line = True
+        percentile = .95
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+
+        for cell_type, threshold in dominant_thresholds.items():
+            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
+        line = ((args.options == 'line') | ( args.options == 'default'))
         plot_counts_at_percentile(present_clones_df,
                                   percentile=percentile,
+                                  thresholds=dominant_thresholds,
                                   analyzed_cell_types=analysed_cell_types,
                                   save=args.save,
                                   line=line,
@@ -489,6 +542,7 @@ def main():
                                  )
         plot_counts_at_percentile(present_clones_df,
                                   percentile=percentile,
+                                  thresholds=dominant_thresholds,
                                   analyzed_cell_types=analysed_cell_types,
                                   save=args.save,
                                   line=line,
@@ -497,6 +551,7 @@ def main():
                                  )
         plot_counts_at_percentile(present_clones_df,
                                   percentile=percentile,
+                                  thresholds=dominant_thresholds,
                                   analyzed_cell_types=analysed_cell_types,
                                   save=args.save,
                                   line=line,
@@ -581,19 +636,39 @@ def main():
                                        group='no_change')
 
     # Lineage Bias Line Plots by percentile
-    if graph_type == 'top_perc_bias' or graph_type == 'default':
-        percentile = .95
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df,
+    if graph_type == 'top_perc_bias':
+        percentile = .995
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+
+        for cell_type, threshold in dominant_thresholds.items():
+            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
+
+        filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(input_df=input_df,
                                                                  lineage_bias_df=lineage_bias_df,
-                                                                 threshold=1,
+                                                                 thresholds=dominant_thresholds,
                                                                  lineage_bias=True,
-                                                                 cell_type='any',
-                                                                 percentile=percentile)
-        plot_lineage_bias_line(filt_lineage_bias_df,
-                               title_addon='Filtered by clones in top ' + str(round(100*percentile, 2)) + 'th Percentile by % WBC abundance per cell type at last timepoint',
+                                                                 cell_type='gr',
+        )
+        filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(input_df=input_df,
+                                                                 lineage_bias_df=lineage_bias_df,
+                                                                 thresholds=dominant_thresholds,
+                                                                 lineage_bias=True,
+                                                                 cell_type='b',
+        )
+        plot_lineage_bias_line(filt_lineage_bias_gr_df,
+                               title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['gr'], 2)) + '% WBC abundance in GR at last timepoint',
                                save=args.save,
-                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot',
+                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/gr',
                                save_format='png',
+                               percentile=percentile
+                              )
+        plot_lineage_bias_line(filt_lineage_bias_b_df,
+                               title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['b'], 2)) + '% WBC abundance in B at last timepoint',
+                               save=args.save,
+                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/b',
+                               save_format='png',
+                               percentile=percentile
                               )
 
     # Lineage Bias Line Plots by threshold
@@ -601,7 +676,7 @@ def main():
         threshold = 1
         filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df,
                                                                  lineage_bias_df=lineage_bias_df,
-                                                                 threshold=threshold,
+                                                                 thresholds={'any': threshold},
                                                                  lineage_bias=True,
                                                                  cell_type='any')
         plot_lineage_bias_line(filt_lineage_bias_df,
@@ -613,9 +688,16 @@ def main():
 
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
+        percentile=0.95
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+
+        for cell_type, threshold in dominant_thresholds.items():
+            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
+
         plot_clone_enriched_at_time(all_clones_df,
                                     [4, 12, 14],
-                                    0.2,
+                                    dominant_thresholds,
                                     save=args.save,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
@@ -623,7 +705,7 @@ def main():
                                    )
         plot_clone_enriched_at_time(all_clones_df,
                                     [4, 12, 14],
-                                    0.2,
+                                    dominant_thresholds,
                                     save=args.save,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
