@@ -51,11 +51,11 @@ Example:
   - TODO: Add argument variables for output directory/filename and input file
 
 ### Plotting Data
-  1. In the root directory of the repository run:
-  `python plot_data.py`
+  1. In the root directory of the repository run:  
+  `python plot_data.py`  
     - By default this will plot whatever the most recently created/worked on graph was 
   2. add a `-s` flag to save plot outputs
-  3. add a `-g GRAPH_TYPE` to change graph type, the following GRAPH_TYPEs availabale
+  3. add a `-g GRAPH_TYPE` to change graph type, the following GRAPH_TYPEs available  
     -  cluster:            Clustered heatmap of present clone engraftment
     -  venn:               Venn Diagram of clone existance at timepoint
     -  clone_count:        Bar charts of clone counts by cell type at different thresholds
