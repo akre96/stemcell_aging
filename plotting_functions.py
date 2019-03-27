@@ -14,7 +14,7 @@ from aggregate_functions import filter_threshold, count_clones, \
      combine_enriched_clones_at_time, count_clones_at_percentile, \
      filter_mice_with_n_timepoints, \
      find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
-     get_max_by_mouse_timepoint
+     get_max_by_mouse_timepoint, get_bias_change
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -540,3 +540,6 @@ def plot_max_engraftment(input_df: pd.DataFrame, title: str = '', percentile: fl
             fname = save_path + os.sep + 'max_engraftment' + '_' + group + '.' + save_format
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)
+
+def plot_bias_change_hist(bias_change_df: pd.DataFrame):
+    sns.swarmplot(x='time_change', y='bias_change', data=bias_change_df)

@@ -8,14 +8,14 @@ import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 from aggregate_functions import filter_threshold, \
-     clones_enriched_at_last_timepoint, \
+     clones_enriched_at_last_timepoint, get_bias_change, \
      find_top_percentile_threshold, \
      filter_cell_type_threshold
 from plotting_functions import plot_max_engraftment, \
      plot_clone_count_by_thresholds, venn_barcode_in_time, \
      plot_clone_enriched_at_time, plot_counts_at_percentile, \
      plot_lineage_bias_abundance_3d, plot_lineage_bias_line, \
-     clustermap_clone_abundance
+     clustermap_clone_abundance, plot_bias_change_hist
 
 
 
@@ -41,6 +41,7 @@ def main():
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='lineage_bias_from_counts.csv')
+    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='lineage_bias_change_from_counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
@@ -49,6 +50,7 @@ def main():
     args = parser.parse_args()
     input_df = pd.read_csv(args.input)
     lineage_bias_df = pd.read_csv(args.lineage_bias)
+    bias_change_df = pd.read_csv(args.bias_change)
 
     analysed_cell_types = ['gr', 'b']
 
@@ -58,9 +60,13 @@ def main():
     graph_type = args.graph_type
 
 
+
     if args.save:
         print('\n **Saving Plots Enabled** \n')
 
+    if graph_type in ['default', 'bias_change']:
+        plot_bias_change_hist(bias_change_df)
+        
     if graph_type == 'max_engraftment':
         plot_max_engraftment(present_clones_df, title='All Present Clones')
 
@@ -267,7 +273,7 @@ def main():
 
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
-        percentile=0.95
+        percentile = 0.95
         present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
         dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
 
