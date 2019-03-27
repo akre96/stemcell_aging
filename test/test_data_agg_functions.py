@@ -78,9 +78,10 @@ def test_combine_enriched_clones_real_data():
     filt_df = filter_threshold(REAL_DATA, threshold, analyzed_cell_types)
     enrichment_month = 4
     enrichment_threshold = .2
+    thresholds = {'b':enrichment_threshold}
 
     # Finds the right barcode
-    enriched_df = combine_enriched_clones_at_time(filt_df, enrichment_month, enrichment_threshold, 'b')
+    enriched_df = combine_enriched_clones_at_time(filt_df, enrichment_month, thresholds, 'b')
     should_be_empty_index = (enriched_df.month == enrichment_month) & (enriched_df.percent_engraftment < enrichment_threshold)
     assert enriched_df[should_be_empty_index].empty
     assert enriched_df[(enriched_df.month == enrichment_month) & (enriched_df.percent_engraftment < enrichment_threshold)].empty
