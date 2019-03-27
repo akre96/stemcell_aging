@@ -301,6 +301,34 @@ def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.Da
     norm_data_df = with_baseline_counts_df.assign(norm_percent_engraftment=lambda row: row.percent_engraftment/row.cell_count)
     return norm_data_df
 
+def get_bias_change(lineage_bias_df: pd.DataFrame, save_err: bool = False) -> pd.DataFrame:
+    bias_change_cols = ['code', 'bias_change', 'time_change', 'first_timepoint', 'last_timepoint']
+    bias_change_df = pd.DataFrame(columns=bias_change_cols)
+    same_code_df = pd.DataFrame()
+    for _, group in lineage_bias_df.groupby('code'):
+        if len(group) < 2:
+            continue
+        bias_change_row = pd.DataFrame(columns=bias_change_cols)
+        first_timepoint = group.loc[group['month'].idxmin()]
+        last_timepoint = group.loc[group['month'].idxmax()]
+        if first_timepoint.code != last_timepoint.code:
+            ValueError('Not grouped by same code/clone')
+        if first_timepoint.month == last_timepoint.month:
+            same_code_df = same_code_df.append(group)
+            continue
+
+        bias_change_row.bias_change = [last_timepoint.lineage_bias - first_timepoint.lineage_bias]
+        bias_change_row.time_change = [last_timepoint.month - first_timepoint.month]
+        bias_change_row.first_timepoint = [first_timepoint.month]
+        bias_change_row.last_timepoint = [last_timepoint.month]
+        bias_change_row.code = first_timepoint.code
+        bias_change_df = bias_change_df.append(bias_change_row, ignore_index=True)
+
+    if save_err:
+        same_code_df.to_csv('same_code_mice_lineage_bias.csv')
+
+    return bias_change_df
+
 def main():
     """ Calculate and save lineage bias
     """
@@ -313,6 +341,9 @@ def main():
 
     lineage_bias_df = create_lineage_bias_df(norm_data_df)
     lineage_bias_df.to_csv('lineage_bias_from_counts.csv', index=False)
+
+    bias_change_df = get_bias_change(lineage_bias_df)
+    bias_change_df.to_csv('lineage_bias_change_from_counts.csv', index=False)
 
 
 if __name__ == '__main__':
