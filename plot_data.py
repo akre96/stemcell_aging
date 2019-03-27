@@ -16,7 +16,8 @@ from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
      combine_enriched_clones_at_time, count_clones_at_percentile, \
      clones_enriched_at_last_timepoint, filter_mice_with_n_timepoints, \
-     find_top_percentile_threshold
+     find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
+     get_max_by_mouse_timepoint, filter_cell_type_threshold
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -127,7 +128,6 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_months: List[int],
                                 enrichment_thresholds: Dict[str, float],
                                 analyzed_cell_types: List[str] = ['gr', 'b'],
-                                group: str = 'all',
                                 save: bool = False,
                                 save_path: str = './output',
                                 save_format: str = 'png',
@@ -151,49 +151,49 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
         None -- Run plt.show() to display figures created
     """
 
-    if group != 'all':
-        filtered_df = filtered_df.loc[filtered_df.group == group]
-    print('Plotting group: ' + group)
+    sns.set_palette(sns.color_palette("hls", 2))
     for month in enrichement_months:
-        plt.figure()
-        plt.subplot(2, 1, 1)
+        print('\n Month '+ str(month) +'\n')
         enriched_df = combine_enriched_clones_at_time(filtered_df, month, enrichment_thresholds, analyzed_cell_types)
+        print('Number of Mice in No Change Group: ' + str(enriched_df.loc[enriched_df.group == 'no_change'].mouse_id.nunique()))
+        print('Number of Mice in Aging Phenotype Group: ' + str(enriched_df.loc[enriched_df.group == 'aging_phenotype'].mouse_id.nunique()))
 
-        print('Plotting clones enriched at month '+str(month))
+        if month == 12:
+            print('EXCLUDING MICE WITH 14 MONTH DATA')
+            enriched_df = get_data_from_mice_missing_at_time(enriched_df, exclusion_timepoint=14, timepoint_column='month')
+        for cell_type in analyzed_cell_types:
+            plt.figure()
+            plt.subplot(2, 1, 1)
+            print('Plotting clones enriched at month '+str(month)+' Cell Type: ' + cell_type)
 
-        sns.lineplot(x='month',
-                     y='percent_engraftment',
-                     hue='cell_type',
-                     data=enriched_df,
-                     legend='brief',
-                     sort=True,
-                    )
-        plt.suptitle('Clones with Abundance > '
-                     + str(round(enrichment_thresholds['gr'], 2))
-                     + ' gr,'
-                     + str(round(enrichment_thresholds['b'], 2))
-                     + ' b'
-                     + ' % WBC At Month: '
-                     + str(month))
-        plt.title('Group: ' + group)
-        plt.xlabel('')
-        plt.subplot(2, 1, 2)
-        sns.swarmplot(x='month',
-                      y='percent_engraftment',
-                      hue='cell_type',
-                      data=enriched_df,
-                      dodge=True,
-                     )
-        if save:
-            fname = save_path \
-                    + os.sep \
-                    + 'dominant_clones_bt' \
-                    + str(round(enrichment_thresholds['b'], 2)).replace('.', '-') \
-                    + '_grt' \
-                    + str(round(enrichment_thresholds['gr'], 2)).replace('.', '-')  \
-                    + '_' + 'm' + str(month) + '_' + group + '.' + save_format
-            print('Saving to: ' + fname)
-            plt.savefig(fname, format=save_format)
+            cell_df = enriched_df.loc[enriched_df.cell_type == cell_type]
+            sns.lineplot(x='month',
+                        y='percent_engraftment',
+                        hue='group',
+                        data=cell_df,
+                        legend='brief',
+                        sort=True,
+                        )
+            plt.suptitle(cell_type + ' Clones with Abundance > '
+                        + str(round(enrichment_thresholds[cell_type], 2))
+                        + ' % WBC At Month: ' + str(month))
+            plt.xlabel('')
+            plt.subplot(2, 1, 2)
+            ax = sns.swarmplot(x='month',
+                        y='percent_engraftment',
+                        hue='group',
+                        data=cell_df,
+                        dodge=True,
+                        )
+            ax.legend_.remove()
+            if save:
+                fname = save_path \
+                        + os.sep \
+                        + 'dominant_clones_' + cell_type + '_' \
+                        + str(round(enrichment_thresholds[cell_type], 2)).replace('.', '-') \
+                        + '_' + 'm' + str(month) + '.' + save_format
+                print('Saving to: ' + fname)
+                plt.savefig(fname, format=save_format)
 
 def clustermap_clone_abundance(filtered_df: pd.DataFrame,
                                cell_types: List[str],
@@ -348,7 +348,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
         fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
 
     plt.figure()
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group') 
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2))
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
     plt.title(title_addon)
 
@@ -503,6 +503,46 @@ def plot_lineage_bias_abundance_3d(lineage_bias_df: pd.DataFrame, analyzed_cell_
     ax.set_zlabel('Abundance in '+analyzed_cell_types[1])
     plt.title(analyzed_cell_types[1])
     
+def plot_max_engraftment(input_df: pd.DataFrame, title: str = '', percentile: float = 0, save: bool = False, save_path: str = '', save_format: str = 'png') -> None:
+    max_df = get_max_by_mouse_timepoint(input_df)
+
+    plt.figure()
+    sns.pointplot(x='month', y='percent_engraftment', hue='cell_type', hue_order=['gr','b'], data=max_df)
+    plt.suptitle('Max Engraftment of All Mice')
+    plt.title(title)
+    if save:
+        if percentile:
+            fname = save_path + os.sep + 'max_engraftment' + str(round(100*percentile, 2)).replace('.', '-') + '_all' + '.' + save_format
+        else:
+            fname = save_path + os.sep + 'max_engraftment' + '_all' + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+    plt.figure()
+    group = 'no_change'
+    sns.pointplot(x='month', y='percent_engraftment', hue='cell_type', hue_order=['gr','b'], data=max_df.loc[max_df.group == group])
+    plt.suptitle('Max Engraftment of ' + group)
+    plt.title(title)
+    if save:
+        if percentile:
+            fname = save_path + os.sep + 'max_engraftment' + str(round(100*percentile, 2)).replace('.', '-') + '_' + group + '.' + save_format
+        else:
+            fname = save_path + os.sep + 'max_engraftment' + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+    plt.figure()
+    group = 'aging_phenotype'
+    sns.pointplot(x='month', y='percent_engraftment', hue='cell_type', hue_order=['gr','b'], data=max_df.loc[max_df.group == group])
+    plt.suptitle('Max Engraftment of ' + group)
+    plt.title(title)
+    if save:
+        if percentile:
+            fname = save_path + os.sep + 'max_engraftment' + str(round(100*percentile, 2)).replace('.', '-') + '_' + group + '.' + save_format
+        else:
+            fname = save_path + os.sep + 'max_engraftment' + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
 
 def main():
     """ Create plots set options via command line arguments
@@ -542,6 +582,26 @@ def main():
 
     if args.save:
         print('\n **Saving Plots Enabled** \n')
+
+    if graph_type == 'max_engraftment':
+        plot_max_engraftment(present_clones_df, title='All Present Clones')
+
+        percentile = .95
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+        filtered_df = filter_cell_type_threshold(present_clones_df, thresholds=dominant_thresholds, analyzed_cell_types=['gr', 'b'])
+        plot_max_engraftment(filtered_df,
+                             title='Filtered by gr > '
+                             + str(round(dominant_thresholds['gr'], 2))
+                             + ', b > '
+                             + str(round(dominant_thresholds['b'], 2))
+                             + ' % WBC, Percentile: '
+                             + str(round(100*percentile, 2)),
+                             percentile=percentile,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment',
+        )
+
 
     if graph_type == 'bias_time_abund':
         plot_lineage_bias_abundance_3d(lineage_bias_df)
@@ -674,7 +734,11 @@ def main():
 
     # Lineage Bias Line Plots by percentile
     if graph_type == 'top_perc_bias':
-        percentile = .995
+        if args.options == 'default':
+            percentile = .995
+        else:
+            percentile = float(args.options)
+        print('Percentile set to: ' + str(percentile))
         present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
         dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
 
@@ -738,15 +802,6 @@ def main():
                                     save=args.save,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
-                                    group='no_change',
-                                   )
-        plot_clone_enriched_at_time(all_clones_df,
-                                    [4, 12, 14],
-                                    dominant_thresholds,
-                                    save=args.save,
-                                    save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
-                                    save_format='png',
-                                    group='aging_phenotype',
                                    )
     
     if not args.save:

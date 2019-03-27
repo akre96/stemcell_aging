@@ -276,5 +276,27 @@ def count_clones_at_percentile(input_df: pd.DataFrame, percentile: float, analyz
     filtered_df = filter_cell_type_threshold(input_df, thresholds=thresholds, threshold_column='percent_engraftment', analyzed_cell_types=analyzed_cell_types)
     return count_clones(filtered_df)
 
+def get_max_by_mouse_timepoint(input_df: pd.DataFrame, timepoint_column: str = 'month') -> pd.DataFrame:
+    """ Find the maximum % engraftment by mouse/cell_type/month
+    
+    Arguments:
+        input_df {pd.DataFrame} -- Dataframe pre-filtered for desired group to look for
+    
+    Keyword Arguments:
+        timepoint_column {str} -- time column to group by (default: {'month'})
+    
+    Returns:
+        pd.DataFrame -- data frame of max percent_engraftment
+    """
+
+    max_group = input_df.groupby(by=['cell_type', timepoint_column, 'mouse_id', 'group']).percent_engraftment.max()
+    max_df = pd.DataFrame(max_group).reset_index()
+    return max_df
+
+
+def get_data_from_mice_missing_at_time(input_df: pd.DataFrame, exclusion_timepoint: int, timepoint_column: str = 'month') -> pd.DataFrame:
+    exclusion_mice = input_df.loc[input_df[timepoint_column] == exclusion_timepoint].mouse_id.unique()
+    excluded_df = input_df.loc[~input_df.mouse_id.isin(exclusion_mice)]
+    return excluded_df
 #INPUT_DF = pd.read_csv('/home/sakre/Code/stemcell_aging/Ania_M_all_percent-engraftment_100818_long.csv')
 #FILTER_DF = filter_threshold(INPUT_DF, 0.01, ['gr', 'b'])
