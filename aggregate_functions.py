@@ -24,7 +24,7 @@ def filter_threshold(input_df: pd.DataFrame,
 
     analyzed_cell_types_df = input_df.loc[input_df.cell_type.isin(analyzed_cell_types)]
     threshold_filtered_df = analyzed_cell_types_df[analyzed_cell_types_df[threshold_column] > threshold]
-    threshold_filtered_df['month'] = pd.to_numeric(round(threshold_filtered_df['day']/30), downcast='integer')
+    threshold_filtered_df = threshold_filtered_df.assign(month=lambda row: pd.to_numeric((row.day/30).round(), downcast='integer'))
     return threshold_filtered_df
 
 def filter_cell_type_threshold(input_df: pd.DataFrame,
@@ -295,8 +295,20 @@ def get_max_by_mouse_timepoint(input_df: pd.DataFrame, timepoint_column: str = '
 
 
 def get_data_from_mice_missing_at_time(input_df: pd.DataFrame, exclusion_timepoint: int, timepoint_column: str = 'month') -> pd.DataFrame:
+    """ Function used to exclude mice with data at a certain timepoint
+    
+    Arguments:
+        input_df {pd.DataFrame} -- input dataframe (lineage_bias or perc_engraftment)
+        exclusion_timepoint {int} -- timepoint during which to filter out mice
+    
+    Keyword Arguments:
+        timepoint_column {str} -- column to search for timepoint (default: {'month'})
+    
+    Returns:
+        pd.DataFrame -- dataframe without mice meant to be excluded
+    """
+
     exclusion_mice = input_df.loc[input_df[timepoint_column] == exclusion_timepoint].mouse_id.unique()
     excluded_df = input_df.loc[~input_df.mouse_id.isin(exclusion_mice)]
     return excluded_df
-#INPUT_DF = pd.read_csv('/home/sakre/Code/stemcell_aging/Ania_M_all_percent-engraftment_100818_long.csv')
-#FILTER_DF = filter_threshold(INPUT_DF, 0.01, ['gr', 'b'])
+
