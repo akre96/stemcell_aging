@@ -1,7 +1,9 @@
 """Calculates lineage bias for clones
 """
+import argparse
 from typing import List
 import re
+import os
 from math import pi, sin, atan
 import pandas as pd
 from aggregate_functions import filter_threshold
@@ -302,15 +304,15 @@ def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.Da
     return norm_data_df
 
 def get_bias_change(lineage_bias_df: pd.DataFrame, save_err: bool = False) -> pd.DataFrame:
-    bias_change_cols = ['code', 'bias_change', 'time_change', 'first_timepoint', 'last_timepoint']
+    bias_change_cols = ['code', 'mouse_id', 'group', 'bias_change', 'time_change', 'first_timepoint', 'last_timepoint']
     bias_change_df = pd.DataFrame(columns=bias_change_cols)
     same_code_df = pd.DataFrame()
     for _, group in lineage_bias_df.groupby('code'):
         if len(group) < 2:
             continue
         bias_change_row = pd.DataFrame(columns=bias_change_cols)
-        first_timepoint = group.loc[group['month'].idxmin()]
-        last_timepoint = group.loc[group['month'].idxmax()]
+        first_timepoint = group.loc[group['month'].astype(int).idxmin()]
+        last_timepoint = group.loc[group['month'].astype(int).idxmax()]
         if first_timepoint.code != last_timepoint.code:
             ValueError('Not grouped by same code/clone')
         if first_timepoint.month == last_timepoint.month:
@@ -322,6 +324,8 @@ def get_bias_change(lineage_bias_df: pd.DataFrame, save_err: bool = False) -> pd
         bias_change_row.first_timepoint = [first_timepoint.month]
         bias_change_row.last_timepoint = [last_timepoint.month]
         bias_change_row.code = first_timepoint.code
+        bias_change_row.mouse_id = first_timepoint.mouse_id
+        bias_change_row.group = first_timepoint.group
         bias_change_df = bias_change_df.append(bias_change_row, ignore_index=True)
 
     if save_err:
@@ -333,17 +337,46 @@ def main():
     """ Calculate and save lineage bias
     """
 
-    input_df = pd.read_csv('Ania_M_all_percent-engraftment_100818_long.csv')
-    cell_count_data = parse_wbc_count_file("/home/sakre/Data/OT 2.0 WBCs D122 D274 D365 D420.txt")
-    present_df = filter_threshold(input_df, .01, ['gr', 'b'])
+    parser = argparse.ArgumentParser(description="Calculate lineage bias and change in lineage bias over time at thresholds")
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
+    parser.add_argument('-c', '--counts', dest='counts_file', help='Path to txt containing FACS cell count data', default="/home/sakre/Data/OT 2.0 WBCs D122 D274 D365 D420.txt")
+    parser.add_argument('-t', '--threshold', dest='threshold', help='Threshold to filter presence of cells by for percent_engraftment', default=.01, type=float)
+    parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
+    parser.add_argument('-l', '--bias-only', dest='bias_only', help='Set flag if you only want to calculate lineage bias, not its change', action="store_true")
+
+    args = parser.parse_args()
+
+    input_df = pd.read_csv(args.input)
+    cell_count_data = parse_wbc_count_file(args.counts_file)
+
+    threshold = args.threshold
+    print('Calculating Lineage Bias and Change for presence threshold of: ' + str(threshold) + '\n')
+
+    print('Filtering for present clones...')
+    present_df = filter_threshold(input_df, threshold, ['gr', 'b'])
+    print('Done.\n')
+    print('Normalizing data...')
     with_baseline_counts_df = calculate_baseline_counts(present_df, cell_count_data)
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
+    print('Done.\n')
+    norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
 
+    print('Calculating lineage bias...')
+    fname_suffix = '_t' + str(threshold).replace('.', '-') + '_from-counts.csv'
     lineage_bias_df = create_lineage_bias_df(norm_data_df)
-    lineage_bias_df.to_csv('lineage_bias_from_counts.csv', index=False)
+    lineage_bias_file_name = args.output_dir + os.sep + 'lineage_bias' + fname_suffix
+    print('Done.\n')
+    print('\nSaving Lineage Bias Data To: ' + lineage_bias_file_name)
+    lineage_bias_df.to_csv(lineage_bias_file_name, index=False)
 
-    bias_change_df = get_bias_change(lineage_bias_df)
-    bias_change_df.to_csv('lineage_bias_change_from_counts.csv', index=False)
+
+    if not args.bias_only:
+        print('Calculating change in lineage bias...')
+        bias_change_df = get_bias_change(lineage_bias_df)
+        bias_change_file_name = args.output_dir + os.sep + 'bias_change' + fname_suffix
+        print('Done.\n')
+        print('\nSaving Bias Change Data To: ' + bias_change_file_name)
+        bias_change_df.to_csv(bias_change_file_name, index=False)
 
 
 if __name__ == '__main__':

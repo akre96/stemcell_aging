@@ -5,10 +5,12 @@ Returns:
 """
 
 import argparse
+import glob
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 from aggregate_functions import filter_threshold, \
-     clones_enriched_at_last_timepoint, get_bias_change, \
+     clones_enriched_at_last_timepoint, \
      find_top_percentile_threshold, \
      filter_cell_type_threshold
 from plotting_functions import plot_max_engraftment, \
@@ -35,6 +37,7 @@ def main():
         counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
         bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
         max_engraftment:    point plot of maximum engraftment averaged across mice by phenotype groups and all mice
+        bias_change_dist:   distribution (histogram + rugplot + kde) of change in lineage bias across thresholds
 
     """
 
@@ -62,11 +65,42 @@ def main():
 
 
     if args.save:
-        print('\n **Saving Plots Enabled** \n')
+        print('\n*** Saving Plots Enabled ***\n')
 
-    if graph_type in ['default', 'bias_change']:
-        plot_bias_change_hist(bias_change_df)
-        
+    if graph_type in ['bias_change_dist']:
+        thresholds = [0.0]
+        bias_data_dir = 'output/lineage_bias'
+        for threshold in thresholds:
+            bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_t'+str(threshold).replace('.', '-')+'_*.csv')
+            if len(bias_change_file) != 1:
+                print('\nMissing file for threshold: ' + str(threshold))
+                print('Results when searching for bias change file:')
+                print(bias_change_file)
+                continue
+                
+            th_change_df = pd.read_csv(bias_change_file[0])
+            plot_bias_change_hist(th_change_df,
+                threshold=threshold,
+                absolute_value=True,
+                group='all',
+                save=args.save,
+                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/bias_distribution'
+            )
+            plot_bias_change_hist(th_change_df,
+                threshold=threshold,
+                absolute_value=True,
+                group='no_change',
+                save=args.save,
+                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/bias_distribution'
+            )
+            plot_bias_change_hist(th_change_df,
+                threshold=threshold,
+                absolute_value=True,
+                group='aging_phenotype',
+                save=args.save,
+                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/bias_distribution'
+            )
+                    
     if graph_type == 'max_engraftment':
         plot_max_engraftment(present_clones_df, title='All Present Clones')
 
@@ -290,6 +324,8 @@ def main():
     
     if not args.save:
         plt.show()
+    else:
+        print('\n*** All Plots Saved ***\n')
 
 
 if __name__ == "__main__":

@@ -12,9 +12,9 @@ import seaborn as sns
 from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
      combine_enriched_clones_at_time, count_clones_at_percentile, \
-     filter_mice_with_n_timepoints, \
+     filter_mice_with_n_timepoints, filter_cell_type_threshold, \
      find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
-     get_max_by_mouse_timepoint, get_bias_change
+     get_max_by_mouse_timepoint
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -541,5 +541,29 @@ def plot_max_engraftment(input_df: pd.DataFrame, title: str = '', percentile: fl
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)
 
-def plot_bias_change_hist(bias_change_df: pd.DataFrame):
-    sns.swarmplot(x='time_change', y='bias_change', data=bias_change_df)
+def plot_bias_change_hist(bias_change_df: pd.DataFrame,
+                          threshold: float,
+                          absolute_value: bool = False,
+                          group: str = 'all',
+                          save: bool = False,
+                          save_path: str = 'output',
+                          save_format: str = 'png'
+                         ) -> None:
+    plt.figure()
+    bins = 20
+    if group != 'all':
+        bias_change_df = bias_change_df.loc[bias_change_df.group == group]
+    if absolute_value:
+        sns.distplot(bias_change_df.bias_change.abs(), bins=bins, rug=True)
+    else:
+        sns.distplot(bias_change_df.bias_change, bins=bins, rug=True)
+
+    plt.title('Distribution of lineage bias change')
+    plt.suptitle('Threshold: ' + str(threshold) + ' Group: ' + group)
+    plt.xlabel('Magnitude of Lineage Bias Change')
+    plt.ylabel('Count of Clones')
+
+    if save:
+        fname = save_path + os.sep + 'bias_change_distribution_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
