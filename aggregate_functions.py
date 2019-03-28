@@ -47,6 +47,12 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
     """
 
     filtered_df = pd.DataFrame()
+    if 'any' in thresholds.keys():
+        return filter_threshold(input_df,
+                                threshold=thresholds['any'],
+                                analyzed_cell_types=analyzed_cell_types,
+                                threshold_column=threshold_column,
+                )
     for cell_type in analyzed_cell_types:
         cell_df = filter_threshold(input_df,
                                    threshold=thresholds[cell_type],
