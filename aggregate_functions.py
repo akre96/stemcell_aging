@@ -3,6 +3,7 @@
 """
 from typing import List, Dict
 import os
+import scipy.stats as stats
 import pandas as pd
 
 def filter_threshold(input_df: pd.DataFrame,
@@ -125,7 +126,7 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
     enriched_clones_df = cell_df.loc[(~cell_df['code'].isin(stray_clones)) & (cell_df['code'].isin(enriched_clones))]
     return enriched_clones_df
 
-def combine_enriched_clones_at_time(input_df: pd.DataFrame, enrichement_month: int, thresholds: Dict[str,float], analyzed_cell_types: List[str]) -> pd.DataFrame:
+def combine_enriched_clones_at_time(input_df: pd.DataFrame, enrichment_month: int, thresholds: Dict[str,float], analyzed_cell_types: List[str], lineage_bias: bool = False) -> pd.DataFrame:
     """ wrapper of find_enriched_clones_at_time() to combine entries from multiple cell types
     
     Arguments:
@@ -140,7 +141,10 @@ def combine_enriched_clones_at_time(input_df: pd.DataFrame, enrichement_month: i
 
     all_enriched_df = pd.DataFrame()
     for cell_type in analyzed_cell_types:
-        enriched_cell_df = find_enriched_clones_at_time(input_df, enrichement_month, thresholds[cell_type], cell_type)
+        if lineage_bias:
+            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_month, thresholds[cell_type], cell_type, lineage_bias=lineage_bias, threshold_column=cell_type+'_percent_engraftment')
+        else:
+            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_month, thresholds[cell_type], cell_type, lineage_bias=lineage_bias)
         all_enriched_df = all_enriched_df.append(enriched_cell_df)
     return all_enriched_df
 
@@ -318,3 +322,27 @@ def get_data_from_mice_missing_at_time(input_df: pd.DataFrame, exclusion_timepoi
     excluded_df = input_df.loc[~input_df.mouse_id.isin(exclusion_mice)]
     return excluded_df
 
+def t_test_on_venn_data():
+    """ Conducts independent t_test on data used to generate venn diagrams
+    Data for each timepoint taken from print statements in the venn_barcode_in_time
+    function in plotting_functions.py
+    """
+
+    no_change_b_4 = [91, 42, 88, 19, 37]
+    aging_phenotype_b_4 = [107, 98, 94]
+    no_change_gr_14 = [28, 15, 0, 1, 0]
+    aging_phenotype_gr_14 = [13, 9, 31]
+    no_change_b_14 = [60, 9, 13, 15, 7]
+    aging_phenotype_b_14 = [5, 0, 33]
+
+    vals = stats.ttest_ind(no_change_b_4, aging_phenotype_b_4)
+    print('\nAging vs No Change 4 month only B clones ttest p-value: ')
+    print(vals.pvalue)
+
+    vals = stats.ttest_ind(no_change_gr_14, aging_phenotype_gr_14)
+    print('\nAging vs No Change 14 month only Gr clones ttest p-value: ')
+    print(vals.pvalue)
+
+    vals = stats.ttest_ind(no_change_b_14, aging_phenotype_b_14)
+    print('\nAging vs No Change 14 month only B clones ttest p-value: ')
+    print(vals.pvalue)

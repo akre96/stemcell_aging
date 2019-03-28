@@ -277,9 +277,9 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
     print('Length of input after: '+str(len(present_clones_df)))
     if group != 'all':
         present_clones_df = present_clones_df.loc[present_clones_df.group == group]
-
+    print('\n Group: ' + group)
     for cell_type in analysed_cell_types:
-        print('Venn diagram for: ' + cell_type)
+        print('\nVenn diagram for: ' + cell_type)
         total_labels = venn.get_labels([
             present_clones_df[(present_clones_df.month == 4) & (present_clones_df.cell_type == cell_type)].code.values,
             present_clones_df[(present_clones_df.month == 9) & (present_clones_df.cell_type == cell_type)].code.values,
@@ -306,6 +306,12 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
             agg_mouse_sections = [int(labels_per_mouse[mouse][section]) for mouse in mice]
             mean_labels[section] = np.round(np.mean(agg_mouse_sections), decimals=1)
             median_labels[section] = np.median(agg_mouse_sections)
+            if cell_type == 'b' and section == '1000':
+                print('Month 4 Only')
+                print(agg_mouse_sections)
+            if section == '0001':
+                print('Month 14 Only')
+                print(agg_mouse_sections)
 
         fname_prefix = save_path + os.sep + 'present_clones_venn_' + cell_type + '_' + group
 
@@ -329,6 +335,31 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
             fname = fname_prefix + '_median.' + save_format
             print('Saving to: ' + fname)
             plt.savefig(fname, format=save_format)
+
+def plot_lineage_average(lineage_bias_df: pd.DataFrame,
+                         title_addon: str = '',
+                         percentile: float = 0,
+                         threshold: float = 0,
+                         month: str = 'last',
+                         save: bool = False,
+                         save_path: str = './output',
+                         save_format: str = 'png'
+                        ) -> None:
+    fname_prefix = save_path + os.sep + 'lineplot_bias_' + 'm' + str(month)
+    if percentile:
+        fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
+    elif threshold:
+        fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
+
+    plt.figure()
+    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2))
+    plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
+    plt.title(title_addon)
+
+    fname = fname_prefix + '_average.' + save_format
+    if save:
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
 
 def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
                            title_addon: str = '',
@@ -500,6 +531,46 @@ def plot_lineage_bias_abundance_3d(lineage_bias_df: pd.DataFrame, analyzed_cell_
     ax.set_zlabel('Abundance in '+analyzed_cell_types[1])
     plt.title(analyzed_cell_types[1])
     
+def plot_max_engraftment_by_group(input_df: pd.DataFrame, cell_type: str, title: str = '', percentile: float = 0, save: bool = False, save_path: str = '', save_format: str = 'png') -> None:
+    max_df = get_max_by_mouse_timepoint(input_df)
+    max_df = max_df.loc[max_df.cell_type == cell_type]
+
+    plt.figure()
+    sns.set_palette(sns.color_palette('hls',2))
+
+    sns.pointplot(x='month', y='percent_engraftment', hue='group', data=max_df)
+    plt.suptitle('Max Engraftment of ' + cell_type)
+    plt.title(title)
+    if save:
+        if percentile:
+            fname = save_path + os.sep + 'max_engraftment_p' + str(round(100*percentile, 2)).replace('.', '-') + '_' + cell_type + '.' + save_format
+        else:
+            fname = save_path + os.sep + 'max_engraftment' + '_' + cell_type + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+def plot_max_engraftment_by_mouse(input_df: pd.DataFrame, cell_type: str, group: str = 'all', title: str = '', percentile: float = 0, save: bool = False, save_path: str = '', save_format: str = 'png') -> None:
+    max_df = get_max_by_mouse_timepoint(input_df)
+    max_df = max_df.loc[max_df.cell_type == cell_type]
+    if group != 'all':
+        max_df = max_df.loc[max_df.group == group]
+
+    plt.figure()
+    sns.set_palette(sns.color_palette('hls',2))
+
+    sns.lineplot(x='month', y='percent_engraftment', hue='mouse_id', data=max_df, legend=False)
+    plt.suptitle('Max Engraftment of ' + cell_type + ' Group: ' + group)
+    plt.title(title)
+    plt.xlabel('Month')
+    plt.ylabel('Max Percent Clone Abundance')
+    if save:
+        if percentile:
+            fname = save_path + os.sep + 'max_engraftment_p' + str(round(100*percentile, 2)).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
+        else:
+            fname = save_path + os.sep + 'max_engraftment' + '_' + cell_type + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
 def plot_max_engraftment(input_df: pd.DataFrame, title: str = '', percentile: float = 0, save: bool = False, save_path: str = '', save_format: str = 'png') -> None:
     max_df = get_max_by_mouse_timepoint(input_df)
 
@@ -507,6 +578,8 @@ def plot_max_engraftment(input_df: pd.DataFrame, title: str = '', percentile: fl
     sns.pointplot(x='month', y='percent_engraftment', hue='cell_type', hue_order=['gr','b'], data=max_df)
     plt.suptitle('Max Engraftment of All Mice')
     plt.title(title)
+    plt.xlabel('Month')
+    plt.ylabel('Max Percent Clone Abundance')
     if save:
         if percentile:
             fname = save_path + os.sep + 'max_engraftment' + str(round(100*percentile, 2)).replace('.', '-') + '_all' + '.' + save_format
@@ -520,6 +593,8 @@ def plot_max_engraftment(input_df: pd.DataFrame, title: str = '', percentile: fl
     sns.pointplot(x='month', y='percent_engraftment', hue='cell_type', hue_order=['gr','b'], data=max_df.loc[max_df.group == group])
     plt.suptitle('Max Engraftment of ' + group)
     plt.title(title)
+    plt.xlabel('Month')
+    plt.ylabel('Max Percent Clone Abundance')
     if save:
         if percentile:
             fname = save_path + os.sep + 'max_engraftment' + str(round(100*percentile, 2)).replace('.', '-') + '_' + group + '.' + save_format
@@ -533,6 +608,8 @@ def plot_max_engraftment(input_df: pd.DataFrame, title: str = '', percentile: fl
     sns.pointplot(x='month', y='percent_engraftment', hue='cell_type', hue_order=['gr','b'], data=max_df.loc[max_df.group == group])
     plt.suptitle('Max Engraftment of ' + group)
     plt.title(title)
+    plt.xlabel('Month')
+    plt.ylabel('Max Percent Clone Abundance')
     if save:
         if percentile:
             fname = save_path + os.sep + 'max_engraftment' + str(round(100*percentile, 2)).replace('.', '-') + '_' + group + '.' + save_format
@@ -549,6 +626,20 @@ def plot_bias_change_hist(bias_change_df: pd.DataFrame,
                           save_path: str = 'output',
                           save_format: str = 'png'
                          ) -> None:
+    """ Plot distribution of bias change (hist + rugplot + kde)
+    
+    Arguments:
+        bias_change_df {pd.DataFrame} -- dataframe of bias change information
+        threshold {float} -- threshold that was used to filter data
+    
+    Keyword Arguments:
+        absolute_value {bool} -- Whether plot is done on magnitude, or including direction (default: {False})
+        group {str} --  Group filtered for (default: {'all'})
+        save {bool} --  Wether to save plot (default: {False})
+        save_path {str} -- Where to save plot (default: {'output'})
+        save_format {str} --  What file format to save plot (default: {'png'})
+    """
+
     plt.figure()
     bins = 20
     if group != 'all':
@@ -565,5 +656,89 @@ def plot_bias_change_hist(bias_change_df: pd.DataFrame,
 
     if save:
         fname = save_path + os.sep + 'bias_change_distribution_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+def plot_bias_change_cutoff(bias_change_df: pd.DataFrame,
+                            threshold: float,
+                            absolute_value: bool = False,
+                            group: str = 'all',
+                            save: bool = False,
+                            save_path: str = 'output',
+                            save_format: str = 'png'
+                           ) -> None:
+    """ Plots KDE of bias change annotated with line to cut "change" vs "non change" clones
+    
+    Arguments:
+        bias_change_df {pd.DataFrame} -- dataframe of bias change information
+        threshold {float} -- threshold that was used to filter data
+    
+    Keyword Arguments:
+        absolute_value {bool} -- Whether plot is done on magnitude, or including direction (default: {False})
+        group {str} --  Group filtered for (default: {'all'})
+        save {bool} --  Wether to save plot (default: {False})
+        save_path {str} -- Where to save plot (default: {'output'})
+        save_format {str} --  What file format to save plot (default: {'png'})
+    """
+
+    plt.figure()
+
+    if group != 'all':
+        bias_change_df = bias_change_df.loc[bias_change_df.group == group]
+
+    if absolute_value:
+        kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
+    else:
+        kde = sns.kdeplot(bias_change_df.bias_change, shade=True)
+    
+    x, y = kde.get_lines()[0].get_data()
+    dy = np.diff(y)/np.diff(x)
+    dx = x[1:]
+    cutoff_candidates: List = []
+    for i, val in enumerate(dy):
+        if i != 0:
+            if dy[i - 1] <= 0 and dy[i] >= 0:
+                cutoff_candidates.append(dx[i])
+    plt.vlines(cutoff_candidates, 0, max(y))
+    kde.text(cutoff_candidates[0] + .1, max(y)/2, 'Change at: ' + str(round(cutoff_candidates[0],3)))
+    plt.title('Kernel Density Estimate of lineage bias change')
+    plt.suptitle('Threshold: ' + str(threshold) + ' Group: ' + group)
+    plt.xlabel('Magnitude of Lineage Bias Change')
+    plt.ylabel('Clone Density at Change')
+    kde.legend_.remove()
+    if save:
+        fname = save_path + os.sep + 'bias_change_cutoff_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
+                             title_addon: str = '',
+                             percentile: float = 0,
+                             group: str = 'all',
+                             threshold: float = 0,
+                             save: bool = False,
+                             save_path: str = './output',
+                             save_format: str = 'png'
+                            ) -> None:
+    fname_prefix = save_path + os.sep + 'violin_bias'
+    plt.figure()
+
+    if percentile:
+        fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
+    elif threshold:
+        fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
+    if group != 'all':
+        lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.group == group]
+        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, inner='stick')
+    else:
+        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2), inner='stick')
+
+    plt.xlabel('Month')
+    plt.ylabel('Lineage Bias')
+    plt.suptitle('Myeloid (+) / Lymphoid (-) Bias, Group: ' + group)
+    plt.title(title_addon)
+
+    fname = fname_prefix + '_' + group + '.' + save_format
+    if save:
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)

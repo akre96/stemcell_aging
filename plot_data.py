@@ -12,12 +12,16 @@ import matplotlib.pyplot as plt
 from aggregate_functions import filter_threshold, \
      clones_enriched_at_last_timepoint, \
      find_top_percentile_threshold, \
-     filter_cell_type_threshold
+     filter_cell_type_threshold, combine_enriched_clones_at_time
 from plotting_functions import plot_max_engraftment, \
      plot_clone_count_by_thresholds, venn_barcode_in_time, \
      plot_clone_enriched_at_time, plot_counts_at_percentile, \
      plot_lineage_bias_abundance_3d, plot_lineage_bias_line, \
-     clustermap_clone_abundance, plot_bias_change_hist
+     clustermap_clone_abundance, plot_bias_change_hist, \
+     plot_max_engraftment_by_group, plot_bias_change_cutoff, \
+     plot_max_engraftment_by_mouse, plot_lineage_bias_violin, \
+     plot_lineage_average
+     
 
 
 
@@ -38,6 +42,7 @@ def main():
         bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
         max_engraftment:    point plot of maximum engraftment averaged across mice by phenotype groups and all mice
         bias_change_dist:   distribution (histogram + rugplot + kde) of change in lineage bias across thresholds
+        bias_change_cutoff: KDE distribution of change in lineage bias across thresholds annotated with recommended cutoff for change
 
     """
 
@@ -67,8 +72,105 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
+    if graph_type in ['bias_violin']:
+        if args.options == 'default':
+            group = 'all'
+        else:
+            group = args.options
+
+        plot_lineage_bias_violin(lineage_bias_df,
+                               group=group,
+                               save=args.save,
+                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot',
+                               save_format='png',
+                              )
+
+    if graph_type in ['max_eng_mouse']:
+        percentile = .95
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+        filtered_df = filter_cell_type_threshold(present_clones_df, thresholds=dominant_thresholds, analyzed_cell_types=['gr', 'b'])
+        if args.options == 'default':
+            group = 'all'
+        else:
+            group = args.options
+        cell_type = 'b'
+        plot_max_engraftment_by_mouse(filtered_df,
+                             title='Abundance > '
+                             + str(round(dominant_thresholds[cell_type], 2))
+                             + ' % WBC, Percentile: '
+                             + str(round(100*percentile, 2)),
+                             group=group,
+                             cell_type=cell_type,
+                             percentile=percentile,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
+        )
+        cell_type = 'gr'
+        plot_max_engraftment_by_mouse(filtered_df,
+                             title='Abundance > '
+                             + str(round(dominant_thresholds[cell_type], 2))
+                             + ' % WBC, Percentile: '
+                             + str(round(100*percentile, 2)),
+                             group=group,
+                             cell_type=cell_type,
+                             percentile=percentile,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
+        )
+    if graph_type in ['max_eng_group']:
+        percentile = .95
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+        filtered_df = filter_cell_type_threshold(present_clones_df, thresholds=dominant_thresholds, analyzed_cell_types=['gr', 'b'])
+
+        cell_type = 'gr'
+        plot_max_engraftment_by_group(filtered_df,
+                             title='Abundance > '
+                             + str(round(dominant_thresholds[cell_type], 2))
+                             + ' % WBC, Percentile: '
+                             + str(round(100*percentile, 2)),
+                             cell_type=cell_type,
+                             percentile=percentile,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
+        )
+        cell_type = 'b'
+        plot_max_engraftment_by_group(filtered_df,
+                             title='Abundance > '
+                             + str(round(dominant_thresholds[cell_type], 2))
+                             + ' % WBC, Percentile: '
+                             + str(round(100*percentile, 2)),
+                             cell_type=cell_type,
+                             percentile=percentile,
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
+        )
+
+
+    if graph_type in ['bias_change_cutoff']:
+        thresholds = [0.0, 0.01, 0.02, 0.05, 0.1, 0.2]
+        bias_data_dir = 'output/lineage_bias'
+        for threshold in thresholds:
+            bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_t'+str(threshold).replace('.', '-')+'_*.csv')
+            if len(bias_change_file) != 1:
+                print('\nMissing file for threshold: ' + str(threshold))
+                print('Results when searching for bias change file:')
+                print(bias_change_file)
+                continue
+            th_change_df = pd.read_csv(bias_change_file[0])
+            plot_bias_change_cutoff(th_change_df,
+                threshold=threshold,
+                absolute_value=True,
+                group='all',
+                save=args.save,
+                save_path='/home/sakre/Code/stemcell_aging/output/Graphs/bias_change_cutoff'
+            )
+            
+
+
     if graph_type in ['bias_change_dist']:
-        thresholds = [0.0]
+        thresholds = [0.02, 0.1, 0.2]
         bias_data_dir = 'output/lineage_bias'
         for threshold in thresholds:
             bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_t'+str(threshold).replace('.', '-')+'_*.csv')
@@ -178,13 +280,13 @@ def main():
                              save_format='png',
                              group='aging_phenotype'
                             )
-        venn_barcode_in_time(present_clones_df,
-                             analysed_cell_types,
-                             save=args.save,
-                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
-                             save_format='png',
-                             group='all'
-                            )
+        #venn_barcode_in_time(present_clones_df,
+                             #analysed_cell_types,
+                             #save=args.save,
+                             #save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Venn_Presence_At_Time',
+                             #save_format='png',
+                             #group='all'
+                            #)
     # heatmap present clones
     if graph_type == 'cluster':
         clustermap_clone_abundance(present_clones_df,
@@ -251,6 +353,54 @@ def main():
                                        group='no_change')
 
     # Lineage Bias Line Plots by percentile
+    if graph_type == 'perc_bias_month':
+        percentile = .995
+        month = 4
+        if args.options == 'default':
+            percentile = .995
+        else:
+            percentile = float(args.options)
+
+        print('Percentile set to: ' + str(percentile))
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+
+        for cell_type, threshold in dominant_thresholds.items():
+            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
+
+        cell_type = 'gr'
+        filt_lineage_bias_gr_df = combine_enriched_clones_at_time(
+                                                                 input_df=lineage_bias_df,
+                                                                 enrichment_month=month,
+                                                                 thresholds=dominant_thresholds,
+                                                                 lineage_bias=True,
+                                                                 analyzed_cell_types=[cell_type],
+        )
+        cell_type = 'b'
+        filt_lineage_bias_b_df = combine_enriched_clones_at_time(
+                                                                 input_df=lineage_bias_df,
+                                                                 enrichment_month=month,
+                                                                 thresholds=dominant_thresholds,
+                                                                 lineage_bias=True,
+                                                                 analyzed_cell_types=[cell_type],
+        )
+        plot_lineage_average(filt_lineage_bias_gr_df,
+                             title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['gr'], 2)) + '% WBC abundance in GR at Month ' + str(month),
+                             save=args.save,
+                             month=month,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/gr',
+                             save_format='png',
+                             percentile=percentile
+                            )
+        plot_lineage_average(filt_lineage_bias_b_df,
+                             title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['b'], 2)) + '% WBC abundance in b at Month ' + str(month),
+                             save=args.save,
+                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/b',
+                             month=month,
+                             save_format='png',
+                             percentile=percentile
+                            )
+
     if graph_type == 'top_perc_bias':
         if args.options == 'default':
             percentile = .995
