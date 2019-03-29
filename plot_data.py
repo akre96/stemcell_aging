@@ -9,9 +9,10 @@ import glob
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 from aggregate_functions import filter_threshold, \
-     clones_enriched_at_last_timepoint, \
-     find_top_percentile_threshold, \
+     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
+     find_top_percentile_threshold, find_clones_bias_range_at_time, \
      filter_cell_type_threshold, combine_enriched_clones_at_time
 from plotting_functions import plot_max_engraftment, \
      plot_clone_count_by_thresholds, venn_barcode_in_time, \
@@ -20,7 +21,7 @@ from plotting_functions import plot_max_engraftment, \
      clustermap_clone_abundance, plot_bias_change_hist, \
      plot_max_engraftment_by_group, plot_bias_change_cutoff, \
      plot_max_engraftment_by_mouse, plot_lineage_bias_violin, \
-     plot_lineage_average
+     plot_lineage_average, plot_contributions
      
 
 
@@ -71,6 +72,51 @@ def main():
 
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
+
+    if graph_type in ['default']:
+
+        cell_type = 'gr'
+        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=101)
+        plot_contributions(contributions,
+            cell_type=cell_type,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/abundance_at_percentile',
+            save_format='png',
+        )
+
+        cell_type = 'b'
+        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=101)
+        plot_contributions(contributions,
+            cell_type=cell_type,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/abundance_at_percentile',
+            save_format='png',
+        )
+
+    if graph_type in ['range_bias_month']:
+        filt_df = find_clones_bias_range_at_time(
+            lineage_bias_df,
+            month=4,
+            min_bias=.45,
+            max_bias=.75,
+        )
+        group = 'no_change'
+        plot_lineage_bias_violin(filt_df,
+                               group=group,
+                               save=args.save,
+                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot',
+                               save_format='png',
+                              )
+        plot_lineage_bias_abundance_3d(filt_df, group=group)
+        group = 'aging_phenotype'
+        plot_lineage_bias_violin(filt_df,
+                               group=group,
+                               save=args.save,
+                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot',
+                               save_format='png',
+                              )
+        plot_lineage_bias_abundance_3d(filt_df, group=group)
+        
 
     if graph_type in ['bias_violin']:
         if args.options == 'default':

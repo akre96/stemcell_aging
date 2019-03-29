@@ -8,6 +8,7 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
@@ -519,13 +520,20 @@ def plot_lineage_bias_abundance_3d(lineage_bias_df: pd.DataFrame, analyzed_cell_
     if group != 'all':
         lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.group == group]
     ax = fig.add_subplot(121, projection='3d')
-    ax.scatter(lineage_bias_df.month, lineage_bias_df.lineage_bias, lineage_bias_df[analyzed_cell_types[0]+ '_percent_engraftment'])
-    ax.set_xlabel('Month')
-    ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
-    ax.set_zlabel('Abundance in '+analyzed_cell_types[0])
+    for mouse_id in lineage_bias_df.mouse_id.unique():
+        mouse_df = lineage_bias_df.loc[lineage_bias_df.mouse_id == mouse_id]
+        ax.scatter(mouse_df.month, mouse_df.lineage_bias, mouse_df[analyzed_cell_types[0]+ '_percent_engraftment'])
+        ax.set_xlabel('Month')
+        ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
+        ax.set_zlabel('Abundance in '+analyzed_cell_types[0])
     plt.title(analyzed_cell_types[0])
     ax = fig.add_subplot(122, projection='3d')
-    ax.scatter(lineage_bias_df.month, lineage_bias_df.lineage_bias, lineage_bias_df[analyzed_cell_types[1]+ '_percent_engraftment'])
+    for mouse_id in lineage_bias_df.mouse_id.unique():
+        mouse_df = lineage_bias_df.loc[lineage_bias_df.mouse_id == mouse_id]
+        ax.scatter(mouse_df.month, mouse_df.lineage_bias, mouse_df[analyzed_cell_types[1]+ '_percent_engraftment'])
+        ax.set_xlabel('Month')
+        ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
+        ax.set_zlabel('Abundance in '+analyzed_cell_types[0])
     ax.set_xlabel('Month')
     ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
     ax.set_zlabel('Abundance in '+analyzed_cell_types[1])
@@ -729,9 +737,9 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
         fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
     if group != 'all':
         lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.group == group]
-        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, inner='stick')
+        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, inner='stick', cut=0)
     else:
-        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2), inner='stick')
+        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2), inner='stick', cut=0)
 
     plt.xlabel('Month')
     plt.ylabel('Lineage Bias')
@@ -740,5 +748,25 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
 
     fname = fname_prefix + '_' + group + '.' + save_format
     if save:
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+def plot_contributions(
+    contributions_df: pd.DataFrame,
+    cell_type: str,
+    save: bool = False,
+    save_path: str = './output',
+    save_format: str = 'png'
+    ) -> None:
+
+    plt.figure()
+    plot = sns.lineplot(x='percentile', y='percent_sum_abundance', hue='month', data=contributions_df)
+    plt.xlabel('Percentile')
+    plt.ylabel('Percent of Total Abundance')
+    plt.title('Sum of abundance at percentiles for ' + cell_type)
+    plt.vlines(95,-5,100, label='95th Percentile', linestyles='dashed')
+    plot.text(67, 0, '95th Percentile')
+
+    if save:
+        fname = save_path + os.sep + 'percentile_abundance_contribution_' + cell_type + '.' + save_format
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)

@@ -3,6 +3,7 @@
 """
 from typing import List, Dict
 import os
+import numpy as np
 import scipy.stats as stats
 import pandas as pd
 
@@ -346,3 +347,48 @@ def t_test_on_venn_data():
     vals = stats.ttest_ind(no_change_b_14, aging_phenotype_b_14)
     print('\nAging vs No Change 14 month only B clones ttest p-value: ')
     print(vals.pvalue)
+
+def find_clones_bias_range_at_time(
+        lineage_bias_df: pd.DataFrame,
+        month: int,
+        min_bias: float,
+        max_bias: float,
+    ) -> pd.DataFrame:
+    """ Find clones with bias within a range at a time point
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- lineage bias data
+        month {int} -- time point to select for
+        min_bias {float} -- minimum bias in range
+        max_bias {float} -- maximum bias in range
+    
+    Returns:
+        pd.DataFrame -- input, filtered for clones with bias in range at desired timepoint
+    """
+
+    filt_index = (lineage_bias_df.month == month) & (lineage_bias_df.lineage_bias > min_bias) & (lineage_bias_df.lineage_bias < max_bias)
+    filt_df = lineage_bias_df.loc[filt_index]
+    filt_df = filt_df[['code', 'mouse_id']]
+    return lineage_bias_df.merge(filt_df, on=['code', 'mouse_id'])
+
+def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 50) -> pd.DataFrame:
+    percentile_range = np.linspace(0, 100, num_points)
+    cell_type_df = input_df.loc[input_df.cell_type == cell_type]
+    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'cell_type','quantile']
+    contribution_df = pd.DataFrame(columns=contribution_df_cols)
+    for percentile in percentile_range:
+        for month in cell_type_df.month.unique():
+            month_df = cell_type_df.loc[cell_type_df.month == month]
+            contribution_row = pd.DataFrame(columns=contribution_df_cols)
+            contribution_row.percentile = [percentile]
+            contribution_row.cell_type = [cell_type]
+            contribution_row.quantile = [month_df.quantile(percentile/100)]
+            contribution_row.month = ['Month: ' + str(month)]
+            contribution_row.total_abundance = [month_df.percent_engraftment.sum()]
+            sum_top = month_df.loc[month_df.percent_engraftment <= month_df.quantile(percentile/100).percent_engraftment].percent_engraftment.sum()
+            contribution_row['percent_sum_abundance'] = 100*(sum_top)/month_df.percent_engraftment.sum()
+            contribution_df = contribution_df.append(contribution_row, ignore_index=True)
+    return contribution_df.reset_index()
+        
+
+
