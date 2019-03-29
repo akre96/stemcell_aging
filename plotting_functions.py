@@ -760,11 +760,13 @@ def plot_contributions(
 
     plt.figure()
     plot = sns.lineplot(x='percentile', y='percent_sum_abundance', hue='month', data=contributions_df)
-    plt.xlabel('Percentile')
-    plt.ylabel('Percent of Total Abundance')
-    plt.title('Sum of abundance at percentiles for ' + cell_type)
+    plt.xlabel('Percentile by Clone Abundance')
+    plt.ylabel('Percent of Tracked Clone ' + cell_type + ' Population')
+    plt.title('Cumulative Abundance at Percentiles for ' + cell_type)
     plt.vlines(95,-5,100, label='95th Percentile', linestyles='dashed')
+    plt.hlines(50,0,100, label='50%', linestyles='dashed')
     plot.text(67, 0, '95th Percentile')
+    plot.text(0, 55, '50%')
 
     if save:
         fname = save_path + os.sep + 'percentile_abundance_contribution_' + cell_type + '.' + save_format
