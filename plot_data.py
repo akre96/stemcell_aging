@@ -37,13 +37,22 @@ def main():
         clone_count_line:   Lineplots of clone counts by cell type, mice, and average at different thresholds
         lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
         top_perc_bias:      line plot of lineage bias over time with top percentile of clones by abundance during last time point
-                            options -- value 0-1 indicating percentile to filter for (.95 => 95th percentile)
+                            options -- value [0-1] indicating percentile to filter for (.95 => 95th percentile)
         engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
         counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
+        perc_bias_month:    lineplot of clones in top abundandance percentile at a specific month. Plots lineage bias.
         bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
         max_engraftment:    point plot of maximum engraftment averaged across mice by phenotype groups and all mice
+        max_eng_mouse:      lineplot of maximum engraftment per mouse
+        max_eng_group:      average of maximum engraftment in mice per group for each cell type
         bias_change_dist:   distribution (histogram + rugplot + kde) of change in lineage bias across thresholds
         bias_change_cutoff: KDE distribution of change in lineage bias across thresholds annotated with recommended cutoff for change
+        bias_violin:        Violin plot of lineage bias default split by group
+                            options -- group 'all' (default), 'no_change', or 'aging_phenotype'
+        range_bias_month:   plots a 3d plot (lineage bias vs abundance vs time) and violin plot (lineage bias vs time)
+                            for cells within a specified lineage bias range at a specific month
+        sum_abundance:      Cumulative abundance of cell types at increasing percentile of cell population ranked by percent_engraftment
+        
 
     """
 
@@ -73,7 +82,7 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
-    if graph_type in ['default']:
+    if graph_type in ['sum_abundance']:
 
         cell_type = 'gr'
         contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=101)
