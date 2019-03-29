@@ -5,7 +5,9 @@ from typing import List
 import re
 import os
 from math import pi, sin, atan
+import numpy as np
 import pandas as pd
+import seaborn as sns
 from aggregate_functions import filter_threshold
 
 def calc_angle(gr_value: float, b_value: float) -> float:
@@ -332,6 +334,36 @@ def get_bias_change(lineage_bias_df: pd.DataFrame, save_err: bool = False) -> pd
         same_code_df.to_csv('same_code_mice_lineage_bias.csv')
 
     return bias_change_df
+
+def calculate_bias_change_cutoff(bias_change_df: pd.DataFrame) -> float:
+    """ Calculates change amount that qualifies as "change"
+
+    Arguments:
+        bias_change_df {pd.DataFrame} -- change in lineage bias dataframe
+
+    Returns:
+        float -- cutoff value for change
+
+    ValueError:
+        if more than 1 cutoff found, throws error
+    """
+    kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
+    x, y = kde.get_lines()[0].get_data()
+
+    # Calculate first derivative
+    dy_dx = np.diff(y)/np.diff(x)
+    dx_vals = x[1:]
+    cutoff_candidates: List = []
+    for i, _ in enumerate(dy_dx):
+        if i != 0:
+            # numerically check if 2nd derivative > 0 and first derivative ~0
+            if dy_dx[i - 1] <= 0 and dy_dx[i] >= 0:
+                cutoff_candidates.append(dx_vals[i])
+    if len(cutoff_candidates) > 1:
+        print(cutoff_candidates)
+        raise ValueError('Too many candidates found')
+
+    return cutoff_candidates[0]
 
 def main():
     """ Calculate and save lineage bias
