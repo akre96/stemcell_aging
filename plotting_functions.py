@@ -153,8 +153,12 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
     for month in enrichement_months:
         print('\n Month '+ str(month) +'\n')
         enriched_df = combine_enriched_clones_at_time(filtered_df, month, enrichment_thresholds, analyzed_cell_types)
-        print('Number of Mice in No Change Group: ' + str(enriched_df.loc[enriched_df.group == 'no_change'].mouse_id.nunique()))
-        print('Number of Mice in Aging Phenotype Group: ' + str(enriched_df.loc[enriched_df.group == 'aging_phenotype'].mouse_id.nunique()))
+        print('Number of Mice in No Change Group: '
+            + str(enriched_df.loc[enriched_df.group == 'no_change'].mouse_id.nunique())
+        )
+        print('Number of Mice in Aging Phenotype Group: '
+            + str(enriched_df.loc[enriched_df.group == 'aging_phenotype'].mouse_id.nunique())
+        )
 
         if month == 12:
             print('EXCLUDING MICE WITH 14 MONTH DATA')
@@ -763,8 +767,8 @@ def plot_contributions(
     plt.xlabel('Percentile by Clone Abundance')
     plt.ylabel('Percent of Tracked Clone ' + cell_type + ' Population')
     plt.title('Cumulative Abundance at Percentiles for ' + cell_type)
-    plt.vlines(95,-5,100, label='95th Percentile', linestyles='dashed')
-    plt.hlines(50,0,100, label='50%', linestyles='dashed')
+    plt.vlines(95, -5, 100, label='95th Percentile', linestyles='dashed')
+    plt.hlines(50, 0, 100, label='50%', linestyles='dashed')
     plot.text(67, 0, '95th Percentile')
     plot.text(0, 55, '50%')
 

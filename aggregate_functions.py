@@ -6,6 +6,8 @@ import os
 import numpy as np
 import scipy.stats as stats
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
@@ -389,6 +391,60 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_point
             contribution_row['percent_sum_abundance'] = 100*(sum_top)/month_df.percent_engraftment.sum()
             contribution_df = contribution_df.append(contribution_row, ignore_index=True)
     return contribution_df.reset_index()
-        
 
+def calculate_bias_change_cutoff(bias_change_df: pd.DataFrame) -> float:
+    """ Calculates change amount that qualifies as "change"
 
+    Arguments:
+        bias_change_df {pd.DataFrame} -- change in lineage bias dataframe
+
+    Returns:
+        float -- cutoff value for change
+
+    ValueError:
+        if more than 1 cutoff found, throws error
+    """
+    fig = plt.figure()
+    kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
+    x, y = kde.get_lines()[0].get_data()
+    plt.close(fig=fig)
+    # Calculate first derivative
+    dy_dx = np.diff(y)/np.diff(x)
+    dx_vals = x[1:]
+    cutoff_candidates: List = []
+    for i, _ in enumerate(dy_dx):
+        if i != 0:
+            # numerically check if 2nd derivative > 0 and first derivative ~0
+            if dy_dx[i - 1] <= 0 and dy_dx[i] >= 0:
+                cutoff_candidates.append(dx_vals[i])
+    if len(cutoff_candidates) > 1:
+        print(cutoff_candidates)
+        raise ValueError('Too many candidates found')
+
+    return cutoff_candidates[0]
+
+def mark_changed(input_df: pd.DataFrame, bias_change_df: pd.DataFrame) -> pd.DataFrame:
+    """ Adds column to input df based on if clone has 'changed' or not
+    
+    Arguments:
+        input_df {pd.DataFrame} -- long form step7 output or lineage bias dataframe
+        bias_change_df {pd.DataFrame} -- Dataframe of bias change
+    
+    Returns:
+        pd.DataFrame -- input_df with changed column
+    """
+    cutoff = calculate_bias_change_cutoff(bias_change_df)
+    with_bias_df = input_df.merge(bias_change_df[['code', 'mouse_id', 'bias_change']], how='left', on=['code', 'mouse_id'])
+
+    with_change_df = with_bias_df.assign(
+        change_status=lambda row: row.bias_change.abs() >= cutoff,
+    )
+
+    return with_change_df
+
+def sum_abundance_by_change(with_change_df: pd.DataFrame) -> pd.DataFrame:
+    total_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'mouse_id', 'month']).percent_engraftment.sum()).reset_index()
+    by_change_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'mouse_id', 'month', 'change_status']).percent_engraftment.sum()).reset_index()
+    total_sum['change_status'] = 'Total'
+    all_change_data_sum = total_sum.append(by_change_sum, ignore_index=True)
+    return(all_change_data_sum)
