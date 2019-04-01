@@ -5,6 +5,7 @@ Returns:
 """
 
 import argparse
+import json
 import glob
 import os
 import pandas as pd
@@ -13,7 +14,8 @@ import seaborn as sns
 from aggregate_functions import filter_threshold, \
      clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
      find_top_percentile_threshold, find_clones_bias_range_at_time, \
-     filter_cell_type_threshold, combine_enriched_clones_at_time
+     filter_cell_type_threshold, combine_enriched_clones_at_time, \
+     mark_changed, sum_abundance_by_change
 from plotting_functions import plot_max_engraftment, \
      plot_clone_count_by_thresholds, venn_barcode_in_time, \
      plot_clone_enriched_at_time, plot_counts_at_percentile, \
@@ -25,33 +27,34 @@ from plotting_functions import plot_max_engraftment, \
      
 
 
-
+    
 def main():
     """ Create plots set options via command line arguments
 
     Available graph types:
-        default:            Subject to change based on what is being actively developed
-        cluster:            Clustered heatmap of present clone engraftment
-        venn:               Venn Diagram of clone existance at timepoint
-        clone_count_bar:    Bar charts of clone counts by cell type at different thresholds
-        clone_count_line:   Lineplots of clone counts by cell type, mice, and average at different thresholds
-        lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
-        top_perc_bias:      line plot of lineage bias over time with top percentile of clones by abundance during last time point
-                            options -- value [0-1] indicating percentile to filter for (.95 => 95th percentile)
-        engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
-        counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
-        perc_bias_month:    lineplot of clones in top abundandance percentile at a specific month. Plots lineage bias.
-        bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
-        max_engraftment:    point plot of maximum engraftment averaged across mice by phenotype groups and all mice
-        max_eng_mouse:      lineplot of maximum engraftment per mouse
-        max_eng_group:      average of maximum engraftment in mice per group for each cell type
-        bias_change_dist:   distribution (histogram + rugplot + kde) of change in lineage bias across thresholds
-        bias_change_cutoff: KDE distribution of change in lineage bias across thresholds annotated with recommended cutoff for change
-        bias_violin:        Violin plot of lineage bias default split by group
-                            options -- group 'all' (default), 'no_change', or 'aging_phenotype'
-        range_bias_month:   plots a 3d plot (lineage bias vs abundance vs time) and violin plot (lineage bias vs time)
-                            for cells within a specified lineage bias range at a specific month
-        sum_abundance:      Cumulative abundance of cell types at increasing percentile of cell population ranked by percent_engraftment
+
+    default:            Subject to change based on what is being actively developed
+    cluster:            Clustered heatmap of present clone engraftment
+    venn:               Venn Diagram of clone existance at timepoint
+    clone_count_bar:    Bar charts of clone counts by cell type at different thresholds
+    clone_count_line:   Lineplots of clone counts by cell type, mice, and average at different thresholds
+    lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
+    top_perc_bias:      line plot of lineage bias over time with top percentile of clones by abundance during last time point
+                        options -- value [0-1] indicating percentile to filter for (.95 => 95th percentile)
+    engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
+    counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
+    perc_bias_month:    lineplot of clones in top abundandance percentile at a specific month. Plots lineage bias.
+    bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
+    max_engraftment:    point plot of maximum engraftment averaged across mice by phenotype groups and all mice
+    max_eng_mouse:      lineplot of maximum engraftment per mouse
+    max_eng_group:      average of maximum engraftment in mice per group for each cell type
+    bias_change_dist:   distribution (histogram + rugplot + kde) of change in lineage bias across thresholds
+    bias_change_cutoff: KDE distribution of change in lineage bias across thresholds annotated with recommended cutoff for change
+    bias_violin:        Violin plot of lineage bias default split by group
+                        options -- group 'all' (default), 'no_change', or 'aging_phenotype'
+    range_bias_month:   plots a 3d plot (lineage bias vs abundance vs time) and violin plot (lineage bias vs time)
+                        for cells within a specified lineage bias range at a specific month
+    sum_abundance:      Cumulative abundance of cell types at increasing percentile of cell population ranked by percent_engraftment
         
 
     """
@@ -59,7 +62,7 @@ def main():
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='lineage_bias_from_counts.csv')
-    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='lineage_bias_change_from_counts.csv')
+    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/bias_change_t0-0_from-counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
@@ -77,10 +80,34 @@ def main():
     all_clones_df = filter_threshold(input_df, 0.0, analysed_cell_types)
     graph_type = args.graph_type
 
+    color_palettes = json.load(open('color_palettes.json','r'))
 
 
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
+
+
+    if graph_type in ['default']:
+        change_marked_df = mark_changed(present_clones_df, bias_change_df)
+        changed_sum = sum_abundance_by_change(change_marked_df)
+        changed_sum = changed_sum.assign(changed=changed_sum.change_status.map({'Total': 'Total', False: 'Unchanged', True: 'Changed'}))
+        palette = sns.color_palette(color_palettes['cell_type'])
+
+        plt.figure()
+        cell_type = 'gr'
+        changed_sum_gr = changed_sum.loc[changed_sum.cell_type == cell_type]
+        sns.barplot(x='month', y='percent_engraftment', hue='changed', data=changed_sum_gr, palette=palette)
+        plt.xlabel('Month')
+        plt.ylabel('Cumulative Abundance (% WBC)')
+        plt.title(cell_type.capitalize() + ' Changed vs Not-Changed Cumulative Abundance')
+
+        plt.figure()
+        cell_type = 'b'
+        changed_sum_gr = changed_sum.loc[changed_sum.cell_type == cell_type]
+        sns.barplot(x='month', y='percent_engraftment', hue='changed', data=changed_sum_gr, palette=palette)
+        plt.xlabel('Month')
+        plt.ylabel('Cumulative Abundance (% WBC)')
+        plt.title(cell_type.capitalize() + ' Changed vs Not-Changed Cumulative Abundance')
 
     if graph_type in ['sum_abundance']:
 
