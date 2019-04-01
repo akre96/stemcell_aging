@@ -5,6 +5,7 @@
 
 from typing import List, Tuple, Dict
 import os
+import json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,8 +16,9 @@ from aggregate_functions import filter_threshold, count_clones, \
      combine_enriched_clones_at_time, count_clones_at_percentile, \
      filter_mice_with_n_timepoints, filter_cell_type_threshold, \
      find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
-     get_max_by_mouse_timepoint
+     get_max_by_mouse_timepoint, sum_abundance_by_change
 
+COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 
 def plot_clone_count(clone_counts: pd.DataFrame,
                      threshold: float,
@@ -754,6 +756,7 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
     if save:
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)
+
 def plot_contributions(
     contributions_df: pd.DataFrame,
     cell_type: str,
@@ -774,5 +777,87 @@ def plot_contributions(
 
     if save:
         fname = save_path + os.sep + 'percentile_abundance_contribution_' + cell_type + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+def plot_change_contributions(
+    changed_marked_df: pd.DataFrame,
+    cell_type: str,
+    group: str = 'all',
+    percent_of_total: bool = False,
+    save: bool = False,
+    save_path: str = './output',
+    save_format: str = 'png'
+    ) -> None:
+
+
+    plt.figure()
+    changed_sum_df = sum_abundance_by_change(changed_marked_df, percent_of_total=percent_of_total)
+    changed_sum_cell_df = changed_sum_df.loc[changed_sum_df.cell_type == cell_type]
+
+    y_units = '(% WBC)'
+    palette = sns.color_palette(COLOR_PALETTES['change_status_3'])
+    if percent_of_total:
+        y_units = '(% of Tracked ' + cell_type.capitalize() +' cells)'
+        palette = sns.color_palette(COLOR_PALETTES['change_status_2'])
+
+    if group != 'all':
+        changed_sum_df = changed_sum_df.loc[changed_sum_df.group == group]
+
+    sns.barplot(x='month', y='percent_engraftment', hue='change_status', data=changed_sum_cell_df, palette=palette)
+    plt.xlabel('Month')
+    plt.ylabel('Cumulative Abundance ' + y_units)
+    plt.suptitle(cell_type.capitalize() + ' Changed vs Not-Changed Cumulative Abundance')
+    plt.title('Group: ' + group)
+    plt.gca().legend().set_title('')
+
+    if save:
+        fname = save_path + os.sep + 'contribution_changed_' + cell_type + '_' + group + '.' + save_format
+        if percent_of_total:
+            fname = save_path + os.sep + 'percent_contribution_changed_' + cell_type + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+def plot_change_contributions_by_group(
+    changed_marked_df: pd.DataFrame,
+    cell_type: str,
+    percent_of_total: bool = False,
+    line: bool = False,
+    save: bool = False,
+    save_path: str = './output',
+    save_format: str = 'png'
+    ) -> None:
+
+
+    plt.figure()
+    changed_sum_df = sum_abundance_by_change(changed_marked_df, percent_of_total=percent_of_total)
+    changed_sum_df = changed_sum_df.loc[changed_sum_df.changed]
+    changed_sum_cell_df = changed_sum_df.loc[changed_sum_df.cell_type == cell_type]
+
+    y_units = '(% WBC)'
+    palette = sns.color_palette(COLOR_PALETTES['group'][:2])
+    if percent_of_total:
+        y_units = '(% of Tracked ' + cell_type.capitalize() +' cells)'
+
+    group = 'both-groups'
+
+    if line:
+        sns.lineplot(x='month', y='percent_engraftment', hue='group', units='mouse_id', estimator=None, data=changed_sum_cell_df, palette=palette)
+    else:
+        sns.barplot(x='month', y='percent_engraftment', hue='group', data=changed_sum_cell_df, palette=palette)
+    plt.xlabel('Month')
+    plt.ylabel('Cumulative Abundance ' + y_units)
+    plt.suptitle(' Cumulative Abundance of Changed ' + cell_type.capitalize() + ' Cells')
+    if percent_of_total:
+        plt.title('Relative to total abundance of tracked cells', fontsize=10)
+    plt.gca().legend().set_title('')
+
+    if save:
+        addon = 'contribution_changed_'  
+        if percent_of_total:
+            addon = addon + 'percent_'
+        if line:
+            addon = addon + 'line_'
+        fname = save_path + os.sep + addon + cell_type + '_' + group + '.' + save_format
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)

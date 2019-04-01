@@ -434,17 +434,34 @@ def mark_changed(input_df: pd.DataFrame, bias_change_df: pd.DataFrame) -> pd.Dat
         pd.DataFrame -- input_df with changed column
     """
     cutoff = calculate_bias_change_cutoff(bias_change_df)
-    with_bias_df = input_df.merge(bias_change_df[['code', 'mouse_id', 'bias_change']], how='left', on=['code', 'mouse_id'])
+    with_bias_df = input_df.merge(bias_change_df[['code', 'group', 'mouse_id', 'bias_change']], how='left', on=['code', 'group', 'mouse_id'])
+    with_bias_df['change_cutoff'] = cutoff
+    print('Lineage Bias Change Cutoff: ' + str(round(cutoff,2)))
 
     with_change_df = with_bias_df.assign(
-        change_status=lambda row: row.bias_change.abs() >= cutoff,
+        changed=lambda row: row.bias_change.abs() >= cutoff,
     )
 
     return with_change_df
 
-def sum_abundance_by_change(with_change_df: pd.DataFrame) -> pd.DataFrame:
-    total_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'mouse_id', 'month']).percent_engraftment.sum()).reset_index()
-    by_change_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'mouse_id', 'month', 'change_status']).percent_engraftment.sum()).reset_index()
-    total_sum['change_status'] = 'Total'
-    all_change_data_sum = total_sum.append(by_change_sum, ignore_index=True)
-    return(all_change_data_sum)
+def sum_abundance_by_change(with_change_df: pd.DataFrame, percent_of_total: bool = False) -> pd.DataFrame:
+    total_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'group', 'mouse_id', 'month']).percent_engraftment.sum()).reset_index()
+    by_change_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'group', 'mouse_id', 'month', 'changed']).percent_engraftment.sum()).reset_index()
+    total_sum['changed'] = 'Total'
+    total_sum['total_abundance'] = total_sum['percent_engraftment']
+    if percent_of_total:
+        total_merged_df = by_change_sum.merge(
+            total_sum[['mouse_id', 'cell_type', 'group', 'month', 'total_abundance']],
+            how='left',
+            on=['mouse_id', 'cell_type', 'group', 'month']
+        )
+        all_change_data_sum = total_merged_df.assign(
+            percent_engraftment=lambda x: 100*x.percent_engraftment/x.total_abundance
+        )
+    else:
+        all_change_data_sum = total_sum.append(by_change_sum, ignore_index=True)
+
+    all_change_data_sum = all_change_data_sum.assign(
+        change_status=all_change_data_sum.changed.map({'Total': 'Total', False: 'Unchanged', True: 'Changed'})
+    )
+    return all_change_data_sum

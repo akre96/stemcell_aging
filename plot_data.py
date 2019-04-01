@@ -23,7 +23,8 @@ from plotting_functions import plot_max_engraftment, \
      clustermap_clone_abundance, plot_bias_change_hist, \
      plot_max_engraftment_by_group, plot_bias_change_cutoff, \
      plot_max_engraftment_by_mouse, plot_lineage_bias_violin, \
-     plot_lineage_average, plot_contributions
+     plot_lineage_average, plot_contributions, \
+     plot_change_contributions, plot_change_contributions_by_group
      
 
 
@@ -62,13 +63,14 @@ def main():
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='lineage_bias_from_counts.csv')
-    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/bias_change_t0-0_from-counts.csv')
+    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/bias_change_t0-01_from-counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
 
     args = parser.parse_args()
+    options = args.options
     input_df = pd.read_csv(args.input)
     lineage_bias_df = pd.read_csv(args.lineage_bias)
     bias_change_df = pd.read_csv(args.bias_change)
@@ -80,34 +82,64 @@ def main():
     all_clones_df = filter_threshold(input_df, 0.0, analysed_cell_types)
     graph_type = args.graph_type
 
-    color_palettes = json.load(open('color_palettes.json','r'))
+    color_palettes = json.load(open('color_palettes.json', 'r'))
 
 
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
 
-    if graph_type in ['default']:
+    if graph_type in ['contrib_change_group', 'default']:
         change_marked_df = mark_changed(present_clones_df, bias_change_df)
-        changed_sum = sum_abundance_by_change(change_marked_df)
-        changed_sum = changed_sum.assign(changed=changed_sum.change_status.map({'Total': 'Total', False: 'Unchanged', True: 'Changed'}))
-        palette = sns.color_palette(color_palettes['cell_type'])
-
-        plt.figure()
+        group = 'all'
+        if options != 'default':
+            group = options
+        percent_of_total = True
+        line = True
         cell_type = 'gr'
-        changed_sum_gr = changed_sum.loc[changed_sum.cell_type == cell_type]
-        sns.barplot(x='month', y='percent_engraftment', hue='changed', data=changed_sum_gr, palette=palette)
-        plt.xlabel('Month')
-        plt.ylabel('Cumulative Abundance (% WBC)')
-        plt.title(cell_type.capitalize() + ' Changed vs Not-Changed Cumulative Abundance')
-
-        plt.figure()
+        plot_change_contributions_by_group(change_marked_df,
+            cell_type=cell_type,
+            percent_of_total=percent_of_total,
+            line=line,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/changed_contribution',
+            save_format='png',
+        )
         cell_type = 'b'
-        changed_sum_gr = changed_sum.loc[changed_sum.cell_type == cell_type]
-        sns.barplot(x='month', y='percent_engraftment', hue='changed', data=changed_sum_gr, palette=palette)
-        plt.xlabel('Month')
-        plt.ylabel('Cumulative Abundance (% WBC)')
-        plt.title(cell_type.capitalize() + ' Changed vs Not-Changed Cumulative Abundance')
+        plot_change_contributions_by_group(change_marked_df,
+            cell_type=cell_type,
+            percent_of_total=percent_of_total,
+            line=line,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/changed_contribution',
+            save_format='png',
+        )
+
+    if graph_type in ['contrib_change_cell']:
+        change_marked_df = mark_changed(present_clones_df, bias_change_df)
+        group = 'all'
+        if options != 'default':
+            group = options
+        percent_of_total=False
+
+        cell_type = 'gr'
+        plot_change_contributions(change_marked_df,
+            cell_type=cell_type,
+            group=group,
+            percent_of_total=percent_of_total,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/changed_contribution',
+            save_format='png',
+        )
+        cell_type = 'b'
+        plot_change_contributions(change_marked_df,
+            cell_type=cell_type,
+            group=group,
+            percent_of_total=percent_of_total,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/changed_contribution',
+            save_format='png',
+        )
 
     if graph_type in ['sum_abundance']:
 
