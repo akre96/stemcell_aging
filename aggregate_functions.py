@@ -373,7 +373,7 @@ def find_clones_bias_range_at_time(
     filt_df = filt_df[['code', 'mouse_id']]
     return lineage_bias_df.merge(filt_df, on=['code', 'mouse_id'])
 
-def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 50) -> pd.DataFrame:
+def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 400) -> pd.DataFrame:
     percentile_range = np.linspace(0, 100, num_points)
     cell_type_df = input_df.loc[input_df.cell_type == cell_type]
     contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'month_str', 'cell_type', 'quantile']

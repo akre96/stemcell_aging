@@ -670,7 +670,7 @@ def main():
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
         if options == 'default':
-            percentile = 0.99
+            percentile = 0.995
             print('Percentile Set To: ' + str(percentile))
             present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
             dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
