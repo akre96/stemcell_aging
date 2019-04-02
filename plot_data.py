@@ -12,19 +12,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from aggregate_functions import filter_threshold, \
-     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
-     find_top_percentile_threshold, find_clones_bias_range_at_time, \
-     filter_cell_type_threshold, combine_enriched_clones_at_time, \
-     mark_changed, sum_abundance_by_change
+    clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
+    find_top_percentile_threshold, find_clones_bias_range_at_time, \
+    filter_cell_type_threshold, combine_enriched_clones_at_time, \
+    mark_changed, sum_abundance_by_change, \
+    calculate_thresholds_sum_abundance
 from plotting_functions import plot_max_engraftment, \
-     plot_clone_count_by_thresholds, venn_barcode_in_time, \
-     plot_clone_enriched_at_time, plot_counts_at_percentile, \
-     plot_lineage_bias_abundance_3d, plot_lineage_bias_line, \
-     clustermap_clone_abundance, plot_bias_change_hist, \
-     plot_max_engraftment_by_group, plot_bias_change_cutoff, \
-     plot_max_engraftment_by_mouse, plot_lineage_bias_violin, \
-     plot_lineage_average, plot_contributions, \
-     plot_change_contributions, plot_change_contributions_by_group
+    plot_clone_count_by_thresholds, venn_barcode_in_time, \
+    plot_clone_enriched_at_time, plot_counts_at_percentile, \
+    plot_lineage_bias_abundance_3d, plot_lineage_bias_line, \
+    clustermap_clone_abundance, plot_bias_change_hist, \
+    plot_max_engraftment_by_group, plot_bias_change_cutoff, \
+    plot_max_engraftment_by_mouse, plot_lineage_bias_violin, \
+    plot_lineage_average, plot_contributions, plot_weighted_bias_hist, \
+    plot_change_contributions, plot_change_contributions_by_group, \
+    plot_counts_at_abundance, plot_average_abundance
      
 
 
@@ -43,6 +45,7 @@ def main():
     top_perc_bias:      line plot of lineage bias over time with top percentile of clones by abundance during last time point
                         options -- value [0-1] indicating percentile to filter for (.95 => 95th percentile)
     engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
+                        options -- value [0-100] percent cumulative abundance to use as threshold. If not set. uses 99.5th percentile
     counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
     perc_bias_month:    lineplot of clones in top abundandance percentile at a specific month. Plots lineage bias.
     bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
@@ -89,13 +92,106 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
 
 
-    if graph_type in ['contrib_change_group', 'default']:
-        change_marked_df = mark_changed(present_clones_df, bias_change_df)
-        group = 'all'
+    if graph_type in ['avg_abund_by_sum', 'default']:
+        abundance_cutoff = 50
         if options != 'default':
-            group = options
+            abundance_cutoff = float(options)
+        analysed_cell_types = ['gr', 'b']
+        print('Thresholds calculated based on cumulative abundance')
+        _, thresholds = calculate_thresholds_sum_abundance(
+            present_clones_df,
+            abundance_cutoff=abundance_cutoff
+        )
+        filter_df = filter_cell_type_threshold(
+            present_clones_df,
+            thresholds,
+            analysed_cell_types,
+            )
+
+        cell_type = 'gr'
+        plot_average_abundance(
+            filter_df,
+            thresholds=thresholds,
+            cell_type=cell_type,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Average_Abundance',
+        )
+        cell_type = 'b'
+        plot_average_abundance(
+            filter_df,
+            thresholds=thresholds,
+            cell_type=cell_type,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Average_Abundance',
+        )
+        
+    if graph_type in ['sum_abund_counts']:
+        abundance_cutoff = 50
+        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+
+        if options not in ['default', 'bar', 'line']:
+            abundance_cutoff = float(options)
+
+        line = ((args.options == 'line') | ( args.options == 'default'))
+        line = False
+        plot_counts_at_abundance(present_clones_df,
+                                  abundance_cutoff=abundance_cutoff,
+                                  analyzed_cell_types=analysed_cell_types,
+                                  save=args.save,
+                                  line=line,
+                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                  group='all',
+                                 )
+        plot_counts_at_abundance(present_clones_df,
+                                  abundance_cutoff=abundance_cutoff,
+                                  analyzed_cell_types=analysed_cell_types,
+                                  save=args.save,
+                                  line=line,
+                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                  group='no_change',
+                                 )
+        plot_counts_at_abundance(present_clones_df,
+                                  abundance_cutoff=abundance_cutoff,
+                                  analyzed_cell_types=analysed_cell_types,
+                                  save=args.save,
+                                  line=line,
+                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                  group='aging_phenotype',
+                                 )
+
+    if graph_type in ['bias_eng_hist']:
+        bins = 30
+        month = 4
+        if options != 'default':
+            month = int(options)
+        cell_type = 'gr'
+        plot_weighted_bias_hist(lineage_bias_df,
+            cell_type=cell_type,
+            month=month,
+            by_group=True,
+            bins=bins,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/hist_bias_weighted_by_abundance',
+            save_format='png',
+        )
+        cell_type = 'b'
+        plot_weighted_bias_hist(lineage_bias_df,
+            cell_type=cell_type,
+            month=month,
+            by_group=True,
+            bins=bins,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/hist_bias_weighted_by_abundance',
+            save_format='png',
+        )
+
+        
+    if graph_type in ['contrib_change_group']:
+        change_marked_df = mark_changed(present_clones_df, bias_change_df)
+        line = False
+        if options != 'default':
+            line = True
         percent_of_total = True
-        line = True
         cell_type = 'gr'
         plot_change_contributions_by_group(change_marked_df,
             cell_type=cell_type,
@@ -120,7 +216,8 @@ def main():
         group = 'all'
         if options != 'default':
             group = options
-        percent_of_total=False
+
+        percent_of_total = False
 
         cell_type = 'gr'
         plot_change_contributions(change_marked_df,
@@ -142,9 +239,9 @@ def main():
         )
 
     if graph_type in ['sum_abundance']:
-
+        num_points = 400
         cell_type = 'gr'
-        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=101)
+        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points)
         plot_contributions(contributions,
             cell_type=cell_type,
             save=args.save,
@@ -153,7 +250,7 @@ def main():
         )
 
         cell_type = 'b'
-        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=101)
+        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points)
         plot_contributions(contributions,
             cell_type=cell_type,
             save=args.save,
@@ -520,6 +617,7 @@ def main():
             percentile = .995
         else:
             percentile = float(args.options)
+
         print('Percentile set to: ' + str(percentile))
         present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
         dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
@@ -571,15 +669,25 @@ def main():
 
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
-        percentile = 0.95
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+        if options == 'default':
+            percentile = 0.99
+            print('Percentile Set To: ' + str(percentile))
+            present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+            dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+        else:
+            print('Thresholds calculated based on cumulative abundance')
+            abundance_cutoff = float(options)
+            percentiles, dominant_thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff
+            )
+
 
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 
         plot_clone_enriched_at_time(all_clones_df,
-                                    [4, 12, 14],
+                                    [4, 14],
                                     dominant_thresholds,
                                     save=args.save,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',

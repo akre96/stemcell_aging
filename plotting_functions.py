@@ -13,10 +13,11 @@ from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
-     combine_enriched_clones_at_time, count_clones_at_percentile, \
-     filter_mice_with_n_timepoints, filter_cell_type_threshold, \
-     find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
-     get_max_by_mouse_timepoint, sum_abundance_by_change
+    combine_enriched_clones_at_time, count_clones_at_percentile, \
+    filter_mice_with_n_timepoints, filter_cell_type_threshold, \
+    find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
+    get_max_by_mouse_timepoint, sum_abundance_by_change, find_intersect, \
+    calculate_thresholds_sum_abundance
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 
@@ -151,7 +152,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
         None -- Run plt.show() to display figures created
     """
 
-    sns.set_palette(sns.color_palette("hls", 2))
+    sns.set_palette(sns.color_palette(COLOR_PALETTES['group'][:2]))
     for month in enrichement_months:
         print('\n Month '+ str(month) +'\n')
         enriched_df = combine_enriched_clones_at_time(filtered_df, month, enrichment_thresholds, analyzed_cell_types)
@@ -766,14 +767,22 @@ def plot_contributions(
     ) -> None:
 
     plt.figure()
-    plot = sns.lineplot(x='percentile', y='percent_sum_abundance', hue='month', data=contributions_df)
+    plot = sns.lineplot(x='percentile', y='percent_sum_abundance', hue='month_str', data=contributions_df)
     plt.xlabel('Percentile by Clone Abundance')
     plt.ylabel('Percent of Tracked Clone ' + cell_type + ' Population')
     plt.title('Cumulative Abundance at Percentiles for ' + cell_type)
-    plt.vlines(95, -5, 100, label='95th Percentile', linestyles='dashed')
-    plt.hlines(50, 0, 100, label='50%', linestyles='dashed')
-    plot.text(67, 0, '95th Percentile')
-    plot.text(0, 55, '50%')
+
+    m4_cont_df = contributions_df.loc[contributions_df.month == 4]
+
+    exp_x, exp_y = find_intersect(m4_cont_df, 50)
+    plt.vlines(exp_x, -5, exp_y + 5, linestyles='dashed')
+    plt.hlines(exp_y, 0, exp_x + 5, linestyles='dashed')
+    plt.text(0, 52, 'Expanded Clones: (' + str(round(exp_x, 2)) + ', ' + str(round(exp_y, 2)) + ')')
+
+    dom_x, dom_y = find_intersect(m4_cont_df, 80)
+    plt.vlines(dom_x, -5, dom_y + 5, linestyles=(0, (1, 1)))
+    plt.hlines(dom_y, 0, dom_x + 5, linestyles=(0, (1, 1)))
+    plt.text(0, 80, 'Dominant Clones: (' + str(round(dom_x, 2)) + ', ' + str(round(dom_y, 2)) + ')')
 
     if save:
         fname = save_path + os.sep + 'percentile_abundance_contribution_' + cell_type + '.' + save_format
@@ -844,7 +853,7 @@ def plot_change_contributions_by_group(
     if line:
         sns.lineplot(x='month', y='percent_engraftment', hue='group', units='mouse_id', estimator=None, data=changed_sum_cell_df, palette=palette)
     else:
-        sns.barplot(x='month', y='percent_engraftment', hue='group', data=changed_sum_cell_df, palette=palette)
+        sns.barplot(x='month', y='percent_engraftment', hue='group', data=changed_sum_cell_df, palette=palette, alpha=0.8)
     plt.xlabel('Month')
     plt.ylabel('Cumulative Abundance ' + y_units)
     plt.suptitle(' Cumulative Abundance of Changed ' + cell_type.capitalize() + ' Cells')
@@ -859,5 +868,186 @@ def plot_change_contributions_by_group(
         if line:
             addon = addon + 'line_'
         fname = save_path + os.sep + addon + cell_type + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+    
+
+def plot_weighted_bias_hist(
+    lineage_bias_df: pd.DataFrame,
+    cell_type: str,
+    month: int = 4,
+    by_group: bool = True,
+    bins: int = 30,
+    save: bool = False,
+    save_path: str = './output',
+    save_format: str = 'png'
+    ) -> None:
+
+
+    plt.figure()
+
+    group = 'all'
+    colors = COLOR_PALETTES['group']
+    if by_group:
+        group = 'by-groups'
+        for i,g in enumerate(['aging_phenotype', 'no_change']):
+            by_group_df = lineage_bias_df.loc[lineage_bias_df.group == g]
+            month_cell_df = by_group_df.loc[(by_group_df.month == month)]
+            plt.hist(
+                month_cell_df.lineage_bias,
+                bins=bins,
+                weights=month_cell_df[cell_type+'_percent_engraftment'],
+                color=colors[i],
+                edgecolor=colors[i],
+                label=g.replace('_', ' ').title(),
+                alpha=0.7
+            )
+        plt.legend()
+    else:
+        month_cell_df = lineage_bias_df.loc[(lineage_bias_df.month == month)]
+        plt.hist(month_cell_df.lineage_bias,
+            bins=bins,
+            weights=month_cell_df[cell_type+'_percent_engraftment'])
+    plt.ylabel('Weighted Counts')
+    plt.xlabel('Lineage Bias Myeloid (+)/Lymphoid (-)')
+    plt.suptitle('Lineage Bias Distribution Weighted by Abundance in ' + cell_type.capitalize())
+    plt.title('Month: ' + str(month))
+
+    if save:
+        addon = 'bias_hist_m' + str(month) + '_'
+        fname = save_path + os.sep + addon + cell_type + '_' + group + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+    
+
+def plot_counts_at_abundance(input_df: pd.DataFrame,
+                              abundance_cutoff: float,
+                              analyzed_cell_types: List[str] = ['gr', 'b'],
+                              group: str = 'all',
+                              line: bool = False,
+                              save: bool = False,
+                              save_path: str = 'output',
+                              save_format: str = 'png',
+                             ) -> None:
+    percentiles, thresholds = calculate_thresholds_sum_abundance(
+        input_df,
+        abundance_cutoff=abundance_cutoff
+    )
+
+    if group != 'all':
+        input_df = input_df.loc[input_df.group == group]
+
+    filter_df = filter_cell_type_threshold(input_df, thresholds, analyzed_cell_types)
+    clone_counts = count_clones(filter_df)
+    sns.set_palette(sns.color_palette(COLOR_PALETTES['cell_type']))
+    if line:
+        _, axis = plt.subplots()
+        sns.lineplot(x='month',
+                    y='code',
+                    hue='cell_type',
+                    data=clone_counts,
+                    ax=axis,
+                    )
+        title_string = 'Average/Mouse Clone Counts for Cells Filtered Above Cumulative Abundance Based Threshold'
+        plt.suptitle(title_string)
+        label = 'Group: ' + group + ', Sum Abundance: ' + str(round(100 - abundance_cutoff, ndigits=2))
+        plt.title(label)
+        plt.xlabel('Month')
+        plt.ylabel('Number of Clones')
+
+        if save:
+            fname = save_path + os.sep + 'clone_count_a' + str(abundance_cutoff).replace('.', '-') + '_' + 'Average' + '_' + group + '.' + save_format
+            print('Saving to: ' + fname)
+            plt.savefig(fname, format=save_format)
+        for cell_type in clone_counts.cell_type.unique():
+            _, axis = plt.subplots()
+            clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
+            sns.lineplot(x='month',
+                        y='code',
+                        hue='mouse_id',
+                        data=clone_counts_cell,
+                        ax=axis,
+                        legend=False
+                        )
+            if cell_type == 'Total':
+                title_string = 'Total Clone Counts for Cells Filtered Above Cumulative Abundance Based Threshold'
+            else:
+                title_string = 'Clone Counts in ' + cell_type + ' > ' + str(round(thresholds[cell_type], ndigits=2)) + '% WBC'
+            plt.suptitle(title_string)
+            label = 'Group: ' + group + ', Sum Abundance: ' + str(round(100 - abundance_cutoff, ndigits=2))
+            plt.title(label)
+            plt.xlabel('Month')
+            plt.ylabel('Number of Clones')
+
+            if save:
+                fname = save_path + os.sep + 'clone_count_a' + str(abundance_cutoff).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
+                print('Saving to: ' + fname)
+                plt.savefig(fname, format=save_format)
+    else:
+        _, axis = plt.subplots()
+        sns.barplot(x='month',
+                    y='code',
+                    hue='cell_type',
+                    hue_order=analyzed_cell_types + ['Total'],
+                    data=clone_counts,
+                    ax=axis,
+                    capsize=.08,
+                    errwidth=0.5
+                )
+        title_string = 'Clone Counts by Cell Type'
+        for cell_type in analyzed_cell_types:
+            title_string += ' ' + cell_type + ' > ' + str(round(thresholds[cell_type], ndigits=2)) + '% WBC'
+        plt.suptitle(title_string)
+        label = 'Group: ' + group + ', Sum Abundance: ' + str(round(100 - abundance_cutoff, ndigits=2))
+        plt.title(label)
+        plt.xlabel('Month')
+        plt.ylabel('Number of Clones')
+        if save:
+            fname = save_path + os.sep + 'clone_count_a' + str(abundance_cutoff).replace('.', '-') + '_' + group + '.' + save_format
+            print('Saving to: ' + fname)
+            plt.savefig(fname, format=save_format)
+
+def group_names_pretty(input_df: pd.DataFrame) -> pd.DataFrame:
+    """ Makes group names formatted 'prettily'
+    
+    Arguments:
+        input_df {pd.DataFrame} -- Data frame with group column
+    
+    Returns:
+        pd.DataFrame -- formatted group column dataframe
+    """
+
+    input_df = input_df.assign(group=lambda x: x.group.str.replace('_', ' ').str.title())
+    return input_df
+
+def plot_average_abundance(input_df: pd.DataFrame,
+    cell_type: str,
+    thresholds: Dict[str, float],
+    by_group: bool = True,
+    save: bool = False,
+    save_path: str = '',
+    save_format: str = 'png'
+    ) -> None:
+
+    plt.figure()
+    sns.set_palette(sns.color_palette(COLOR_PALETTES['group'][:2]))
+    cell_df = input_df.loc[input_df.cell_type == cell_type]
+    if by_group:
+        cell_df = group_names_pretty(cell_df)
+        sns.lineplot(x='month', y='percent_engraftment', hue='group', data=cell_df)
+    else:
+        sns.lineplot(x='month', y='percent_engraftment', hue='mouse_id', data=cell_df)
+
+    title = 'Average Abundance of ' + cell_type.capitalize() \
+          + ' with Abundance > ' \
+          + str(round(thresholds[cell_type],2)) + '% WBC'
+    plt.title(title)
+    plt.xlabel('Month')
+    plt.ylabel('Clone Abundance (% WBC)')
+    if save:
+        fname = save_path + os.sep + 'average_abundance' \
+                + '_' + cell_type + '_th' \
+                + str(round(thresholds[cell_type],2)).replace('.','-') \
+                + '.' + save_format
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)

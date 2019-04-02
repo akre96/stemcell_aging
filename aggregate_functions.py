@@ -1,7 +1,7 @@
 """ Commonly used data transform functions for analysis of step7 output data
 
 """
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import os
 import numpy as np
 import scipy.stats as stats
@@ -27,7 +27,7 @@ def filter_threshold(input_df: pd.DataFrame,
     """
 
     analyzed_cell_types_df = input_df.loc[input_df.cell_type.isin(analyzed_cell_types)]
-    threshold_filtered_df = analyzed_cell_types_df[analyzed_cell_types_df[threshold_column] > threshold]
+    threshold_filtered_df = analyzed_cell_types_df.loc[analyzed_cell_types_df[threshold_column] > threshold]
     threshold_filtered_df = threshold_filtered_df.assign(month=lambda row: pd.to_numeric((row.day/30).round(), downcast='integer'))
     return threshold_filtered_df
 
@@ -331,8 +331,8 @@ def t_test_on_venn_data():
     function in plotting_functions.py
     """
 
-    no_change_b_4 = [91, 42, 88, 19, 37]
-    aging_phenotype_b_4 = [107, 98, 94]
+    no_change_b_4 = [91, 17, 155, 19, 26, 37, 88, 42, 3]
+    aging_phenotype_b_4 = [105, 94, 107, 160, 11, 98, 10, 105, 28]
     no_change_gr_14 = [28, 15, 0, 1, 0]
     aging_phenotype_gr_14 = [13, 9, 31]
     no_change_b_14 = [60, 9, 13, 15, 7]
@@ -376,7 +376,7 @@ def find_clones_bias_range_at_time(
 def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 50) -> pd.DataFrame:
     percentile_range = np.linspace(0, 100, num_points)
     cell_type_df = input_df.loc[input_df.cell_type == cell_type]
-    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'cell_type','quantile']
+    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'month_str', 'cell_type', 'quantile']
     contribution_df = pd.DataFrame(columns=contribution_df_cols)
     for percentile in percentile_range:
         for month in cell_type_df.month.unique():
@@ -385,7 +385,8 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_point
             contribution_row.percentile = [percentile]
             contribution_row.cell_type = [cell_type]
             contribution_row.quantile = [month_df.quantile(percentile/100)]
-            contribution_row.month = ['Month: ' + str(month)]
+            contribution_row.month_str = ['Month: ' + str(month)]
+            contribution_row.month = [month]
             contribution_row.total_abundance = [month_df.percent_engraftment.sum()]
             sum_top = month_df.loc[month_df.percent_engraftment <= month_df.quantile(percentile/100).percent_engraftment].percent_engraftment.sum()
             contribution_row['percent_sum_abundance'] = 100*(sum_top)/month_df.percent_engraftment.sum()
@@ -465,3 +466,51 @@ def sum_abundance_by_change(with_change_df: pd.DataFrame, percent_of_total: bool
         change_status=all_change_data_sum.changed.map({'Total': 'Total', False: 'Unchanged', True: 'Changed'})
     )
     return all_change_data_sum
+
+def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum_abundance'):
+    if y in data[y_col].values:
+        print('Found intersection in data')
+        y_val = y
+        x_val = data[data[y_col] == y][x_col]
+    else:
+        idx = np.argwhere(np.diff(np.sign(data[y_col] - y))).flatten()
+        if len(idx) > 1:
+            print('More than one intersect found: ')
+            print(idx)
+        x_val = data.iloc[idx[0]][x_col]
+        y_val = data.iloc[idx[0]][y_col]
+
+    print(x_val, y_val)
+    return (x_val, y_val)
+
+def calculate_thresholds_sum_abundance(
+    input_df: pd.DataFrame,
+    abundance_cutoff: float = 50.0,
+    analyzed_cell_types: List[str] = ['gr', 'b']
+    ) -> Tuple[Dict[str, float], Dict[str, float]]:
+
+    thresholds: Dict[str, float] = {}
+    percentiles: Dict[str, float] = {}
+
+    for cell_type in analyzed_cell_types:
+        month_4_cell_df = input_df.loc[(input_df.month == 4) & (input_df.cell_type == cell_type)]
+        contributions = percentile_sum_engraftment(month_4_cell_df, cell_type)
+        percentile, _ = find_intersect(
+            data=contributions,
+            y=abundance_cutoff,
+            x_col='percentile',
+            y_col='percent_sum_abundance'
+        )
+        percentile_threshold = find_top_percentile_threshold(
+            month_4_cell_df,
+            percentile/100,
+            cell_types=[cell_type]
+        )
+        thresholds[cell_type] = percentile_threshold[cell_type]
+        percentiles[cell_type] = percentile
+    
+    print('\nPercentiles: ')
+    print(percentiles)
+    print('\nThresholds: ')
+    print(thresholds)
+    return (percentiles, thresholds)
