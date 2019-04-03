@@ -36,29 +36,39 @@ def main():
 
     Available graph types:
 
-    default:            Subject to change based on what is being actively developed
-    cluster:            Clustered heatmap of present clone engraftment
-    venn:               Venn Diagram of clone existance at timepoint
-    clone_count_bar:    Bar charts of clone counts by cell type at different thresholds
-    clone_count_line:   Lineplots of clone counts by cell type, mice, and average at different thresholds
-    lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint
-    top_perc_bias:      line plot of lineage bias over time with top percentile of clones by abundance during last time point
-                        options -- value [0-1] indicating percentile to filter for (.95 => 95th percentile)
-    engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
-                        options -- value [0-100] percent cumulative abundance to use as threshold. If not set. uses 99.5th percentile
-    counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
-    perc_bias_month:    lineplot of clones in top abundandance percentile at a specific month. Plots lineage bias.
-    bias_time_abund:    3d plot of lineage bias vs time vs abundance in b and gr cells
-    max_engraftment:    point plot of maximum engraftment averaged across mice by phenotype groups and all mice
-    max_eng_mouse:      lineplot of maximum engraftment per mouse
-    max_eng_group:      average of maximum engraftment in mice per group for each cell type
-    bias_change_dist:   distribution (histogram + rugplot + kde) of change in lineage bias across thresholds
-    bias_change_cutoff: KDE distribution of change in lineage bias across thresholds annotated with recommended cutoff for change
-    bias_violin:        Violin plot of lineage bias default split by group
-                        options -- group 'all' (default), 'no_change', or 'aging_phenotype'
-    range_bias_month:   plots a 3d plot (lineage bias vs abundance vs time) and violin plot (lineage bias vs time)
-                        for cells within a specified lineage bias range at a specific month
-    sum_abundance:      Cumulative abundance of cell types at increasing percentile of cell population ranked by percent_engraftment
+    default:                Subject to change based on what is being actively developed
+    cluster:                Clustered heatmap of present clone engraftment
+    venn:                   Venn Diagram of clone existance at timepoint
+    clone_count_bar:        Bar charts of clone counts by cell type at different thresholds
+    clone_count_line:       Lineplots of clone counts by cell type, mice, and average at different thresholds
+    lineage_bias_line:      lineplots of lineage bias over time at different abundance from last timepoint
+    top_perc_bias:          line plot of lineage bias over time with top percentile of clones by abundance during last time point
+                            options -- value [0-1] indicating percentile to filter for (.95 => 95th percentile)
+    engraftment_time:       lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months
+                            options -- value [0-100] percent cumulative abundance to use as threshold. If not set. uses 99.5th percentile
+    counts_at_perc:         line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance
+    perc_bias_month:        lineplot of clones in top abundandance percentile at a specific month. Plots lineage bias.
+    bias_time_abund:        3d plot of lineage bias vs time vs abundance in b and gr cells
+    max_engraftment:        point plot of maximum engraftment averaged across mice by phenotype groups and all mice
+    max_eng_mouse:          lineplot of maximum engraftment per mouse
+    max_eng_group:          average of maximum engraftment in mice per group for each cell type
+    bias_change_dist:       distribution (histogram + rugplot + kde) of change in lineage bias across thresholds
+    bias_change_cutoff:     KDE distribution of change in lineage bias across thresholds annotated with recommended cutoff for change
+    bias_violin:            Violin plot of lineage bias default split by group
+                            options -- group 'all' (default), 'no_change', or 'aging_phenotype'
+    range_bias_month:       plots a 3d plot (lineage bias vs abundance vs time) and violin plot (lineage bias vs time)
+                            for cells within a specified lineage bias range at a specific month
+    sum_abundance:          Cumulative abundance of cell types at increasing percentile of cell population ranked by percent_engraftment
+    contrib_change_cell:    Contribution of changed cells vs not changed cells grouped by cell type i.e can great 'all', 'aging_phenotype', and 'no_change' graphs
+                            options -- group 'all' (default), 'no_change', or 'aging_phenotype'
+    contrib_change_group:   Contribution of changed cells as percent of total cell type. One graph per cell type, grouped by phenotype group
+                            options -- 'line', 'bar'
+    bias_eng_hist:          Weighted Histogram of lineage bias, weights by count and abundance. Done in Gr and B at specified timepoint
+                            options -- integer, month number --> one of 4, 9, 12, or 14
+    sum_abund_counts:       Count clones passing thresholds calculated by cumulative abundance based thresholds. Manually set Line to true of false for barchart or lineplot
+                            options -- abundance_cutoff, defaults to 50%, range [0-100]
+    avg_abund_by_sum:       Lineplot of average abundance of clones above threshold selected based on cumulative abundance
+                            options -- abundance_cutoff, defaults to 50%, range [0-100]
         
 
     """
@@ -132,31 +142,30 @@ def main():
         if options not in ['default', 'bar', 'line']:
             abundance_cutoff = float(options)
 
-        line = ((args.options == 'line') | ( args.options == 'default'))
-        line = False
+        line = True
         plot_counts_at_abundance(present_clones_df,
-                                  abundance_cutoff=abundance_cutoff,
-                                  analyzed_cell_types=analysed_cell_types,
-                                  save=args.save,
-                                  line=line,
-                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                  group='all',
+                                 abundance_cutoff=abundance_cutoff,
+                                 analyzed_cell_types=analysed_cell_types,
+                                 save=args.save,
+                                 line=line,
+                                 save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                 group='all',
                                  )
         plot_counts_at_abundance(present_clones_df,
-                                  abundance_cutoff=abundance_cutoff,
-                                  analyzed_cell_types=analysed_cell_types,
-                                  save=args.save,
-                                  line=line,
-                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                  group='no_change',
+                                 abundance_cutoff=abundance_cutoff,
+                                 analyzed_cell_types=analysed_cell_types,
+                                 save=args.save,
+                                 line=line,
+                                 save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                 group='no_change',
                                  )
         plot_counts_at_abundance(present_clones_df,
-                                  abundance_cutoff=abundance_cutoff,
-                                  analyzed_cell_types=analysed_cell_types,
-                                  save=args.save,
-                                  line=line,
-                                  save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
-                                  group='aging_phenotype',
+                                 abundance_cutoff=abundance_cutoff,
+                                 analyzed_cell_types=analysed_cell_types,
+                                 save=args.save,
+                                 line=line,
+                                 save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Clone_Count_at_Thresholds_Over_Time',
+                                 group='aging_phenotype',
                                  )
 
     if graph_type in ['bias_eng_hist']:
@@ -165,7 +174,8 @@ def main():
         if options != 'default':
             month = int(options)
         cell_type = 'gr'
-        plot_weighted_bias_hist(lineage_bias_df,
+        plot_weighted_bias_hist(
+            lineage_bias_df,
             cell_type=cell_type,
             month=month,
             by_group=True,
@@ -175,7 +185,8 @@ def main():
             save_format='png',
         )
         cell_type = 'b'
-        plot_weighted_bias_hist(lineage_bias_df,
+        plot_weighted_bias_hist(
+            lineage_bias_df,
             cell_type=cell_type,
             month=month,
             by_group=True,
@@ -336,26 +347,28 @@ def main():
         filtered_df = filter_cell_type_threshold(present_clones_df, thresholds=dominant_thresholds, analyzed_cell_types=['gr', 'b'])
 
         cell_type = 'gr'
-        plot_max_engraftment_by_group(filtered_df,
-                             title='Abundance > '
-                             + str(round(dominant_thresholds[cell_type], 2))
-                             + ' % WBC, Percentile: '
-                             + str(round(100*percentile, 2)),
-                             cell_type=cell_type,
-                             percentile=percentile,
-                             save=args.save,
-                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
+        plot_max_engraftment_by_group(
+            filtered_df,
+            title='Abundance > '
+            + str(round(dominant_thresholds[cell_type], 2))
+            + ' % WBC, Percentile: '
+            + str(round(100*percentile, 2)),
+            cell_type=cell_type,
+            percentile=percentile,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
         )
         cell_type = 'b'
-        plot_max_engraftment_by_group(filtered_df,
-                             title='Abundance > '
-                             + str(round(dominant_thresholds[cell_type], 2))
-                             + ' % WBC, Percentile: '
-                             + str(round(100*percentile, 2)),
-                             cell_type=cell_type,
-                             percentile=percentile,
-                             save=args.save,
-                             save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
+        plot_max_engraftment_by_group(
+            filtered_df,
+            title='Abundance > '
+            + str(round(dominant_thresholds[cell_type], 2))
+            + ' % WBC, Percentile: '
+            + str(round(100*percentile, 2)),
+            cell_type=cell_type,
+            percentile=percentile,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Max_Engraftment'
         )
 
 

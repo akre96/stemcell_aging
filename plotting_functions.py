@@ -173,11 +173,11 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
 
             cell_df = enriched_df.loc[enriched_df.cell_type == cell_type]
             sns.lineplot(x='month',
-                        y='percent_engraftment',
-                        hue='group',
-                        data=cell_df,
-                        legend='brief',
-                        sort=True,
+                         y='percent_engraftment',
+                         hue='group',
+                         data=cell_df,
+                         legend='brief',
+                         sort=True,
                         )
             plt.suptitle(cell_type + ' Clones with Abundance > '
                         + str(round(enrichment_thresholds[cell_type], 2))
@@ -185,11 +185,11 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
             plt.xlabel('')
             plt.subplot(2, 1, 2)
             ax = sns.swarmplot(x='month',
-                        y='percent_engraftment',
-                        hue='group',
-                        data=cell_df,
-                        dodge=True,
-                        )
+                               y='percent_engraftment',
+                               hue='group',
+                               data=cell_df,
+                               dodge=True,
+                              )
             ax.legend_.remove()
             if save:
                 fname = save_path \
@@ -477,11 +477,11 @@ def plot_counts_at_percentile(input_df: pd.DataFrame,
             _, axis = plt.subplots()
             clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
             sns.lineplot(x='month',
-                        y='code',
-                        hue='mouse_id',
-                        data=clone_counts_cell,
-                        ax=axis,
-                        legend=False
+                         y='code',
+                         hue='mouse_id',
+                         data=clone_counts_cell,
+                         ax=axis,
+                         legend=False
                         )
             if cell_type == 'Total':
                 title_string = 'Total Clone Counts for Cells Filtered Above Percentile Based Threshold'
@@ -920,15 +920,17 @@ def plot_weighted_bias_hist(
         plt.savefig(fname, format=save_format)
     
 
-def plot_counts_at_abundance(input_df: pd.DataFrame,
-                              abundance_cutoff: float,
-                              analyzed_cell_types: List[str] = ['gr', 'b'],
-                              group: str = 'all',
-                              line: bool = False,
-                              save: bool = False,
-                              save_path: str = 'output',
-                              save_format: str = 'png',
-                             ) -> None:
+def plot_counts_at_abundance(
+    input_df: pd.DataFrame,
+    abundance_cutoff: float,
+    analyzed_cell_types: List[str] = ['gr', 'b'],
+    group: str = 'all',
+    line: bool = False,
+    save: bool = False,
+    save_path: str = 'output',
+    save_format: str = 'png',
+    ) -> None:
+                            
     percentiles, thresholds = calculate_thresholds_sum_abundance(
         input_df,
         abundance_cutoff=abundance_cutoff
@@ -1028,6 +1030,23 @@ def plot_average_abundance(input_df: pd.DataFrame,
     save_path: str = '',
     save_format: str = 'png'
     ) -> None:
+    """ Plot average abundance of cell_type by group
+    
+    Arguments:
+        input_df {pd.DataFrame} -- abundance dataframe
+        cell_type {str} -- 'gr' or 'b'
+        thresholds {Dict[str, float]} -- dictionary of threshold {celltype: value}
+    
+    Keyword Arguments:
+        by_group {bool} -- organize by phenotype group or not (default: {True})
+        save {bool} -- save file (default: {False})
+        save_path {str} --  where to save file (default: {''})
+        save_format {str} -- what format to save file (default: {'png'})
+    
+    Returns:
+        None -- plt.show() to view graph
+    """
+
 
     plt.figure()
     sns.set_palette(sns.color_palette(COLOR_PALETTES['group'][:2]))

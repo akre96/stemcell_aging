@@ -129,7 +129,13 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
     enriched_clones_df = cell_df.loc[(~cell_df['code'].isin(stray_clones)) & (cell_df['code'].isin(enriched_clones))]
     return enriched_clones_df
 
-def combine_enriched_clones_at_time(input_df: pd.DataFrame, enrichment_month: int, thresholds: Dict[str,float], analyzed_cell_types: List[str], lineage_bias: bool = False) -> pd.DataFrame:
+def combine_enriched_clones_at_time(
+        input_df: pd.DataFrame,
+        enrichment_month: int,
+        thresholds: Dict[str, float],
+        analyzed_cell_types: List[str],
+        lineage_bias: bool = False
+    ) -> pd.DataFrame:
     """ wrapper of find_enriched_clones_at_time() to combine entries from multiple cell types
     
     Arguments:
@@ -175,7 +181,13 @@ def long_to_wide_data(input_df: pd.DataFrame, data_col: str) -> pd.DataFrame:
         output_df = output_df.append(new_row, ignore_index=True)
     return output_df
 
-def clones_enriched_at_last_timepoint(input_df: pd.DataFrame, lineage_bias_df: pd.DataFrame, thresholds: Dict[str, float] = {'any' : 0.0}, cell_type: str = 'any', lineage_bias: bool = False) -> pd.DataFrame:
+def clones_enriched_at_last_timepoint(
+        input_df: pd.DataFrame,
+        lineage_bias_df: pd.DataFrame,
+        thresholds: Dict[str, float] = {'any' : 0.0},
+        cell_type: str = 'any',
+        lineage_bias: bool = False
+    ) -> pd.DataFrame:
     """ Finds clones enriched at last timepoint for clone
     
     Arguments:
@@ -374,6 +386,19 @@ def find_clones_bias_range_at_time(
     return lineage_bias_df.merge(filt_df, on=['code', 'mouse_id'])
 
 def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 400) -> pd.DataFrame:
+    """ Create dataframe sum of abundance due to clones below percentile ranked by clonal abundance
+    
+    Arguments:
+        input_df {pd.DataFrame} -- abundance data frame
+        cell_type {str} -- cell type to analyze
+    
+    Keyword Arguments:
+        num_points {int} -- data points to create. Higher increases comp time and granularity (default: {400})
+    
+    Returns:
+        pd.DataFrame -- Percentile vs Cumulative Abundance Dataframe
+    """
+
     percentile_range = np.linspace(0, 100, num_points)
     cell_type_df = input_df.loc[input_df.cell_type == cell_type]
     contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'month_str', 'cell_type', 'quantile']
@@ -445,9 +470,21 @@ def mark_changed(input_df: pd.DataFrame, bias_change_df: pd.DataFrame) -> pd.Dat
 
     return with_change_df
 
-def sum_abundance_by_change(with_change_df: pd.DataFrame, percent_of_total: bool = False) -> pd.DataFrame:
-    total_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'group', 'mouse_id', 'month']).percent_engraftment.sum()).reset_index()
-    by_change_sum = pd.DataFrame(with_change_df.groupby(['cell_type', 'group', 'mouse_id', 'month', 'changed']).percent_engraftment.sum()).reset_index()
+def sum_abundance_by_change(with_change_contribution_df: pd.DataFrame, percent_of_total: bool = False) -> pd.DataFrame:
+    """ Cumulative abundance at percentiles
+    
+    Arguments:
+        with_change_df {pd.DataFrame} -- contribution data frame where clones are marked as having changed or not changed (True/false)
+    
+    Keyword Arguments:
+        percent_of_total {bool} -- To calculate based on %engraftment or as a percent of total engraftment for a cell_type (default: {False})
+    
+    Returns:
+        pd.DataFrame -- sum of abundance in chagen vs not changed at each time point, per cell_type, mouse_id
+    """
+
+    total_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', 'month']).percent_engraftment.sum()).reset_index()
+    by_change_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', 'month', 'changed']).percent_engraftment.sum()).reset_index()
     total_sum['changed'] = 'Total'
     total_sum['total_abundance'] = total_sum['percent_engraftment']
     if percent_of_total:
@@ -468,6 +505,20 @@ def sum_abundance_by_change(with_change_df: pd.DataFrame, percent_of_total: bool
     return all_change_data_sum
 
 def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum_abundance'):
+    """ Find where percentile matches sum abundance value on cumulative abundance vs percentile dataframe
+    
+    Arguments:
+        data {[type]} -- Cumulative abundance data frame
+        y {[type]} -- value to find percentile for
+    
+    Keyword Arguments:
+        x_col {str} -- column to search for x values in (default: {'percentile'})
+        y_col {str} -- column to search for y values in (default: {'percent_sum_abundance'})
+    
+    Returns:
+        Tuple(float, float) -- x, y values for intersections
+    """
+
     if y in data[y_col].values:
         print('Found intersection in data')
         y_val = y
@@ -488,6 +539,19 @@ def calculate_thresholds_sum_abundance(
     abundance_cutoff: float = 50.0,
     analyzed_cell_types: List[str] = ['gr', 'b']
     ) -> Tuple[Dict[str, float], Dict[str, float]]:
+    """ Calculates abundance thresholds by cell type based on cumulative abundance at month 4
+    
+    Arguments:
+        input_df {pd.DataFrame} --  clone abundance dataframe
+    
+    Keyword Arguments:
+        abundance_cutoff {float} -- % of cells lower portion should contribute (default: {50.0})
+        analyzed_cell_types {List[str]} -- cell types to analyze against (default: {['gr', 'b']})
+    
+    Returns:
+        Tuple[Dict[str, float], Dict[str, float]] -- Dictionary of percentile and thresholds in format {cell_type: value}
+    """
+
 
     thresholds: Dict[str, float] = {}
     percentiles: Dict[str, float] = {}
