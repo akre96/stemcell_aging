@@ -16,7 +16,7 @@ from aggregate_functions import filter_threshold, \
     find_top_percentile_threshold, find_clones_bias_range_at_time, \
     filter_cell_type_threshold, combine_enriched_clones_at_time, \
     mark_changed, sum_abundance_by_change, \
-    calculate_thresholds_sum_abundance
+    calculate_thresholds_sum_abundance, filter_lineage_bias_threshold
 from plotting_functions import plot_max_engraftment, \
     plot_clone_count_by_thresholds, venn_barcode_in_time, \
     plot_clone_enriched_at_time, plot_counts_at_percentile, \
@@ -26,7 +26,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_max_engraftment_by_mouse, plot_lineage_bias_violin, \
     plot_lineage_average, plot_contributions, plot_weighted_bias_hist, \
     plot_change_contributions, plot_change_contributions_by_group, \
-    plot_counts_at_abundance, plot_average_abundance
+    plot_counts_at_abundance, plot_average_abundance, \
+    swamplot_abundance_cutoff
      
 
 
@@ -102,7 +103,32 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
 
 
-    if graph_type in ['avg_abund_by_sum', 'default']:
+    if graph_type in ['swarm_abund_cut', 'default']:
+        abundance_cutoff = 50
+        if options != 'default':
+            abundance_cutoff = float(options)
+
+        cell_type = 'gr'
+        swamplot_abundance_cutoff(
+            present_clones_df,
+            abundance_cutoff=abundance_cutoff,
+            color_col='mouse_id',
+            cell_type=cell_type,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/swarmplot_abundance',
+        )
+
+        cell_type = 'b'
+        swamplot_abundance_cutoff(
+            present_clones_df,
+            abundance_cutoff=abundance_cutoff,
+            color_col='mouse_id',
+            cell_type=cell_type,
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/swarmplot_abundance',
+        )
+
+    if graph_type in ['avg_abund_by_sum']:
         abundance_cutoff = 50
         if options != 'default':
             abundance_cutoff = float(options)
@@ -577,6 +603,55 @@ def main():
                                        group='no_change')
 
     # Lineage Bias Line Plots by percentile
+    if graph_type == 'abund_bias_month':
+        abundance_cutoff = 50
+        if options != 'default':
+            abundance_cutoff = float(options)
+
+        analysed_cell_types = ['gr', 'b']
+        print('Thresholds calculated based on cumulative abundance')
+        _, thresholds = calculate_thresholds_sum_abundance(
+            present_clones_df,
+            abundance_cutoff=abundance_cutoff
+        )
+
+        print('Abundance cutoff set to: ' + str(abundance_cutoff))
+        month = 4
+
+        cell_type = 'gr'
+        filt_lineage_bias_gr_df = combine_enriched_clones_at_time(
+            input_df=lineage_bias_df,
+            enrichment_month=month,
+            thresholds=thresholds,
+            lineage_bias=True,
+            analyzed_cell_types=[cell_type],
+        )
+        cell_type = 'b'
+        filt_lineage_bias_b_df = combine_enriched_clones_at_time(
+            input_df=lineage_bias_df,
+            enrichment_month=month,
+            thresholds=thresholds,
+            lineage_bias=True,
+            analyzed_cell_types=[cell_type],
+        )
+        plot_lineage_average(
+            filt_lineage_bias_gr_df,
+            title_addon='Filtered by clones with > ' + str(round(thresholds['gr'], 2)) + '% WBC abundance in GR at Month ' + str(month),
+            save=args.save,
+            month=month,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/gr',
+            save_format='png',
+            abundance=abundance_cutoff,
+        )
+        plot_lineage_average(
+            filt_lineage_bias_b_df,
+            title_addon='Filtered by clones with > ' + str(round(thresholds['b'], 2)) + '% WBC abundance in B at Month ' + str(month),
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/b',
+            month=month,
+            save_format='png',
+            abundance=abundance_cutoff,
+        )
     if graph_type == 'perc_bias_month':
         percentile = .995
         month = 4
@@ -625,6 +700,49 @@ def main():
                              percentile=percentile
                             )
 
+    if graph_type == 'top_abund_bias':
+        abundance_cutoff = 50
+        if options != 'default':
+            abundance_cutoff = float(options)
+        analysed_cell_types = ['gr', 'b']
+        print('Thresholds calculated based on cumulative abundance')
+        _, thresholds = calculate_thresholds_sum_abundance(
+            present_clones_df,
+            abundance_cutoff=abundance_cutoff
+        )
+
+        filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(
+            input_df=input_df,
+            lineage_bias_df=lineage_bias_df,
+            thresholds=thresholds,
+            lineage_bias=True,
+            cell_type='gr',
+        )
+        filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(
+            input_df=input_df,
+            lineage_bias_df=lineage_bias_df,
+            thresholds=thresholds,
+            lineage_bias=True,
+            cell_type='b',
+        )
+        plot_lineage_bias_line(
+            filt_lineage_bias_gr_df,
+            title_addon='Filtered by clones with > ' + str(round(thresholds['gr'], 2)) + '% WBC abundance in GR at last timepoint',
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/gr',
+            save_format='png',
+            abundance=abundance_cutoff
+        )
+        plot_lineage_bias_line(
+            filt_lineage_bias_b_df,
+            title_addon='Filtered by clones with > ' + str(round(thresholds['b'], 2)) + '% WBC abundance in B at last timepoint',
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/b',
+            save_format='png',
+            abundance=abundance_cutoff
+        )
+
+        
     if graph_type == 'top_perc_bias':
         if args.options == 'default':
             percentile = .995
@@ -638,32 +756,36 @@ def main():
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 
-        filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(input_df=input_df,
-                                                                 lineage_bias_df=lineage_bias_df,
-                                                                 thresholds=dominant_thresholds,
-                                                                 lineage_bias=True,
-                                                                 cell_type='gr',
+        filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(
+            input_df=input_df,
+            lineage_bias_df=lineage_bias_df,
+            thresholds=dominant_thresholds,
+            lineage_bias=True,
+            cell_type='gr',
         )
-        filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(input_df=input_df,
-                                                                 lineage_bias_df=lineage_bias_df,
-                                                                 thresholds=dominant_thresholds,
-                                                                 lineage_bias=True,
-                                                                 cell_type='b',
+        filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(
+            input_df=input_df,
+            lineage_bias_df=lineage_bias_df,
+            thresholds=dominant_thresholds,
+            lineage_bias=True,
+            cell_type='b',
         )
-        plot_lineage_bias_line(filt_lineage_bias_gr_df,
-                               title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['gr'], 2)) + '% WBC abundance in GR at last timepoint',
-                               save=args.save,
-                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/gr',
-                               save_format='png',
-                               percentile=percentile
-                              )
-        plot_lineage_bias_line(filt_lineage_bias_b_df,
-                               title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['b'], 2)) + '% WBC abundance in B at last timepoint',
-                               save=args.save,
-                               save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/b',
-                               save_format='png',
-                               percentile=percentile
-                              )
+        plot_lineage_bias_line(
+            filt_lineage_bias_gr_df,
+            title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['gr'], 2)) + '% WBC abundance in GR at last timepoint',
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/gr',
+            save_format='png',
+            percentile=percentile
+        )
+        plot_lineage_bias_line(
+            filt_lineage_bias_b_df,
+            title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['b'], 2)) + '% WBC abundance in B at last timepoint',
+            save=args.save,
+            save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Lineage_Bias_Line_Plot/b',
+            save_format='png',
+            percentile=percentile
+        )
 
     # Lineage Bias Line Plots by threshold
     if graph_type == 'lineage_bias_line':
@@ -695,7 +817,7 @@ def main():
                 abundance_cutoff=abundance_cutoff
             )
 
-
+        by_mouse = True
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 
@@ -705,6 +827,7 @@ def main():
                                     save=args.save,
                                     save_path='/home/sakre/Code/stemcell_aging/output/Graphs/Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
+                                    by_mouse=by_mouse
                                    )
     
     if not args.save:

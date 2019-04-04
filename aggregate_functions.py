@@ -66,6 +66,14 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
         filtered_df = filtered_df.append(cell_df)
     return filtered_df
 
+def filter_lineage_bias_threshold(
+        lineage_bias_df: pd.DataFrame,
+        threshold: float,
+        cell_type: str,
+    ) -> pd.DataFrame:
+    filter_col = cell_type + '_percent_engraftment'
+    return lineage_bias_df.loc[lineage_bias_df[filter_col] >= threshold]
+
 def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     """ Count unique clones per cell type
 
@@ -109,25 +117,17 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
     Returns:
         pd.DataFrame -- DataFrame with only clones enriched at specified timepoint
     """
+    month_df = input_df[input_df.month == enrichment_month]
 
-    if lineage_bias:
-        filter_index = (input_df[threshold_column] > enrichment_threshold) & (input_df['month'] == enrichment_month)
-    else:
-        filter_index = (input_df[threshold_column] > enrichment_threshold) & (input_df['month'] == enrichment_month) & (input_df['cell_type'] == cell_type)
-
-    enriched_at_month_df = input_df.loc[filter_index]
-    enriched_clones = enriched_at_month_df['code']
+    enriched_at_month_df = month_df[month_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id', 'cell_type'])
 
     if lineage_bias:
         cell_df = input_df
     else:
-        cell_df = input_df.loc[input_df.cell_type == cell_type]
+        cell_df = input_df[input_df.cell_type == cell_type]
+        enriched_at_month_df = enriched_at_month_df[enriched_at_month_df.cell_type == cell_type]
 
-    should_be_empty_index = (cell_df.month == enrichment_month) & (cell_df[threshold_column] < enrichment_threshold)
-    stray_clones = cell_df[should_be_empty_index]['code'].unique()
-
-    enriched_clones_df = cell_df.loc[(~cell_df['code'].isin(stray_clones)) & (cell_df['code'].isin(enriched_clones))]
-    return enriched_clones_df
+    return cell_df.merge(enriched_at_month_df[['code', 'mouse_id']], how='inner', on=['code', 'mouse_id'], validate="m:1")
 
 def combine_enriched_clones_at_time(
         input_df: pd.DataFrame,

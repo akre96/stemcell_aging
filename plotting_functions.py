@@ -129,6 +129,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_months: List[int],
                                 enrichment_thresholds: Dict[str, float],
                                 analyzed_cell_types: List[str] = ['gr', 'b'],
+                                by_mouse: bool = False,
                                 save: bool = False,
                                 save_path: str = './output',
                                 save_format: str = 'png',
@@ -144,6 +145,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
     Keyword Arguments:
         analyzed_cell_types {List[str]} -- Cell types to categorize by (default: {['gr', 'b']})
         group {str} -- Phenotypic group to filter by (default: {'all'})
+        by_mouse {bool} -- wether to set units as mouse_id for lineplot
         save {bool} --  True to save a figure (default: {False})
         save_path {str} -- Path of saved output (default: {'./output'})
         save_format {str} -- Format to save output figure (default: {'png'})
@@ -162,7 +164,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
         print('Number of Mice in Aging Phenotype Group: '
             + str(enriched_df.loc[enriched_df.group == 'aging_phenotype'].mouse_id.nunique())
         )
-
+        title_addon = ''
         if month == 12:
             print('EXCLUDING MICE WITH 14 MONTH DATA')
             enriched_df = get_data_from_mice_missing_at_time(enriched_df, exclusion_timepoint=14, timepoint_column='month')
@@ -170,31 +172,43 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
             plt.figure()
             plt.subplot(2, 1, 1)
             print('Plotting clones enriched at month '+str(month)+' Cell Type: ' + cell_type)
-
             cell_df = enriched_df.loc[enriched_df.cell_type == cell_type]
-            sns.lineplot(x='month',
-                         y='percent_engraftment',
-                         hue='group',
-                         data=cell_df,
-                         legend='brief',
-                         sort=True,
-                        )
+            if by_mouse:
+                title_addon = 'by-mouse_'
+                sns.set_palette(sns.color_palette('hls'))
+                sns.lineplot(x='month',
+                            y='percent_engraftment',
+                            hue='mouse_id',
+                            style='group',
+                            data=cell_df,
+                            units='code',
+                            estimator=None,
+                            sort=True,
+                            )
+            else:
+                sns.lineplot(x='month',
+                            y='percent_engraftment',
+                            hue='group',
+                            data=cell_df,
+                            legend=None,
+                            sort=True,
+                            )
             plt.suptitle(cell_type + ' Clones with Abundance > '
                         + str(round(enrichment_thresholds[cell_type], 2))
                         + ' % WBC At Month: ' + str(month))
             plt.xlabel('')
             plt.subplot(2, 1, 2)
+            sns.set_palette(sns.color_palette(COLOR_PALETTES['group'][:2]))
             ax = sns.swarmplot(x='month',
                                y='percent_engraftment',
                                hue='group',
                                data=cell_df,
                                dodge=True,
                               )
-            ax.legend_.remove()
             if save:
                 fname = save_path \
                         + os.sep \
-                        + 'dominant_clones_' + cell_type + '_' \
+                        + 'dominant_clones_' + cell_type + '_' + title_addon \
                         + str(round(enrichment_thresholds[cell_type], 2)).replace('.', '-') \
                         + '_' + 'm' + str(month) + '.' + save_format
                 print('Saving to: ' + fname)
@@ -348,6 +362,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
                          title_addon: str = '',
                          percentile: float = 0,
                          threshold: float = 0,
+                         abundance: float = 0,
                          month: str = 'last',
                          save: bool = False,
                          save_path: str = './output',
@@ -358,9 +373,12 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
         fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
     elif threshold:
         fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
+    elif abundance:
+        fname_prefix += '_a' + str(round(abundance, ndigits=2)).replace('.', '-')
+        
 
     plt.figure()
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2))
+    sns.lineplot(x='month', y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=sns.color_palette(COLOR_PALETTES['group'][:2]))
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
     plt.title(title_addon)
 
@@ -373,6 +391,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
                            title_addon: str = '',
                            percentile: float = 0,
                            threshold: float = 0,
+                           abundance: float = 0,
                            save: bool = False,
                            save_path: str = './output',
                            save_format: str = 'png'
@@ -382,9 +401,11 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
         fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
     elif threshold:
         fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
+    elif abundance:
+        fname_prefix += '_a' + str(round(abundance, ndigits=2)).replace('.', '-')
 
     plt.figure()
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2))
+    sns.lineplot(x='month', y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=sns.color_palette(COLOR_PALETTES['group'][:2]))
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
     plt.title(title_addon)
 
@@ -803,7 +824,6 @@ def plot_change_contributions(
     plt.figure()
     changed_sum_df = sum_abundance_by_change(changed_marked_df, percent_of_total=percent_of_total)
     changed_sum_cell_df = changed_sum_df.loc[changed_sum_df.cell_type == cell_type]
-
     y_units = '(% WBC)'
     palette = sns.color_palette(COLOR_PALETTES['change_status_3'])
     if percent_of_total:
@@ -843,6 +863,10 @@ def plot_change_contributions_by_group(
     changed_sum_df = changed_sum_df.loc[changed_sum_df.changed]
     changed_sum_cell_df = changed_sum_df.loc[changed_sum_df.cell_type == cell_type]
 
+    print('Outlier Mice:')
+    print(
+        changed_sum_cell_df.loc[(changed_sum_cell_df.percent_engraftment > 60) & (changed_sum_cell_df.month == 14)].mouse_id
+    )
     y_units = '(% WBC)'
     palette = sns.color_palette(COLOR_PALETTES['group'][:2])
     if percent_of_total:
@@ -1067,6 +1091,44 @@ def plot_average_abundance(input_df: pd.DataFrame,
         fname = save_path + os.sep + 'average_abundance' \
                 + '_' + cell_type + '_th' \
                 + str(round(thresholds[cell_type],2)).replace('.','-') \
+                + '.' + save_format
+        print('Saving to: ' + fname)
+        plt.savefig(fname, format=save_format)
+
+def swamplot_abundance_cutoff(
+        input_df: pd.DataFrame,
+        cell_type: str,
+        abundance_cutoff: float,
+        color_col: str = 'mouse_id',
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png'
+    ) -> None:
+
+    _, thresholds = calculate_thresholds_sum_abundance(
+        input_df,
+        abundance_cutoff=abundance_cutoff
+    )
+    filtered_df = filter_cell_type_threshold(
+        input_df,
+        thresholds,
+        analyzed_cell_types=[cell_type]
+    )
+
+    plt.figure()
+    sns.set_palette(sns.color_palette('hls', 18))
+    sns.swarmplot(x='month', y='percent_engraftment', hue='mouse_id', data=filtered_df)
+
+    title = 'Average Abundance of ' + cell_type.capitalize() \
+          + ' with Abundance > ' \
+          + str(round(thresholds[cell_type],2)) + '% WBC'
+    plt.title(title)
+    plt.xlabel('Month')
+    plt.ylabel('Clone Abundance (% WBC)')
+    if save:
+        fname = save_path + os.sep + 'swamplot_abundance' \
+                + '_' + cell_type + '_a' \
+                + str(round(abundance_cutoff, 2)).replace('.','-') \
                 + '.' + save_format
         print('Saving to: ' + fname)
         plt.savefig(fname, format=save_format)
