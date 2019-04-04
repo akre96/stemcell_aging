@@ -252,12 +252,12 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
         month = int(round(day/30))
 
         for cell_type in analyzed_cell_types:
-            cell_type_timepoint_data = pd.DataFrame()
+            cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id','day','month','cell_type','cell_count'])
             cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]]
             cell_type_timepoint_data['day'] = day
             cell_type_timepoint_data['month'] = month
             cell_type_timepoint_data['cell_type'] = cell_type
-            cell_type_col = one_timepoint_cols[[re.match(cell_type.upper(), x) is not None for x in one_timepoint_cols]]
+            cell_type_col = one_timepoint_cols[[re.match(cell_type.upper(), x.upper()) is not None for x in one_timepoint_cols]]
             cell_type_timepoint_data['cell_count'] = one_timepoint_data[cell_type_col]
             parsed_timepoint_data = parsed_timepoint_data.append(cell_type_timepoint_data, ignore_index=True)
 
@@ -312,8 +312,8 @@ def get_bias_change(lineage_bias_df: pd.DataFrame, save_err: bool = False) -> pd
         if len(group) < 2:
             continue
         bias_change_row = pd.DataFrame(columns=bias_change_cols)
-        first_timepoint = group.loc[group['month'].astype(int).idxmin()]
-        last_timepoint = group.loc[group['month'].astype(int).idxmax()]
+        first_timepoint = group.loc[group['day'].astype(int).idxmin()]
+        last_timepoint = group.loc[group['day'].astype(int).idxmax()]
         if first_timepoint.code != last_timepoint.code:
             ValueError('Not grouped by same code/clone')
         if first_timepoint.month == last_timepoint.month:
@@ -321,9 +321,9 @@ def get_bias_change(lineage_bias_df: pd.DataFrame, save_err: bool = False) -> pd
             continue
 
         bias_change_row.bias_change = [last_timepoint.lineage_bias - first_timepoint.lineage_bias]
-        bias_change_row.time_change = [last_timepoint.month - first_timepoint.month]
-        bias_change_row.first_timepoint = [first_timepoint.month]
-        bias_change_row.last_timepoint = [last_timepoint.month]
+        bias_change_row.time_change = [last_timepoint.day- first_timepoint.day]
+        bias_change_row.first_timepoint = [first_timepoint.day]
+        bias_change_row.last_timepoint = [last_timepoint.day]
         bias_change_row.code = first_timepoint.code
         bias_change_row.mouse_id = first_timepoint.mouse_id
         bias_change_row.group = first_timepoint.group
@@ -339,8 +339,8 @@ def main():
     """
 
     parser = argparse.ArgumentParser(description="Calculate lineage bias and change in lineage bias over time at thresholds")
-    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
-    parser.add_argument('-c', '--counts', dest='counts_file', help='Path to txt containing FACS cell count data', default="/home/sakre/Data/OT 2.0 WBCs D122 D274 D365 D420.txt")
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', required=True)
+    parser.add_argument('-c', '--counts', dest='counts_file', help='Path to txt containing FACS cell count data', required=True)
     parser.add_argument('-t', '--threshold', dest='threshold', help='Threshold to filter presence of cells by for percent_engraftment', default=.01, type=float)
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
     parser.add_argument('-l', '--bias-only', dest='bias_only', help='Set flag if you only want to calculate lineage bias, not its change', action="store_true")
