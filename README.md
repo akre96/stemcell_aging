@@ -33,11 +33,16 @@ Example:
 `mkdir long_format_outputs`  
 `python step7_to_long_format.py -i ./inputs -o ./long_format_outputs`
 
+Exact usage on transplant data:  
+`python step7_to_long_format.py -i /home/sakre/Data/serial_transplant_data/step\ 7/ -o /home/sakre/Data/serial_transplant_data/step7_long/ -p M`
 ### Consolidating reformatted data to one file
   1. In the root directory of this repository run:  
   `python consolidate_data.py -i \[LONG_FORMAT_INPUT_DIRECTORY_PATH\] -o \[OUTPUT_DIRECTORY_PATH\]`  
 Example:  
 `python consolidate_data.py -i long_format_outputs`  
+
+Exact usage on transplant data:  
+`python consolidate_data.py -i /home/sakre/Data/serial_transplant_data/step7_long -o /home/sakre/Data/serial_transplant_data -g /home/sakre/Data/serial_transplant_data/mouse_id_group.csv`
 
 - Output directory optional, defaults to current directory (generally repository root)
 - This step names the output file the same as the first input file it finds, but replaces M### with
@@ -45,11 +50,10 @@ Example:
 
 ### Calculating Lineage Bias
   1. In the root directory of the repository run:
-  `python lineage_bias.py`  
-  - Outputs file `lineage_bias.csv` in root directory of repository.
-  - Currently requires manually changing variable in main() function to change path of input file
-  - TODO: Add argument variables for output directory/filename and input file
+  `python lineage_bias.py -i [PATH_TO_CONSOLIDATED_LONG_FORMAT_DATA] -o [PATH_TO_OUTPUT_FOLDER] -c [PATH_TO_FACS_CELL_COUNT_FILE]`  
 
+Example from serial transplantation data:  
+`python lineage_bias.py -i ~/Data/serial_transplant_data/M_allAniaAnia\ serial\ transpl_percent-engraftment_121018_long.csv -c ~/Data/serial_transplant_data/WBC\ serial\ transpl\ 111618.txt -o ~/Data/serial_transplant_data/lineage_bias`
 ### Plotting Data
   1. In the root directory of the repository run:  
   `python plot_data.py`  
