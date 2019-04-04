@@ -1,5 +1,12 @@
 """ Create plots from step 7 output data
-
+Example:
+python plot_data.py \
+    -i ~/Data/serial_transplant_data/M_allAniaAnia\ serial\ transpl_percent-engraftment_121018_long.csv \
+    -o ~/Data/serial_transplant_data/Graphs \
+    -l ~/Data/serial_transplant_data/lineage_bias/lineage_bias_t0-01_from-counts.csv \
+    -c ~/Data/serial_transplant_data/lineage_bias/bias_change_t0-01_from-counts.csv \
+    -g clone_count_bar \
+    -d --line
 Returns:
     None - Shows plots
 """
@@ -82,6 +89,9 @@ def main():
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
+    parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
+    parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
+    parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
 
     args = parser.parse_args()
     options = args.options
@@ -342,6 +352,7 @@ def main():
             save=args.save,
             save_path=save_path,
             save_format='png',
+            by_day=args.by_day
         )
 
     if graph_type in ['max_eng_mouse']:
@@ -414,8 +425,8 @@ def main():
 
 
     if graph_type in ['bias_change_cutoff']:
-        thresholds = [0.0, 0.01, 0.02, 0.05, 0.1, 0.2]
-        bias_data_dir = 'output/lineage_bias'
+        thresholds = [0.01]
+        bias_data_dir = os.path.dirname(args.bias_change)
         save_path = args.output_dir + os.sep + 'bias_change_cutoff'
         for threshold in thresholds:
             bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_t'+str(threshold).replace('.', '-')+'_*.csv')
@@ -437,8 +448,8 @@ def main():
 
 
     if graph_type in ['bias_change_dist']:
-        thresholds = [0.02, 0.1, 0.2]
-        bias_data_dir = 'output/lineage_bias'
+        thresholds = [0.01]
+        bias_data_dir = os.path.dirname(args.bias_change)
         save_path = args.output_dir + os.sep + 'bias_distribution'
         for threshold in thresholds:
             bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_t'+str(threshold).replace('.', '-')+'_*.csv')
@@ -577,48 +588,19 @@ def main():
     # Count clones by threshold
     if graph_type == 'clone_count_bar':
         clone_count_thresholds = [0.01]
-        plot_clone_count_by_thresholds(present_clones_df,
-                                       clone_count_thresholds,
-                                       analysed_cell_types,
-                                       save=args.save,
-                                       save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                       group='all')
-        plot_clone_count_by_thresholds(present_clones_df,
-                                       clone_count_thresholds,
-                                       analysed_cell_types,
-                                       save=args.save,
-                                       save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                       group='aging_phenotype')
-        plot_clone_count_by_thresholds(present_clones_df,
-                                       clone_count_thresholds,
-                                       analysed_cell_types,
-                                       save=args.save,
-                                       save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                       group='no_change')
+        group = 'all'
+        if 'default' not in options:
+            group = options
 
-    # Clone counts by threshold as lineplot
-    if graph_type == 'clone_count_line':
-        clone_count_thresholds = [0.01]
+        line = args.line
         plot_clone_count_by_thresholds(present_clones_df,
                                        clone_count_thresholds,
                                        analysed_cell_types,
+                                       by_day=args.by_day,
+                                       line=line,
                                        save=args.save,
-                                       line=True,
-                                       save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time')
-        plot_clone_count_by_thresholds(present_clones_df,
-                                       clone_count_thresholds,
-                                       analysed_cell_types,
-                                       save=args.save,
-                                       line=True,
                                        save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                       group='aging_phenotype')
-        plot_clone_count_by_thresholds(present_clones_df,
-                                       clone_count_thresholds,
-                                       analysed_cell_types,
-                                       save=args.save,
-                                       line=True,
-                                       save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                       group='no_change')
+                                       group=group)
 
     # Lineage Bias Line Plots by percentile
     if graph_type == 'abund_bias_month':
