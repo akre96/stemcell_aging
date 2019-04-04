@@ -4,10 +4,10 @@
         "#ff701e",
         "#838383"
     ],
-    "group": [
-        "#0085ca",
-        "#b653e1"
-    ],
+    "group": {
+        "no_change" : "#0085ca",
+        "aging_phenotype" : "#b653e1"
+    },
     "change_status_3": [
         "#8cc35c",
         "#3ae5ff",
