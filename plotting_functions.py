@@ -41,6 +41,7 @@ def plot_clone_count(clone_counts: pd.DataFrame,
                      analyzed_cell_types: List[str],
                      group: str = 'all',
                      line: bool = False,
+                     by_day: bool = False,
                      save: bool = False,
                      save_path: str = './output',
                      save_format: str = 'png',
@@ -58,12 +59,16 @@ def plot_clone_count(clone_counts: pd.DataFrame,
         Tuple -- fig,ax for further modification if required
     """
 
-    clone_counts['month'] = pd.to_numeric(round(clone_counts['day']/30), downcast='integer')
+    x_var = 'day'
+    if not by_day:
+        clone_counts['month'] = pd.to_numeric(round(clone_counts['day']/30), downcast='integer')
+        x_var = 'month'
+
     if line:
         for cell_type in clone_counts.cell_type.unique():
             fig, axis = plt.subplots()
             clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
-            sns.lineplot(x='month',
+            sns.lineplot(x=x_var,
                          y='code',
                          hue='mouse_id',
                          data=clone_counts_cell,
@@ -73,7 +78,7 @@ def plot_clone_count(clone_counts: pd.DataFrame,
             plt.suptitle('Clone Counts in '+ cell_type +' Cells with Abundance > ' + str(threshold) + ' % WBC')
             label = 'Group: ' + group
             plt.title(label)
-            plt.xlabel('Month')
+            plt.xlabel(x_var.title())
             plt.ylabel('Number of Clones')
             if save:
                 fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
@@ -81,19 +86,20 @@ def plot_clone_count(clone_counts: pd.DataFrame,
                 plt.savefig(fname, format=save_format)
     else:
         fig, axis = plt.subplots()
-        sns.barplot(x='month',
+        sns.barplot(x=x_var,
                     y='code',
                     hue='cell_type',
                     hue_order=analyzed_cell_types + ['Total'],
                     data=clone_counts,
                     ax=axis,
                     capsize=.08,
-                    errwidth=0.5
+                    errwidth=0.5,
+                    palette=sns.color_palette(COLOR_PALETTES['cell_type'])
                    )
         plt.suptitle('Clone Counts By Cell Type with Abundance > ' + str(threshold) + ' % WBC')
         label = 'Group: ' + group
         plt.title(label)
-        plt.xlabel('Month')
+        plt.xlabel(x_var.title())
         plt.ylabel('Number of Clones')
         fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
         save_plot(fname, save, save_format)
@@ -104,6 +110,7 @@ def plot_clone_count(clone_counts: pd.DataFrame,
 def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                                    thresholds: List[float],
                                    analysed_cell_types: List[str],
+                                   by_day: bool = False,
                                    group: str = 'all',
                                    line: bool = False,
                                    save: bool = False,
@@ -136,6 +143,7 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                          group=group,
                          save=save,
                          line=line,
+                         by_day=by_day,
                          save_path=save_path)
 
 def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
@@ -755,22 +763,26 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
                              threshold: float = 0,
                              save: bool = False,
                              save_path: str = './output',
-                             save_format: str = 'png'
+                             save_format: str = 'png',
+                             by_day: bool = False,
                             ) -> None:
     fname_prefix = save_path + os.sep + 'violin_bias'
     plt.figure()
 
+    x_var = 'month'
+    if by_day:
+        x_var = 'day'
     if percentile:
         fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
     elif threshold:
         fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
     if group != 'all':
         lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.group == group]
-        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, inner='stick', cut=0)
+        sns.violinplot(x=x_var, y='lineage_bias', data=lineage_bias_df, inner='stick', cut=0)
     else:
-        sns.violinplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='group', palette=sns.color_palette('hls', 2), inner='stick', cut=0)
+        sns.violinplot(x=x_var, y='lineage_bias', data=lineage_bias_df, hue='group', palette=COLOR_PALETTES['group'], inner='stick', cut=0)
 
-    plt.xlabel('Month')
+    plt.xlabel(x_var.title())
     plt.ylabel('Lineage Bias')
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias, Group: ' + group)
     plt.title(title_addon)
