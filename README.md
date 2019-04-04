@@ -67,7 +67,7 @@ Example from serial transplantation data:
     -  engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months  
     -  counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance  
   4. add a `-i` flag to specify location of long format step7 output
-  5. add `-o` flag to specify where to output graphs [NOT IMPLEMENTED YET]
+  5. add `-o` flag to specify where to output graphs
   7. add `-l` flag to specify location of lineage_bias file
 
 
