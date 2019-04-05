@@ -474,7 +474,7 @@ def plot_lineage_bias_swarm_by_group(lineage_bias_df: pd.DataFrame) -> None:
 
 def plot_counts_at_percentile(input_df: pd.DataFrame,
                               percentile: float = 0.9,
-                              thresholds: Dict[str,float] = None,
+                              thresholds: Dict[str, float] = None,
                               analyzed_cell_types: List[str] = ['gr', 'b'],
                               group: str = 'all',
                               line: bool = False,
@@ -716,9 +716,10 @@ def plot_bias_change_hist(bias_change_df: pd.DataFrame,
     save_plot(fname, save, save_format)
 
 def plot_bias_change_cutoff(bias_change_df: pd.DataFrame,
-                            threshold: float,
+                            threshold: str,
                             absolute_value: bool = False,
                             group: str = 'all',
+                            min_time_difference: int = 0,
                             save: bool = False,
                             save_path: str = 'output',
                             save_format: str = 'png'
@@ -727,18 +728,19 @@ def plot_bias_change_cutoff(bias_change_df: pd.DataFrame,
     
     Arguments:
         bias_change_df {pd.DataFrame} -- dataframe of bias change information
-        threshold {float} -- threshold that was used to filter data
+        threshold {str} -- threshold(t0-01) or abundance(a50-0) that was used to filter data
     
     Keyword Arguments:
         absolute_value {bool} -- Whether plot is done on magnitude, or including direction (default: {False})
         group {str} --  Group filtered for (default: {'all'})
+        min_time_difference {int} -- Minimum days of seperation for bias change (280ish for 10 months)
         save {bool} --  Wether to save plot (default: {False})
         save_path {str} -- Where to save plot (default: {'output'})
         save_format {str} --  What file format to save plot (default: {'png'})
     """
 
     plt.figure()
-
+    bias_change_df = bias_change_df[bias_change_df.time_change >= min_time_difference]
     if group != 'all':
         bias_change_df = bias_change_df.loc[bias_change_df.group == group]
 
@@ -755,7 +757,7 @@ def plot_bias_change_cutoff(bias_change_df: pd.DataFrame,
         if i != 0:
             if dy[i - 1] <= 0 and dy[i] >= 0:
                 cutoff_candidates.append(dx[i])
-    plt.vlines(cutoff_candidates, 0, max(y))
+    plt.vlines(cutoff_candidates[0], 0, max(y))
     kde.text(cutoff_candidates[0] + .1, max(y)/2, 'Change at: ' + str(round(cutoff_candidates[0],3)))
     plt.title('Kernel Density Estimate of lineage bias change')
     plt.suptitle('Threshold: ' + str(threshold) + ' Group: ' + group)
@@ -763,7 +765,7 @@ def plot_bias_change_cutoff(bias_change_df: pd.DataFrame,
     plt.ylabel('Clone Density at Change')
     kde.legend_.remove()
 
-    fname = save_path + os.sep + 'bias_change_cutoff_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
+    fname = save_path + os.sep + 'bias_change_cutoff_' + str(threshold).replace('.', '-') + '_' + group + '_mtd' + str(min_time_difference) + '.' + save_format
     save_plot(fname, save, save_format)
 
 def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
@@ -810,7 +812,13 @@ def plot_contributions(
     ) -> None:
 
     plt.figure()
-    plot = sns.lineplot(x='percentile', y='percent_sum_abundance', hue='time_str', data=contributions_df)
+    plot = sns.lineplot(
+        x='percentile',
+        y='percent_sum_abundance',
+        hue='time_str',
+        data=contributions_df.sort_values(by='day'),
+        palette=sns.color_palette(COLOR_PALETTES['time_point'], n_colors=contributions_df.time_str.nunique())
+    )
     plt.xlabel('Percentile by Clone Abundance')
     plt.ylabel('Percent of Tracked Clone ' + cell_type + ' Population')
     plt.title('Cumulative Abundance at Percentiles for ' + cell_type)
@@ -1115,6 +1123,7 @@ def swamplot_abundance_cutoff(
         cell_type: str,
         abundance_cutoff: float,
         color_col: str = 'mouse_id',
+        group: str = 'all',
         save: bool = False,
         save_path: str = '',
         save_format: str = 'png'
@@ -1124,24 +1133,33 @@ def swamplot_abundance_cutoff(
         input_df,
         abundance_cutoff=abundance_cutoff
     )
-    filtered_df = filter_cell_type_threshold(
+    if group != 'all':
+        input_df = input_df[input_df.group == group]
+
+    all_timepoint_df = filter_mice_with_n_timepoints(
         input_df,
+        n_timepoints=4
+    )
+    filtered_df = filter_cell_type_threshold(
+        all_timepoint_df,
         thresholds,
         analyzed_cell_types=[cell_type]
     )
 
     plt.figure()
-    sns.set_palette(sns.color_palette('hls', 18))
+    sns.set_palette(sns.color_palette('hls', filtered_df.mouse_id.nunique()))
     sns.swarmplot(x='month', y='percent_engraftment', hue='mouse_id', data=filtered_df)
 
-    title = 'Average Abundance of ' + cell_type.capitalize() \
+    title = 'Abundance of ' + cell_type.capitalize() \
           + ' with Abundance > ' \
           + str(round(thresholds[cell_type],2)) + '% WBC'
-    plt.title(title)
+    plt.suptitle(title)
+    plt.title('Group: ' + group.replace('_', ' ').title())
     plt.xlabel('Month')
     plt.ylabel('Clone Abundance (% WBC)')
     fname = save_path + os.sep + 'swamplot_abundance' \
             + '_' + cell_type + '_a' \
             + str(round(abundance_cutoff, 2)).replace('.','-') \
+            + '_' + group \
             + '.' + save_format
     save_plot(fname, save, save_format)

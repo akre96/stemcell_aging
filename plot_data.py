@@ -90,6 +90,8 @@ def main():
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
+    parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
+    parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False)
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
 
@@ -116,13 +118,18 @@ def main():
     if graph_type in ['swarm_abund_cut', 'default']:
         save_path = args.output_dir + os.sep + 'swarmplot_abundance'
         abundance_cutoff = 50
-        if options != 'default':
-            abundance_cutoff = float(options)
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+
+        group = 'all'
+        if args.group:
+            group = args.group
 
         cell_type = 'gr'
         swamplot_abundance_cutoff(
             present_clones_df,
             abundance_cutoff=abundance_cutoff,
+            group=group,
             color_col='mouse_id',
             cell_type=cell_type,
             save=args.save,
@@ -134,6 +141,7 @@ def main():
             present_clones_df,
             abundance_cutoff=abundance_cutoff,
             color_col='mouse_id',
+            group=group,
             cell_type=cell_type,
             save=args.save,
             save_path=save_path,
@@ -431,11 +439,18 @@ def main():
 
 
     if graph_type in ['bias_change_cutoff']:
-        thresholds = [0.01]
+        thresholds = ['t'+str(0.01).replace('.', '-')]
+        if args.abundance_cutoff:
+            thresholds = ['a'+str(args.abundance_cutoff).replace('.', '-')]
+
+        min_time_difference = 0
+        if options not in ['default']:
+            min_time_difference = int(options)
+
         bias_data_dir = os.path.dirname(args.bias_change)
         save_path = args.output_dir + os.sep + 'bias_change_cutoff'
         for threshold in thresholds:
-            bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_t'+str(threshold).replace('.', '-')+'_*.csv')
+            bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_'+ threshold +'_*.csv')
             if len(bias_change_file) != 1:
                 print('\nMissing file for threshold: ' + str(threshold))
                 print('Results when searching for bias change file:')
@@ -447,6 +462,7 @@ def main():
                 threshold=threshold,
                 absolute_value=True,
                 group='all',
+                min_time_difference=min_time_difference,
                 save=args.save,
                 save_path=save_path
             )
@@ -824,7 +840,7 @@ def main():
         else:
             print('Thresholds calculated based on cumulative abundance')
             abundance_cutoff = float(options)
-            percentiles, dominant_thresholds = calculate_thresholds_sum_abundance(
+            _, dominant_thresholds = calculate_thresholds_sum_abundance(
                 present_clones_df,
                 by_day=args.by_day,
                 abundance_cutoff=abundance_cutoff
