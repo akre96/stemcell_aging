@@ -1,13 +1,21 @@
 """Calculates lineage bias for clones
+
+Example command using abundance cutoff:
+python lineage_bias.py \
+    -i Ania_M_all_percent-engraftment_100818_long.csv \
+    -c ~/Data/aging_data/OT\ 2.0\ WBCs\ D122\ D274\ D365\ D420.txt \
+    -o ./output/lineage_bias \
+    -a 80
 """
 import argparse
 from typing import List
 import re
 import os
 from math import pi, sin, atan
-import numpy as np
 import pandas as pd
-from aggregate_functions import filter_threshold
+from aggregate_functions import filter_threshold, \
+    calculate_thresholds_sum_abundance, \
+    filter_clones_threshold_anytime
 
 def calc_angle(gr_value: float, b_value: float) -> float:
     """ Calculates angle towards myeloid bias
@@ -199,6 +207,7 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
 
         # Check no more than 2 cell types (gr and b)
         if len(group) > 2:
+            print(group)
             raise ValueError('More cell types than expected')
 
         new_row = pd.DataFrame(columns=lineage_bias_columns)
@@ -339,9 +348,10 @@ def main():
     """
 
     parser = argparse.ArgumentParser(description="Calculate lineage bias and change in lineage bias over time at thresholds")
-    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', required=True)
+    parser.add_argument('-i', '--input', dest='input', help='Path to file containing consolidated long format step7 output', required=True)
     parser.add_argument('-c', '--counts', dest='counts_file', help='Path to txt containing FACS cell count data', required=True)
     parser.add_argument('-t', '--threshold', dest='threshold', help='Threshold to filter presence of cells by for percent_engraftment', default=.01, type=float)
+    parser.add_argument('-a', '--abundance_cutoff', dest='abundance_cutoff', help='Set thresholds based on desired cumulative abundance based cutoff', type=float, required=False)
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
     parser.add_argument('-l', '--bias-only', dest='bias_only', help='Set flag if you only want to calculate lineage bias, not its change', action="store_true")
     parser.add_argument('-d', '--by-day', dest='by_day', help='Calculations done using day column and day 127', action="store_true")
@@ -356,13 +366,28 @@ def main():
     if args.by_day:
         time_column = 'day'
         base_time_point = 127
-    print('Lineage Bias Calculated using baseline by ' + time_column + 'at point: ' + str(base_time_point))
-    threshold = args.threshold
-    print('Calculating Lineage Bias and Change for presence threshold of: ' + str(threshold) + '\n')
+    if args.abundance_cutoff:
+        print('Lineage Bias Calculated using baseline by ' + time_column + ' at point: ' + str(base_time_point))
+        abundance_cutoff = args.abundance_cutoff
+        _, thresholds = calculate_thresholds_sum_abundance(
+            input_df,
+            abundance_cutoff=abundance_cutoff,
+            analyzed_cell_types=['gr','b'],
+        )
+        print('Calculating Lineage Bias and Change for cumulative abundance cutoff: ' + str(abundance_cutoff) + '\n')
 
-    print('Filtering for present clones...')
-    present_df = filter_threshold(input_df, threshold, ['gr', 'b'])
-    print('Done.\n')
+        print('Filtering for present clones (any time point clone > thresholds)...')
+        present_df = filter_clones_threshold_anytime(input_df, thresholds, ['gr', 'b'])
+        print('Done.\n')
+    else:
+        print('Lineage Bias Calculated using baseline by ' + time_column + 'at point: ' + str(base_time_point))
+        threshold = args.threshold
+        print('Calculating Lineage Bias and Change for presence threshold of: ' + str(threshold) + '\n')
+
+        print('Filtering for present clones...')
+        present_df = filter_threshold(input_df, threshold, ['gr', 'b'])
+        print('Done.\n')
+
     print('Normalizing data...')
     with_baseline_counts_df = calculate_baseline_counts(
         present_df,
@@ -375,7 +400,10 @@ def main():
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
 
     print('Calculating lineage bias...')
-    fname_suffix = '_t' + str(threshold).replace('.', '-') + '_from-counts.csv'
+    if args.abundance_cutoff:
+        fname_suffix = '_a' + str(abundance_cutoff).replace('.', '-') + '_from-counts.csv'
+    else:
+        fname_suffix = '_t' + str(threshold).replace('.', '-') + '_from-counts.csv'
     lineage_bias_df = create_lineage_bias_df(norm_data_df)
     lineage_bias_file_name = args.output_dir + os.sep + 'lineage_bias' + fname_suffix
     print('Done.\n')
