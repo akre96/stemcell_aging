@@ -6,7 +6,9 @@
     ],
     "group": {
         "no_change" : "#0085ca",
-        "aging_phenotype" : "#b653e1"
+        "aging_phenotype" : "#b653e1",
+        "No Change" : "#0085ca",
+        "Aging Phenotype" : "#b653e1"
     },
     "change_status_3": [
         "#8cc35c",
