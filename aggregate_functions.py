@@ -186,6 +186,7 @@ def clones_enriched_at_last_timepoint(
         lineage_bias_df: pd.DataFrame,
         thresholds: Dict[str, float] = {'any' : 0.0},
         cell_type: str = 'any',
+        by_day: bool = False,
         lineage_bias: bool = False
     ) -> pd.DataFrame:
     """ Finds clones enriched at last timepoint for clone
@@ -204,6 +205,11 @@ def clones_enriched_at_last_timepoint(
         pd.DataFrame -- [description]
     """
 
+    if by_day:
+        time_point_col = 'day'
+    else:
+        time_point_col = 'month'
+
     groupby_cols = ['mouse_id', 'code']
     if lineage_bias:
         if cell_type == 'any':
@@ -215,7 +221,7 @@ def clones_enriched_at_last_timepoint(
         groupby_cols.append('cell_type')
 
     # get max month for clones
-    grouped_df = pd.DataFrame(filtered_df.groupby(by=groupby_cols).month.max()).reset_index()
+    grouped_df = pd.DataFrame(filtered_df.groupby(by=groupby_cols)[time_point_col].max()).reset_index()
     if lineage_bias:
         filtered_for_enrichment = lineage_bias_df.merge(grouped_df['code'], how='inner', on=['code'])
     else:
@@ -385,7 +391,7 @@ def find_clones_bias_range_at_time(
     filt_df = filt_df[['code', 'mouse_id']]
     return lineage_bias_df.merge(filt_df, on=['code', 'mouse_id'])
 
-def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 400) -> pd.DataFrame:
+def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 400, by_day: bool = False) -> pd.DataFrame:
     """ Create dataframe sum of abundance due to clones below percentile ranked by clonal abundance
     
     Arguments:
@@ -399,22 +405,27 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_point
         pd.DataFrame -- Percentile vs Cumulative Abundance Dataframe
     """
 
+    if by_day:
+        time_col = 'day'
+    else:
+        time_col = 'month'
     percentile_range = np.linspace(0, 100, num_points)
     cell_type_df = input_df.loc[input_df.cell_type == cell_type]
-    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'month_str', 'cell_type', 'quantile']
+    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'day', 'time_str', 'cell_type', 'quantile']
     contribution_df = pd.DataFrame(columns=contribution_df_cols)
     for percentile in percentile_range:
-        for month in cell_type_df.month.unique():
-            month_df = cell_type_df.loc[cell_type_df.month == month]
+        for time_point in cell_type_df[time_col].unique():
+            time_df = cell_type_df.loc[cell_type_df[time_col] == time_point]
             contribution_row = pd.DataFrame(columns=contribution_df_cols)
             contribution_row.percentile = [percentile]
             contribution_row.cell_type = [cell_type]
-            contribution_row.quantile = [month_df.quantile(percentile/100)]
-            contribution_row.month_str = ['Month: ' + str(month)]
-            contribution_row.month = [month]
-            contribution_row.total_abundance = [month_df.percent_engraftment.sum()]
-            sum_top = month_df.loc[month_df.percent_engraftment <= month_df.quantile(percentile/100).percent_engraftment].percent_engraftment.sum()
-            contribution_row['percent_sum_abundance'] = 100*(sum_top)/month_df.percent_engraftment.sum()
+            contribution_row.quantile = [time_df.quantile(percentile/100)]
+            contribution_row.time_str = [time_col.title() + ': ' + str(time_point)]
+            contribution_row.month = [round(time_df.day.min()/30)]
+            contribution_row.day = [time_df.day.min()]
+            contribution_row.total_abundance = [time_df.percent_engraftment.sum()]
+            sum_top = time_df.loc[time_df.percent_engraftment <= time_df.quantile(percentile/100).percent_engraftment].percent_engraftment.sum()
+            contribution_row['percent_sum_abundance'] = 100*(sum_top)/time_df.percent_engraftment.sum()
             contribution_df = contribution_df.append(contribution_row, ignore_index=True)
     return contribution_df.reset_index()
 
@@ -528,8 +539,8 @@ def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum
         if len(idx) > 1:
             print('More than one intersect found: ')
             print(idx)
-        x_val = data.iloc[idx[0]][x_col]
-        y_val = data.iloc[idx[0]][y_col]
+        x_val = data.iloc[idx[-1]][x_col]
+        y_val = data.iloc[idx[-1]][y_col]
 
     print(x_val, y_val)
     return (x_val, y_val)
@@ -537,6 +548,7 @@ def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum
 def calculate_thresholds_sum_abundance(
     input_df: pd.DataFrame,
     abundance_cutoff: float = 50.0,
+    by_day: bool = False,
     analyzed_cell_types: List[str] = ['gr', 'b']
     ) -> Tuple[Dict[str, float], Dict[str, float]]:
     """ Calculates abundance thresholds by cell type based on cumulative abundance at month 4
@@ -557,7 +569,14 @@ def calculate_thresholds_sum_abundance(
     percentiles: Dict[str, float] = {}
 
     for cell_type in analyzed_cell_types:
-        month_4_cell_df = input_df.loc[(input_df.month == 4) & (input_df.cell_type == cell_type)]
+        if by_day:
+            first_day = input_df.day.min()
+            if first_day != 127:
+                print('First day: ' + str(first_day))
+            month_4_cell_df = input_df.loc[(input_df.day== first_day) & (input_df.cell_type == cell_type)]
+        else:
+            month_4_cell_df = input_df.loc[(input_df.month == 4) & (input_df.cell_type == cell_type)]
+
         contributions = percentile_sum_engraftment(month_4_cell_df, cell_type)
         percentile, _ = find_intersect(
             data=contributions,

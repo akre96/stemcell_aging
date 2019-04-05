@@ -344,12 +344,19 @@ def main():
     parser.add_argument('-t', '--threshold', dest='threshold', help='Threshold to filter presence of cells by for percent_engraftment', default=.01, type=float)
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
     parser.add_argument('-l', '--bias-only', dest='bias_only', help='Set flag if you only want to calculate lineage bias, not its change', action="store_true")
+    parser.add_argument('-d', '--by-day', dest='by_day', help='Calculations done using day column and day 127', action="store_true")
 
     args = parser.parse_args()
 
     input_df = pd.read_csv(args.input)
     cell_count_data = parse_wbc_count_file(args.counts_file)
 
+    time_column = 'month'
+    base_time_point = 4
+    if args.by_day:
+        time_column = 'day'
+        base_time_point = 127
+    print('Lineage Bias Calculated using baseline by ' + time_column + 'at point: ' + str(base_time_point))
     threshold = args.threshold
     print('Calculating Lineage Bias and Change for presence threshold of: ' + str(threshold) + '\n')
 
@@ -357,7 +364,12 @@ def main():
     present_df = filter_threshold(input_df, threshold, ['gr', 'b'])
     print('Done.\n')
     print('Normalizing data...')
-    with_baseline_counts_df = calculate_baseline_counts(present_df, cell_count_data)
+    with_baseline_counts_df = calculate_baseline_counts(
+        present_df,
+        cell_count_data,
+        baseline_column=time_column,
+        baseline_timepoint=base_time_point
+        )
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
     print('Done.\n')
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)

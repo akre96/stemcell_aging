@@ -293,23 +293,29 @@ def main():
 
     if graph_type in ['sum_abundance']:
         save_path = args.output_dir + os.sep + 'abundance_at_percentile'
-        num_points = 400
+        num_points = 100
         cell_type = 'gr'
-        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points)
+        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points, by_day=args.by_day)
+        if args.by_day:
+            time_point_col = 'day'
+        else:
+            time_point_col = 'month'
         plot_contributions(contributions,
             cell_type=cell_type,
             save=args.save,
             save_path=save_path,
             save_format='png',
+            by_day=args.by_day
         )
 
         cell_type = 'b'
-        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points)
+        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points, by_day=args.by_day)
         plot_contributions(contributions,
             cell_type=cell_type,
             save=args.save,
             save_path=save_path,
             save_format='png',
+            by_day=args.by_day
         )
 
     if graph_type in ['range_bias_month']:
@@ -503,9 +509,9 @@ def main():
 
 
     if graph_type == 'bias_time_abund':
-        plot_lineage_bias_abundance_3d(lineage_bias_df)
-        plot_lineage_bias_abundance_3d(lineage_bias_df, group='aging_phenotype')
-        plot_lineage_bias_abundance_3d(lineage_bias_df, group='no_change')
+        plot_lineage_bias_abundance_3d(lineage_bias_df, by_day=args.by_day)
+        plot_lineage_bias_abundance_3d(lineage_bias_df, by_day=args.by_day, group='aging_phenotype')
+        plot_lineage_bias_abundance_3d(lineage_bias_df, by_day=args.by_day, group='no_change')
 
     if graph_type == 'counts_at_perc':
         percentile = .95
@@ -708,7 +714,8 @@ def main():
         print('Thresholds calculated based on cumulative abundance')
         _, thresholds = calculate_thresholds_sum_abundance(
             present_clones_df,
-            abundance_cutoff=abundance_cutoff
+            abundance_cutoff=abundance_cutoff,
+            by_day=args.by_day,
         )
 
         filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(
@@ -717,6 +724,7 @@ def main():
             thresholds=thresholds,
             lineage_bias=True,
             cell_type='gr',
+            by_day=args.by_day,
         )
         filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(
             input_df=input_df,
@@ -724,6 +732,7 @@ def main():
             thresholds=thresholds,
             lineage_bias=True,
             cell_type='b',
+            by_day=args.by_day,
         )
         plot_lineage_bias_line(
             filt_lineage_bias_gr_df,
@@ -731,6 +740,7 @@ def main():
             save=args.save,
             save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/gr',
             save_format='png',
+            by_day=args.by_day,
             abundance=abundance_cutoff
         )
         plot_lineage_bias_line(
@@ -739,6 +749,7 @@ def main():
             save=args.save,
             save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
             save_format='png',
+            by_day=args.by_day,
             abundance=abundance_cutoff
         )
 
@@ -798,6 +809,7 @@ def main():
         plot_lineage_bias_line(filt_lineage_bias_df,
                                title_addon='Filtered by clones with Abundance >' + str(round(threshold, 2)) + '% WBC at last timepoint',
                                save=args.save,
+                               by_day=args.by_day,
                                save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot',
                                save_format='png',
                               )
@@ -814,10 +826,12 @@ def main():
             abundance_cutoff = float(options)
             percentiles, dominant_thresholds = calculate_thresholds_sum_abundance(
                 present_clones_df,
+                by_day=args.by_day,
                 abundance_cutoff=abundance_cutoff
             )
 
         by_mouse = False
+        print(dominant_thresholds)
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 

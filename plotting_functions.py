@@ -175,7 +175,6 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
         None -- Run plt.show() to display figures created
     """
 
-    sns.set_palette(sns.color_palette(COLOR_PALETTES['group'][:2]))
     for month in enrichement_months:
         print('\n Month '+ str(month) +'\n')
         enriched_df = combine_enriched_clones_at_time(filtered_df, month, enrichment_thresholds, analyzed_cell_types)
@@ -214,19 +213,21 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                             data=cell_df,
                             legend=None,
                             sort=True,
+                            palette=COLOR_PALETTES['group']
                             )
             plt.suptitle(cell_type + ' Clones with Abundance > '
                         + str(round(enrichment_thresholds[cell_type], 2))
                         + ' % WBC At Month: ' + str(month))
             plt.xlabel('')
             plt.subplot(2, 1, 2)
-            sns.set_palette(sns.color_palette(COLOR_PALETTES['group'][:2]))
-            ax = sns.swarmplot(x='month',
-                               y='percent_engraftment',
-                               hue='group',
-                               data=cell_df,
-                               dodge=True,
-                              )
+            ax = sns.swarmplot(
+                x='month',
+                y='percent_engraftment',
+                hue='group',
+                data=cell_df,
+                dodge=True,
+                palette=COLOR_PALETTES['group']
+            )
             fname = save_path \
                     + os.sep \
                     + 'dominant_clones_' + cell_type + '_' + title_addon \
@@ -407,6 +408,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
                            percentile: float = 0,
                            threshold: float = 0,
                            abundance: float = 0,
+                           by_day: bool = False,
                            save: bool = False,
                            save_path: str = './output',
                            save_format: str = 'png'
@@ -419,18 +421,20 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     elif abundance:
         fname_prefix += '_a' + str(round(abundance, ndigits=2)).replace('.', '-')
 
+    x_var = 'month'
+    if by_day:
+        x_var = 'day'
+
     plt.figure()
-    sns.lineplot(x='month', y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=sns.color_palette(COLOR_PALETTES['group'][:2]))
+    sns.lineplot(x=x_var, y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=COLOR_PALETTES['group'])
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
     plt.title(title_addon)
 
     fname = fname_prefix + '_all_average.' + save_format
-    if save:
-        print('Saving to: ' + fname)
-        plt.savefig(fname, format=save_format)
+    save_plot(fname, save, save_format)
 
     plt.figure()
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_df, hue='mouse_id', style='group', units='code', estimator=None)
+    sns.lineplot(x=x_var, y='lineage_bias', data=lineage_bias_df, hue='mouse_id', style='group', units='code', estimator=None)
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice by Clone')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -439,7 +443,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
 
     plt.figure()
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    sns.lineplot(x=x_var, y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -448,7 +452,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
 
     plt.figure()
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
-    sns.lineplot(x='month', y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    sns.lineplot(x=x_var, y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in no_change')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -548,29 +552,35 @@ def plot_counts_at_percentile(input_df: pd.DataFrame,
         fname = save_path + os.sep + 'clone_count_p' + str(percentile).replace('.', '-') + '_' + group + '.' + save_format
         save_plot(fname, save, save_format)
 
-def plot_lineage_bias_abundance_3d(lineage_bias_df: pd.DataFrame, analyzed_cell_types: List[str] = ['gr','b'], group: str = 'all'):
+def plot_lineage_bias_abundance_3d(
+        lineage_bias_df: pd.DataFrame,
+        analyzed_cell_types: List[str] = ['gr','b'],
+        group: str = 'all',
+        by_day: bool = False,
+    ) -> None:
     fig = plt.figure()
     fig.suptitle('Group: ' + group)
+    x_var = 'month'
+    if by_day:
+        x_var = 'day'
     if group != 'all':
         lineage_bias_df = lineage_bias_df.loc[lineage_bias_df.group == group]
+
     ax = fig.add_subplot(121, projection='3d')
     for mouse_id in lineage_bias_df.mouse_id.unique():
         mouse_df = lineage_bias_df.loc[lineage_bias_df.mouse_id == mouse_id]
-        ax.scatter(mouse_df.month, mouse_df.lineage_bias, mouse_df[analyzed_cell_types[0]+ '_percent_engraftment'])
-        ax.set_xlabel('Month')
+        ax.scatter(mouse_df[x_var], mouse_df.lineage_bias, mouse_df[analyzed_cell_types[0]+ '_percent_engraftment'])
+        ax.set_xlabel(x_var.title())
         ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
         ax.set_zlabel('Abundance in '+analyzed_cell_types[0])
     plt.title(analyzed_cell_types[0])
     ax = fig.add_subplot(122, projection='3d')
     for mouse_id in lineage_bias_df.mouse_id.unique():
         mouse_df = lineage_bias_df.loc[lineage_bias_df.mouse_id == mouse_id]
-        ax.scatter(mouse_df.month, mouse_df.lineage_bias, mouse_df[analyzed_cell_types[1]+ '_percent_engraftment'])
-        ax.set_xlabel('Month')
+        ax.scatter(mouse_df[x_var], mouse_df.lineage_bias, mouse_df[analyzed_cell_types[1]+ '_percent_engraftment'])
+        ax.set_xlabel(x_var.title())
         ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
-        ax.set_zlabel('Abundance in '+analyzed_cell_types[0])
-    ax.set_xlabel('Month')
-    ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
-    ax.set_zlabel('Abundance in '+analyzed_cell_types[1])
+        ax.set_zlabel('Abundance in '+analyzed_cell_types[1])
     plt.title(analyzed_cell_types[1])
     
 def plot_max_engraftment_by_group(
@@ -793,28 +803,33 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
 def plot_contributions(
         contributions_df: pd.DataFrame,
         cell_type: str,
+        by_day: bool = False,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
 
     plt.figure()
-    plot = sns.lineplot(x='percentile', y='percent_sum_abundance', hue='month_str', data=contributions_df)
+    plot = sns.lineplot(x='percentile', y='percent_sum_abundance', hue='time_str', data=contributions_df)
     plt.xlabel('Percentile by Clone Abundance')
     plt.ylabel('Percent of Tracked Clone ' + cell_type + ' Population')
     plt.title('Cumulative Abundance at Percentiles for ' + cell_type)
 
-    m4_cont_df = contributions_df.loc[contributions_df.month == 4]
+    if by_day:
+        m4_cont_df = contributions_df.loc[contributions_df.day == contributions_df.day.min()]
+        print('min day: ' + str(contributions_df.day.min()))
+    else:
+        m4_cont_df = contributions_df.loc[contributions_df.month == 4]
 
     exp_x, exp_y = find_intersect(m4_cont_df, 50)
     plt.vlines(exp_x, -5, exp_y + 5, linestyles='dashed')
     plt.hlines(exp_y, 0, exp_x + 5, linestyles='dashed')
-    plt.text(0, 52, 'Expanded Clones: (' + str(round(exp_x, 2)) + ', ' + str(round(exp_y, 2)) + ')')
+    plt.text(25, 52, 'Expanded Clones: (' + str(round(exp_x, 2)) + ', ' + str(round(exp_y, 2)) + ')')
 
     dom_x, dom_y = find_intersect(m4_cont_df, 80)
     plt.vlines(dom_x, -5, dom_y + 5, linestyles=(0, (1, 1)))
     plt.hlines(dom_y, 0, dom_x + 5, linestyles=(0, (1, 1)))
-    plt.text(0, 80, 'Dominant Clones: (' + str(round(dom_x, 2)) + ', ' + str(round(dom_y, 2)) + ')')
+    plt.text(30, 80, 'Dominant Clones: (' + str(round(dom_x, 2)) + ', ' + str(round(dom_y, 2)) + ')')
 
     fname = save_path + os.sep + 'percentile_abundance_contribution_' + cell_type + '.' + save_format
     save_plot(fname, save, save_format)
