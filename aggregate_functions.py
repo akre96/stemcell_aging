@@ -66,6 +66,38 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
         filtered_df = filtered_df.append(cell_df)
     return filtered_df
 
+def filter_clones_threshold_anytime(
+        input_df: pd.DataFrame,
+        thresholds: Dict[str, float],
+        analyzed_cell_types: List[str],
+    ) -> pd.DataFrame:
+    """ Filter for clones above a threshold at any time point
+    
+    Arguments:
+        input_df {pd.DataFrame} -- abundance data frame
+        thresholds {Dict[str,float]} -- {cell_type: threshold}
+        analyzed_cell_types {List[str]} -- cell types to consider
+    
+    Returns:
+        pd.DataFrame -- filtered for clones which pass the threshold at any timepoint
+    """
+
+
+    hard_filtered_df = filter_cell_type_threshold(
+        input_df,
+        thresholds,
+        analyzed_cell_types,
+    )
+    deduped = hard_filtered_df.drop_duplicates(subset=['code', 'mouse_id'])
+    clones_above_thresh_at_any_time = input_df.merge(
+        deduped[['code', 'mouse_id']],
+        how='inner',
+        on=['code', 'mouse_id'],
+        validate='m:1'
+    )
+    return clones_above_thresh_at_any_time[clones_above_thresh_at_any_time.cell_type.isin(analyzed_cell_types)]
+
+
 def filter_lineage_bias_threshold(
         lineage_bias_df: pd.DataFrame,
         threshold: float,
@@ -573,7 +605,7 @@ def calculate_thresholds_sum_abundance(
             first_day = input_df.day.min()
             if first_day != 127:
                 print('First day: ' + str(first_day))
-            month_4_cell_df = input_df.loc[(input_df.day== first_day) & (input_df.cell_type == cell_type)]
+            month_4_cell_df = input_df.loc[(input_df.day == first_day) & (input_df.cell_type == cell_type)]
         else:
             month_4_cell_df = input_df.loc[(input_df.month == 4) & (input_df.cell_type == cell_type)]
 
