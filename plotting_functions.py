@@ -178,10 +178,12 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
     for month in enrichement_months:
         print('\n Month '+ str(month) +'\n')
         enriched_df = combine_enriched_clones_at_time(filtered_df, month, enrichment_thresholds, analyzed_cell_types)
-        print('Number of Mice in No Change Group: '
+        print(
+            'Number of Mice in No Change Group: '
             + str(enriched_df.loc[enriched_df.group == 'no_change'].mouse_id.nunique())
         )
-        print('Number of Mice in Aging Phenotype Group: '
+        print(
+            'Number of Mice in Aging Phenotype Group: '
             + str(enriched_df.loc[enriched_df.group == 'aging_phenotype'].mouse_id.nunique())
         )
         title_addon = ''
@@ -196,25 +198,27 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
             if by_mouse:
                 title_addon = 'by-mouse_'
                 sns.set_palette(sns.color_palette('hls'))
-                sns.lineplot(x='month',
-                            y='percent_engraftment',
-                            hue='mouse_id',
-                            style='group',
-                            data=cell_df,
-                            units='code',
-                            legend=False,
-                            estimator=None,
-                            sort=True,
-                            )
+                sns.lineplot(
+                    x='month',
+                    y='percent_engraftment',
+                    hue='mouse_id',
+                    style='group',
+                    data=cell_df,
+                    units='code',
+                    legend=False,
+                    estimator=None,
+                    sort=True,
+                )
             else:
-                sns.lineplot(x='month',
-                            y='percent_engraftment',
-                            hue='group',
-                            data=cell_df,
-                            legend=None,
-                            sort=True,
-                            palette=COLOR_PALETTES['group']
-                            )
+                sns.lineplot(
+                    x='month',
+                    y='percent_engraftment',
+                    hue='group',
+                    data=cell_df,
+                    legend=None,
+                    sort=True,
+                    palette=COLOR_PALETTES['group']
+                )
             plt.suptitle(cell_type + ' Clones with Abundance > '
                         + str(round(enrichment_thresholds[cell_type], 2))
                         + ' % WBC At Month: ' + str(month))
@@ -340,7 +344,7 @@ def venn_barcode_in_time(present_clones_df: pd.DataFrame,
             ], fill=['number'])
             labels_per_mouse[mouse] = labels
 
-        
+
         mean_labels = {}
         median_labels = {}
         for section in labels.keys():
@@ -393,7 +397,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
         fname_prefix += '_t' + str(round(threshold, ndigits=2)).replace('.', '-')
     elif abundance:
         fname_prefix += '_a' + str(round(abundance, ndigits=2)).replace('.', '-')
-        
+
 
     plt.figure()
     sns.lineplot(x='month', y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=sns.color_palette(COLOR_PALETTES['group'][:2]))
@@ -582,7 +586,7 @@ def plot_lineage_bias_abundance_3d(
         ax.set_ylabel('Lineage Bias Myeloid(+)/Lymphoid(-)')
         ax.set_zlabel('Abundance in '+analyzed_cell_types[1])
     plt.title(analyzed_cell_types[1])
-    
+
 def plot_max_engraftment_by_group(
         input_df: pd.DataFrame,
         cell_type: str,
@@ -685,11 +689,11 @@ def plot_bias_change_hist(bias_change_df: pd.DataFrame,
                           save_format: str = 'png'
                          ) -> None:
     """ Plot distribution of bias change (hist + rugplot + kde)
-    
+
     Arguments:
         bias_change_df {pd.DataFrame} -- dataframe of bias change information
         threshold {float} -- threshold that was used to filter data
-    
+
     Keyword Arguments:
         absolute_value {bool} -- Whether plot is done on magnitude, or including direction (default: {False})
         group {str} --  Group filtered for (default: {'all'})
@@ -725,11 +729,11 @@ def plot_bias_change_cutoff(bias_change_df: pd.DataFrame,
                             save_format: str = 'png'
                            ) -> None:
     """ Plots KDE of bias change annotated with line to cut "change" vs "non change" clones
-    
+
     Arguments:
         bias_change_df {pd.DataFrame} -- dataframe of bias change information
         threshold {str} -- threshold(t0-01) or abundance(a50-0) that was used to filter data
-    
+
     Keyword Arguments:
         absolute_value {bool} -- Whether plot is done on magnitude, or including direction (default: {False})
         group {str} --  Group filtered for (default: {'all'})
@@ -748,7 +752,7 @@ def plot_bias_change_cutoff(bias_change_df: pd.DataFrame,
         kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
     else:
         kde = sns.kdeplot(bias_change_df.bias_change, shade=True)
-    
+
     x, y = kde.get_lines()[0].get_data()
     dy = np.diff(y)/np.diff(x)
     dx = x[1:]
@@ -778,6 +782,25 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
                              save_format: str = 'png',
                              by_day: bool = False,
                             ) -> None:
+    """ Creats violin plot of lineage bias over time
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- lineage bias data frame
+    
+    Keyword Arguments:
+        title_addon {str} -- description for title (default: {''})
+        percentile {float} -- percentil to look at (default: {0})
+        group {str} -- group to subselect (default: {'all'})
+        threshold {float} --  threshold analyzed (default: {0})
+        save {bool} -- (default: {False})
+        save_path {str} -- (default: {'./output'})
+        save_format {str} -- (default: {'png'})
+        by_day {bool} -- Whether to plot by day instead of month (default: {False})
+    
+    Returns:
+        None -- [description]
+    """
+
     fname_prefix = save_path + os.sep + 'violin_bias'
     plt.figure()
 
@@ -810,6 +833,24 @@ def plot_contributions(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    """ Plot cumulative abundance at percentile, one line per timepoint
+    Also adds lines to see intersection where cells contribute 50% and 20% 
+    of cumulative abundance
+    
+    Arguments:
+        contributions_df {pd.DataFrame} -- percentile to cumulative abundance df
+        cell_type {str} -- cell type to look at
+    
+    Keyword Arguments:
+        by_day {bool} -- by day timepoint instead of month (default: {False})
+        save {bool} -- (default: {False})
+        save_path {str} -- (default: {'./output'})
+        save_format {str} -- (default: {'png'})
+    
+    Returns:
+        None -- plt.show() to view plot
+    """
+
 
     plt.figure()
     plot = sns.lineplot(
@@ -851,6 +892,22 @@ def plot_change_contributions(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    """ Plot contribution of changed cells
+    
+    Arguments:
+        changed_marked_df {pd.DataFrame} -- bias_change with clones marked as changed
+        cell_type {str} -- cell type to analyze
+    
+    Keyword Arguments:
+        group {str} -- group to filter for (default: {'all'})
+        percent_of_total {bool} -- plot as percent of tracked cell (default: {False})
+        save {bool} -- (default: {False})
+        save_path {str} -- (default: {'./output'})
+        save_format {str} -- (default: {'png'})
+    
+    Returns:
+        None -- plt.show() to view plot
+    """
 
 
     plt.figure()
@@ -886,6 +943,23 @@ def plot_change_contributions_by_group(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    """ Plot contributions of 'changed' cells, one line per group
+    
+    Arguments:
+        changed_marked_df {pd.DataFrame} -- bias_change with clones marked as changed
+        cell_type {str} -- cell type to analyze
+    
+    Keyword Arguments:
+        percent_of_total {bool} -- look as percent of total (default: {False})
+        line {bool} --  plot as line instead of bar (default: {False})
+        save {bool} -- (default: {False})
+        save_path {str} -- (default: {'./output'})
+        save_format {str} -- (default: {'png'})
+    
+    Returns:
+        None -- plt.show() to view plot
+    """
+
 
 
     plt.figure()
@@ -922,18 +996,36 @@ def plot_change_contributions_by_group(
         addon = addon + 'line_'
     fname = save_path + os.sep + addon + cell_type + '_' + group + '.' + save_format
     save_plot(fname, save, save_format)
-    
+
 
 def plot_weighted_bias_hist(
-    lineage_bias_df: pd.DataFrame,
-    cell_type: str,
-    month: int = 4,
-    by_group: bool = True,
-    bins: int = 30,
-    save: bool = False,
-    save_path: str = './output',
-    save_format: str = 'png'
+        lineage_bias_df: pd.DataFrame,
+        cell_type: str,
+        month: int = 4,
+        by_group: bool = True,
+        bins: int = 30,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
     ) -> None:
+    """ Histogram of lineage bias at time point, weighted by abundance
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- lineage bias data frame
+        cell_type {str} -- cell type to weight abundance of
+    
+    Keyword Arguments:
+        month {int} -- time point to analyze (default: {4})
+        by_group {bool} -- wether to split by phenotype group (default: {True})
+        bins {int} -- bins for histogram (default: {30})
+        save {bool} --  (default: {False})
+        save_path {str} --  (default: {'./output'})
+        save_format {str} --  (default: {'png'})
+    
+    Returns:
+        None -- plt.show() to view plot
+    """
+
 
 
     plt.figure()
@@ -968,7 +1060,7 @@ def plot_weighted_bias_hist(
     addon = 'bias_hist_m' + str(month) + '_'
     fname = save_path + os.sep + addon + cell_type + '_' + group + '.' + save_format
     save_plot(fname, save, save_format)
-    
+
 
 def plot_counts_at_abundance(
         input_df: pd.DataFrame,
@@ -980,8 +1072,26 @@ def plot_counts_at_abundance(
         save_path: str = 'output',
         save_format: str = 'png',
     ) -> None:
-                            
-    percentiles, thresholds = calculate_thresholds_sum_abundance(
+    """ Plot clone counts at cumulative abundance based thresholds
+    
+    Arguments:
+        input_df {pd.DataFrame} -- abundance data frame
+        abundance_cutoff {float} -- cumulative abundance of bottom percentil cutoff
+    
+    Keyword Arguments:
+        analyzed_cell_types {List[str]} -- (default: {['gr', 'b']})
+        group {str} -- 'no_change' or 'aging_phenotype (default: {'all'})
+        line {bool} --  line or bar plot (default: {False})
+        save {bool} --  (default: {False})
+        save_path {str} --  (default: {'output'})
+        save_format {str} --  (default: {'png'})
+    
+    Returns:
+        None -- plt.show() to view plot
+    """
+
+
+    _, thresholds = calculate_thresholds_sum_abundance(
         input_df,
         abundance_cutoff=abundance_cutoff
     )
@@ -1059,10 +1169,10 @@ def plot_counts_at_abundance(
 
 def group_names_pretty(input_df: pd.DataFrame) -> pd.DataFrame:
     """ Makes group names formatted 'prettily'
-    
+
     Arguments:
         input_df {pd.DataFrame} -- Data frame with group column
-    
+
     Returns:
         pd.DataFrame -- formatted group column dataframe
     """
@@ -1128,6 +1238,24 @@ def swamplot_abundance_cutoff(
         save_path: str = '',
         save_format: str = 'png'
     ) -> None:
+    """ Swarm plot of abundance of mice with all 4 month timepoints
+
+    Arguments:
+        input_df {pd.DataFrame} -- abundance dataframe
+        cell_type {str} -- cell type to plot
+        abundance_cutoff {float} -- cumulative abundance cutoff to calculate threshold at
+
+    Keyword Arguments:
+        color_col {str} -- column to set hue to (default: {'mouse_id'})
+        group {str} -- filter by group (default: {'all'})
+        save {bool} -- save plot or not (default: {False})
+        save_path {str} -- path to save file (default: {''})
+        save_format {str} -- plot save format (default: {'png'})
+
+    Returns:
+        None -- plt.show() to view plot
+    """
+
 
     _, thresholds = calculate_thresholds_sum_abundance(
         input_df,
@@ -1148,7 +1276,12 @@ def swamplot_abundance_cutoff(
 
     plt.figure()
     sns.set_palette(sns.color_palette('hls', filtered_df.mouse_id.nunique()))
-    sns.swarmplot(x='month', y='percent_engraftment', hue='mouse_id', data=filtered_df)
+    sns.swarmplot(
+        x='month',
+        y='percent_engraftment',
+        hue=color_col,
+        data=filtered_df
+        )
 
     title = 'Abundance of ' + cell_type.capitalize() \
           + ' with Abundance > ' \
@@ -1163,3 +1296,4 @@ def swamplot_abundance_cutoff(
             + '_' + group \
             + '.' + save_format
     save_plot(fname, save, save_format)
+
