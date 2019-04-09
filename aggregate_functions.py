@@ -149,9 +149,10 @@ def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def find_enriched_clones_at_time(input_df: pd.DataFrame,
-                                 enrichment_month: int,
+                                 enrichment_time: int,
                                  enrichment_threshold: float,
                                  cell_type: str,
+                                 timepoint_col: str,
                                  threshold_column: str = 'percent_engraftment',
                                  lineage_bias: bool = False,
                                  ) -> pd.DataFrame:
@@ -159,7 +160,7 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
 
     Arguments:
         input_df {pd.DataFrame} -- long format data, formatted with filter_threshold()
-        enrichment_month {int} -- month of interest
+        enrichment_time {int} -- timepoint of interest
         threshold {int} -- threshold for significant engraftment
         cell_type {str} -- Cell type to select for
         threshold_column {str} -- column on which to apply threshold
@@ -170,21 +171,22 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
     Returns:
         pd.DataFrame -- DataFrame with only clones enriched at specified timepoint
     """
-    month_df = input_df[input_df.month == enrichment_month]
+    time_df = input_df[input_df[timepoint_col] == enrichment_time]
 
-    enriched_at_month_df = month_df[month_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id', 'cell_type'])
+    enriched_at_time_df = time_df[time_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id'])
 
     if lineage_bias:
         cell_df = input_df
     else:
         cell_df = input_df[input_df.cell_type == cell_type]
-        enriched_at_month_df = enriched_at_month_df[enriched_at_month_df.cell_type == cell_type]
+        enriched_at_time_df = enriched_at_time_df[enriched_at_time_df.cell_type == cell_type]
 
-    return cell_df.merge(enriched_at_month_df[['code', 'mouse_id']], how='inner', on=['code', 'mouse_id'], validate="m:1")
+    return cell_df.merge(enriched_at_time_df[['code', 'mouse_id']], how='inner', on=['code', 'mouse_id'], validate="m:1")
 
 def combine_enriched_clones_at_time(
         input_df: pd.DataFrame,
-        enrichment_month: int,
+        enrichment_time: int,
+        timepoint_col: str,
         thresholds: Dict[str, float],
         analyzed_cell_types: List[str],
         lineage_bias: bool = False
@@ -205,9 +207,9 @@ def combine_enriched_clones_at_time(
     all_enriched_df = pd.DataFrame()
     for cell_type in analyzed_cell_types:
         if lineage_bias:
-            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_month, thresholds[cell_type], cell_type, lineage_bias=lineage_bias, threshold_column=cell_type+'_percent_engraftment')
+            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, timepoint_col=timepoint_col, lineage_bias=lineage_bias, threshold_column=cell_type+'_percent_engraftment')
         else:
-            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_month, thresholds[cell_type], cell_type, lineage_bias=lineage_bias)
+            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, timepoint_col=timepoint_col, lineage_bias=lineage_bias)
         all_enriched_df = all_enriched_df.append(enriched_cell_df)
     return all_enriched_df
 

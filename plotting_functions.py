@@ -386,12 +386,13 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
                          percentile: float = 0,
                          threshold: float = 0,
                          abundance: float = 0,
-                         month: str = 'last',
+                         timepoint: str = 'last',
+                         timepoint_col: str = 'month',
                          save: bool = False,
                          save_path: str = './output',
                          save_format: str = 'png'
                         ) -> None:
-    fname_prefix = save_path + os.sep + 'lineplot_bias_' + 'm' + str(month)
+    fname_prefix = save_path + os.sep + 'lineplot_bias_' + timepoint_col + str(timepoint)
     if percentile:
         fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
     elif threshold:
@@ -401,7 +402,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
 
 
     plt.figure()
-    sns.lineplot(x='month', y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=sns.color_palette(COLOR_PALETTES['group'][:2]))
+    sns.lineplot(x=timepoint_col, y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=COLOR_PALETTES['group'])
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
     plt.title(title_addon)
 
