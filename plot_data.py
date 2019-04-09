@@ -22,7 +22,7 @@ from aggregate_functions import filter_threshold, \
     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
     find_top_percentile_threshold, find_clones_bias_range_at_time, \
     filter_cell_type_threshold, combine_enriched_clones_at_time, \
-    mark_changed, sum_abundance_by_change, \
+    mark_changed, sum_abundance_by_change, between_gen_bias_change, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_threshold
 from plotting_functions import plot_max_engraftment, \
     plot_clone_count_by_thresholds, venn_barcode_in_time, \
@@ -34,7 +34,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_lineage_average, plot_contributions, plot_weighted_bias_hist, \
     plot_change_contributions, plot_change_contributions_by_group, \
     plot_counts_at_abundance, plot_average_abundance, \
-    swamplot_abundance_cutoff
+    swamplot_abundance_cutoff, bias_change_between_gen, \
+    bias_change_across_gens
      
 
 
@@ -91,9 +92,11 @@ def main():
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
-    parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False)
+    parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
+    parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
+    parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
 
     args = parser.parse_args()
     options = args.options
@@ -114,13 +117,75 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
+    if graph_type in ['change_across_gens', 'default']:
+        save_path = args.output_dir + os.sep + 'bias_across'
+        thresholds = {
+            'gr': 0.01,
+            'b': 0.01
+            }
+        abundance_cutoff = 0.0
 
-    if graph_type in ['swarm_abund_cut', 'default']:
+        magnitude = args.magnitude
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
+
+        bias_change_across_gens(
+            lineage_bias_df,
+            abundance_cutoff=abundance_cutoff,
+            thresholds=thresholds,
+            magnitude=magnitude,
+            group=args.group,
+            by_clone=args.by_clone,
+            save=args.save,
+            save_path=save_path,
+        )
+
+    if graph_type in ['change_between_gens']:
+        save_path = args.output_dir + os.sep + 'bias_gen_change'
+        thresholds = {
+            'gr': 0.01,
+            'b': 0.01
+            }
+        abundance_cutoff = 0.0
+
+        magnitude = args.magnitude
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
+
+        bias_change_between_gen(
+            lineage_bias_df,
+            abundance_cutoff=abundance_cutoff,
+            thresholds=thresholds,
+            magnitude=magnitude,
+            group=args.group,
+            by_clone=args.by_clone,
+            save=args.save,
+            save_path=save_path,
+        )
+
+    if graph_type in ['swarm_abund_cut']:
         save_path = args.output_dir + os.sep + 'swarmplot_abundance'
         abundance_cutoff = 50
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
 
+        _, thresholds = calculate_thresholds_sum_abundance(
+            input_df,
+            abundance_cutoff=abundance_cutoff,
+            by_day=args.by_day,
+        )
         group = 'all'
         if args.group:
             group = args.group
@@ -129,7 +194,9 @@ def main():
         swamplot_abundance_cutoff(
             present_clones_df,
             abundance_cutoff=abundance_cutoff,
+            thresholds=thresholds,
             group=group,
+            by_day=args.by_day,
             color_col='mouse_id',
             cell_type=cell_type,
             save=args.save,
@@ -140,8 +207,10 @@ def main():
         swamplot_abundance_cutoff(
             present_clones_df,
             abundance_cutoff=abundance_cutoff,
+            thresholds=thresholds,
             color_col='mouse_id',
             group=group,
+            by_day=args.by_day,
             cell_type=cell_type,
             save=args.save,
             save_path=save_path,

@@ -22,3 +22,6 @@ output
 
 # Temp Files
 *~
+
+# Personal Script Files
+*.sh

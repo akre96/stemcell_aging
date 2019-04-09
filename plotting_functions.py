@@ -17,7 +17,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     filter_mice_with_n_timepoints, filter_cell_type_threshold, \
     find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
     get_max_by_mouse_timepoint, sum_abundance_by_change, find_intersect, \
-    calculate_thresholds_sum_abundance
+    calculate_thresholds_sum_abundance, filter_lineage_bias_anytime, \
+    across_gen_bias_change
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 
@@ -1232,6 +1233,8 @@ def swamplot_abundance_cutoff(
         input_df: pd.DataFrame,
         cell_type: str,
         abundance_cutoff: float,
+        thresholds: Dict[str, float],
+        by_day: bool = False,
         color_col: str = 'mouse_id',
         group: str = 'all',
         save: bool = False,
@@ -1244,10 +1247,12 @@ def swamplot_abundance_cutoff(
         input_df {pd.DataFrame} -- abundance dataframe
         cell_type {str} -- cell type to plot
         abundance_cutoff {float} -- cumulative abundance cutoff to calculate threshold at
+        thresholds {Dict[str, float]} -- thresholds to filter input by
 
     Keyword Arguments:
         color_col {str} -- column to set hue to (default: {'mouse_id'})
         group {str} -- filter by group (default: {'all'})
+        by_day {bool} -- use day as timepoint column
         save {bool} -- save plot or not (default: {False})
         save_path {str} -- path to save file (default: {''})
         save_format {str} -- plot save format (default: {'png'})
@@ -1257,16 +1262,19 @@ def swamplot_abundance_cutoff(
     """
 
 
-    _, thresholds = calculate_thresholds_sum_abundance(
-        input_df,
-        abundance_cutoff=abundance_cutoff
-    )
     if group != 'all':
         input_df = input_df[input_df.group == group]
+    
+    time_col = 'month'
+    if by_day:
+        time_col = 'day'
 
+    n_timepoints = input_df[time_col].nunique()
+    print('Minimum number of timepoints: ' + str(n_timepoints))
     all_timepoint_df = filter_mice_with_n_timepoints(
         input_df,
-        n_timepoints=4
+        n_timepoints=n_timepoints,
+        time_col=time_col,
     )
     filtered_df = filter_cell_type_threshold(
         all_timepoint_df,
@@ -1277,7 +1285,7 @@ def swamplot_abundance_cutoff(
     plt.figure()
     sns.set_palette(sns.color_palette('hls', filtered_df.mouse_id.nunique()))
     sns.swarmplot(
-        x='month',
+        x=time_col,
         y='percent_engraftment',
         hue=color_col,
         data=filtered_df
@@ -1288,7 +1296,7 @@ def swamplot_abundance_cutoff(
           + str(round(thresholds[cell_type],2)) + '% WBC'
     plt.suptitle(title)
     plt.title('Group: ' + group.replace('_', ' ').title())
-    plt.xlabel('Month')
+    plt.xlabel(time_col.title())
     plt.ylabel('Clone Abundance (% WBC)')
     fname = save_path + os.sep + 'swamplot_abundance' \
             + '_' + cell_type + '_a' \
@@ -1297,3 +1305,211 @@ def swamplot_abundance_cutoff(
             + '.' + save_format
     save_plot(fname, save, save_format)
 
+
+def bias_change_between_gen(
+        lineage_bias_df: pd.DataFrame,
+        abundance_cutoff: float,
+        thresholds: Dict[str, float],
+        magnitude: bool = False,
+        by_clone: bool = False,
+        group: str = 'all',
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png'
+    ) -> None:
+    """ Plots lineage bias change between generations for serial transplant data
+
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- lineage bias dataframe
+        abundance_cutoff {float} -- cumulative abundance cutoff to calculate threshold at
+        thresholds {Dict[str, float]} -- thresholds to filter input by
+
+    Keyword Arguments:
+        group {str} -- filter by group (default: {'all'})
+        magnitude {bool} -- use absolute value of change
+        by_clone {bool} -- plot individual clones
+        save {bool} -- save plot or not (default: {False})
+        save_path {str} -- path to save file (default: {''})
+        save_format {str} -- plot save format (default: {'png'})
+
+    Returns:
+        None -- plt.show() to view plot
+    """
+
+    if group != 'all':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
+
+    
+    plt.figure()
+    filtered_df = filter_lineage_bias_anytime(
+        lineage_bias_df,
+        thresholds
+        )
+    between_gen_bias_change_df = bias_change_between_gen(
+        filtered_df,
+        absolute=magnitude
+        )
+    if by_clone:
+        sns.lineplot(
+            x='gen_change',
+            y='bias_change',
+            data=group_names_pretty(between_gen_bias_change_df),
+            hue='mouse_id',
+            estimator=None,
+            style='group',
+            units='code',
+            legend=None
+            )
+    else:
+        palette = COLOR_PALETTES['group']
+        sns.lineplot(
+            x='gen_change',
+            y='bias_change',
+            data=group_names_pretty(between_gen_bias_change_df),
+            hue='group',
+            palette=palette,
+            )
+
+    if magnitude:
+        plt.ylabel('Magnitude Bias Change')
+    else:
+        plt.ylabel('Bias Change')
+
+    fname_addon = ''
+    if magnitude:
+        fname_addon = '_magnitude'
+    if by_clone:
+        fname_addon = fname_addon + '_by-clone'
+
+    title = 'Bias Change of clones ' \
+          + ' with Abundance Gr > ' \
+          + str(round(thresholds['gr'], 2)) + '% WBC' \
+          + ' & B > ' \
+          + str(round(thresholds['b'], 2)) + '% WBC' \
+          + ' at Any Timepoint'
+    plt.suptitle(title)
+    if group != 'all':
+        plt.title('Group: ' + group.replace('_', ' ').title())
+    plt.xlabel('Generation Change')
+    fname = save_path + os.sep + 'bias_change_generations' \
+            + fname_addon + '_a' \
+            + str(round(abundance_cutoff, 2)).replace('.', '-') \
+            + '_' + group \
+            + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def bias_change_across_gens(
+        lineage_bias_df: pd.DataFrame,
+        abundance_cutoff: float,
+        thresholds: Dict[str, float],
+        magnitude: bool = False,
+        by_clone: bool = False,
+        group: str = 'all',
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png'
+    ) -> None:
+    """ Plots lineage bias change across generations for serial transplant data
+        goes one to two, one to three, one to four, etc.
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- lineage bias dataframe
+        abundance_cutoff {float} -- cumulative abundance cutoff to calculate threshold at
+        thresholds {Dict[str, float]} -- thresholds to filter input by
+
+    Keyword Arguments:
+        group {str} -- filter by group (default: {'all'})
+        magnitude {bool} -- use absolute value of change
+        save {bool} -- save plot or not (default: {False})
+        save_path {str} -- path to save file (default: {''})
+        save_format {str} -- plot save format (default: {'png'})
+
+    Returns:
+        None -- plt.show() to view plot
+    """
+
+    if group != 'all':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
+
+    
+    plt.figure()
+
+    filtered_df = filter_lineage_bias_anytime(
+        lineage_bias_df,
+        thresholds
+        )
+    across_gen_bias_change_df = across_gen_bias_change(
+        filtered_df,
+        absolute=magnitude
+        )
+    title = 'Bias Change of clones ' \
+        + ' with Abundance Gr > ' \
+        + str(round(thresholds['gr'], 2)) + '% WBC' \
+        + ' & B > ' \
+        + str(round(thresholds['b'], 2)) + '% WBC' \
+        + ' at Any Timepoint'
+
+    if by_clone:
+        plt.subplot(2, 1, 1)
+        ax = sns.swarmplot(
+            x='gen_change',
+            y='bias_change',
+            data=group_names_pretty(across_gen_bias_change_df),
+            hue='mouse_id',
+            )
+        ax.legend_.remove()
+
+        if magnitude:
+            plt.ylabel('Magnitude Bias Change')
+        else:
+            plt.ylabel('Bias Change')
+
+        plt.xlabel('Generation Change')
+        if group != 'all':
+            plt.title('Group: ' + group.replace('_', ' ').title())
+
+        plt.subplot(2, 1, 2)
+        sns.lineplot(
+            x='gen_change',
+            y='bias_change',
+            data=group_names_pretty(across_gen_bias_change_df),
+            hue='mouse_id',
+            units='code',
+            estimator=None,
+            legend=None
+            )
+        if magnitude:
+            plt.ylabel('Magnitude Bias Change')
+        else:
+            plt.ylabel('Bias Change')
+        
+        plt.xlabel('Generation Change')
+    else:
+        palette = COLOR_PALETTES['group']
+        sns.lineplot(
+            x='gen_change',
+            y='bias_change',
+            data=group_names_pretty(across_gen_bias_change_df),
+            hue='group',
+            palette=palette,
+        )
+        if magnitude:
+            plt.ylabel('Magnitude Bias Change')
+        else:
+            plt.ylabel('Bias Change')
+        
+        plt.xlabel('Generation Change')
+
+    plt.suptitle(title)
+
+    fname_addon = ''
+    if magnitude:
+        fname_addon = '_magnitude'
+    if by_clone:
+        fname_addon = fname_addon + '_by-clone'
+
+    fname = save_path + os.sep + 'bias_change_across_gens' \
+            + fname_addon + '_a' \
+            + str(round(abundance_cutoff, 2)).replace('.', '-') \
+            + '_' + group \
+            + '.' + save_format
+    save_plot(fname, save, save_format)

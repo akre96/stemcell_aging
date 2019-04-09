@@ -13,6 +13,7 @@ def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
                      analyzed_cell_types: List[str],
                      threshold_column: str = "percent_engraftment",
+                     lineage_bias: bool = False,
                      ) -> pd.DataFrame:
     """Filter dataframe based on numerical thresholds, adds month column
 
@@ -25,7 +26,6 @@ def filter_threshold(input_df: pd.DataFrame,
     Returns:
         pd.DataFrame -- thresholded dataframe
     """
-
     analyzed_cell_types_df = input_df.loc[input_df.cell_type.isin(analyzed_cell_types)]
     threshold_filtered_df = analyzed_cell_types_df.loc[analyzed_cell_types_df[threshold_column] > threshold]
     threshold_filtered_df = threshold_filtered_df.assign(month=lambda row: pd.to_numeric((row.day/30).round(), downcast='integer'))
@@ -106,6 +106,27 @@ def filter_lineage_bias_threshold(
     filter_col = cell_type + '_percent_engraftment'
     return lineage_bias_df.loc[lineage_bias_df[filter_col] >= threshold]
 
+def filter_lineage_bias_anytime(
+        lineage_bias_df: pd.DataFrame,
+        thresholds: Dict[str, float],
+    ) -> pd.DataFrame:
+
+    filt_df = pd.DataFrame()
+    for cell_type, threshold in thresholds.items():
+        filt_df = filt_df.append(
+            lineage_bias_df[(
+                lineage_bias_df[cell_type + '_percent_engraftment'] >= threshold
+            )]
+            )
+    filt_codes = filt_df[['code','mouse_id']].drop_duplicates(subset=['code','mouse_id'])
+    anytime_thresh_df = lineage_bias_df.merge(
+        filt_codes,
+        how='inner',
+        validate='m:1'
+    )
+    return anytime_thresh_df
+
+
 def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     """ Count unique clones per cell type
 
@@ -169,7 +190,8 @@ def combine_enriched_clones_at_time(
         lineage_bias: bool = False
     ) -> pd.DataFrame:
     """ wrapper of find_enriched_clones_at_time() to combine entries from multiple cell types
-    
+        between_gen_bias_change_df = between_gen_bias_change(lineage_bias_df, absolute=True)
+        sns.lineplot(x='gen_change', y='bias_change', data=between_gen_bias_change_df, hue='group',)    
     Arguments:
         input_df {pd.DataFrame} -- data frame with month value
         enrichement_month {int} -- month to check enrichment at
@@ -261,7 +283,7 @@ def clones_enriched_at_last_timepoint(
 
     return filtered_for_enrichment
 
-def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4) -> pd.DataFrame:
+def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4, time_col: str = 'month') -> pd.DataFrame:
     """ Finds mice with desired number of timepoints.
     Used primarily to only select mice with all four time points
 
@@ -270,6 +292,7 @@ def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4)
 
     Keyword Arguments:
         n_timepoints {int} -- number of timepoints desired (default: {4})
+        time_col {string} -- column to look for timepoints in
 
     Returns:
         pd.DataFrame -- [description]
@@ -277,7 +300,7 @@ def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4)
 
     output_df = pd.DataFrame()
     for _, group in input_df.groupby(['mouse_id']):
-        if group.month.nunique() >= n_timepoints:
+        if group[time_col].nunique() >= n_timepoints:
             output_df = output_df.append(group)
     return output_df
 
@@ -629,3 +652,69 @@ def calculate_thresholds_sum_abundance(
     print('\nThresholds: ')
     print(thresholds)
     return (percentiles, thresholds)
+
+def between_gen_bias_change(
+        lineage_bias_df: pd.DataFrame,
+        absolute: bool = False
+    ) -> pd.DataFrame:
+
+    bias_gen_change_cols = ['mouse_id', 'code', 'group', 'gen_change', 'bias_change']
+    bias_gen_change_df = pd.DataFrame(columns=bias_gen_change_cols)
+    for _, group in lineage_bias_df.groupby(['code', 'mouse_id']):
+        if group.day.nunique() != len(group):
+            print('\n *** mismatch days to group length *** \n')
+            print(group)
+        for _, row in group.iterrows():
+            next_gen_row = group[group.day == row.day + 2]
+            if next_gen_row.empty:
+                continue
+            if not row.mouse_id:
+                print(row)
+            bias_gen_row = pd.DataFrame(columns=bias_gen_change_cols)
+            gen = (row.day - 127)/2 + 1
+            bias_gen_row.code = [row.code]
+            bias_gen_row.mouse_id = [row.mouse_id]
+            bias_gen_row.group = [row.group]
+            bias_gen_row.gen_change = [str(int(gen)) + ' to ' + str(int(gen + 1))]
+            bias_change = next_gen_row.lineage_bias - row.lineage_bias
+            if absolute:
+                bias_change = bias_change.abs()
+            bias_gen_row.bias_change = bias_change.tolist()
+            bias_gen_change_df = bias_gen_change_df.append(bias_gen_row, ignore_index=True)
+
+    return bias_gen_change_df
+
+def across_gen_bias_change(
+        lineage_bias_df: pd.DataFrame,
+        absolute: bool = False
+    ) -> pd.DataFrame:
+
+    bias_gen_change_cols = ['mouse_id', 'code', 'group', 'gen_change', 'bias_change']
+    bias_gen_change_df = pd.DataFrame(columns=bias_gen_change_cols)
+    for _, group in lineage_bias_df.groupby(['code', 'mouse_id']):
+        sorted_group = group.sort_values(by=['day'])
+        first_gen_row = sorted_group.iloc[0]
+        first_gen = (first_gen_row.day - 127)/2 + 1
+
+        if int(first_gen) != 1:
+            continue
+
+        if sorted_group.day.nunique() != len(group):
+            print('\n *** mismatch days to group length *** \n')
+            print(group)
+            raise ValueError('Non-unique value found for clone at day')
+
+        for _, row in sorted_group.iloc[1:].iterrows():
+            bias_gen_row = pd.DataFrame(columns=bias_gen_change_cols)
+            end_gen = (row.day - 127)/2 + 1
+            bias_gen_row.code = [row.code]
+            bias_gen_row.mouse_id = [row.mouse_id]
+            bias_gen_row.group = [row.group]
+            bias_gen_row.gen_change = [str(int(first_gen)) + ' to ' + str(int(end_gen))]
+            bias_change = row.lineage_bias - first_gen_row.lineage_bias
+            if absolute:
+                bias_change = np.abs(bias_change)
+            bias_gen_row.bias_change = bias_change.tolist()
+            bias_gen_change_df = bias_gen_change_df.append(bias_gen_row, ignore_index=True)
+
+    return bias_gen_change_df
