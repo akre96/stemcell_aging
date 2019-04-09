@@ -205,6 +205,8 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
             b_value = group[group.cell_type == 'b'].norm_percent_engraftment.values[0]
             b_engraftment = group[group.cell_type == 'b'].percent_engraftment.values[0]
 
+        if b_engraftment < 0.01 and gr_engraftment < 0.01:
+            continue
         # Check no more than 2 cell types (gr and b)
         if len(group) > 2:
             print(group)
@@ -350,7 +352,7 @@ def main():
     parser = argparse.ArgumentParser(description="Calculate lineage bias and change in lineage bias over time at thresholds")
     parser.add_argument('-i', '--input', dest='input', help='Path to file containing consolidated long format step7 output', required=True)
     parser.add_argument('-c', '--counts', dest='counts_file', help='Path to txt containing FACS cell count data', required=True)
-    parser.add_argument('-t', '--threshold', dest='threshold', help='Threshold to filter presence of cells by for percent_engraftment', default=.01, type=float)
+    parser.add_argument('-t', '--threshold', dest='threshold', help='Threshold to filter presence of cells by for percent_engraftment', default=.0, type=float)
     parser.add_argument('-a', '--abundance_cutoff', dest='abundance_cutoff', help='Set thresholds based on desired cumulative abundance based cutoff', type=float, required=False)
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
     parser.add_argument('-l', '--bias-only', dest='bias_only', help='Set flag if you only want to calculate lineage bias, not its change', action="store_true")
