@@ -691,7 +691,7 @@ def across_gen_bias_change(
         absolute: bool = False
     ) -> pd.DataFrame:
 
-    bias_gen_change_cols = ['mouse_id', 'code', 'group', 'gen_change', 'bias_change']
+    bias_gen_change_cols = ['mouse_id', 'code', 'group', 'gen_change', 'bias_change', 'first_gen', 'end_gen']
     bias_gen_change_df = pd.DataFrame(columns=bias_gen_change_cols)
     for _, group in lineage_bias_df.groupby(['code', 'mouse_id']):
         sorted_group = group.sort_values(by=['day'])
@@ -713,6 +713,8 @@ def across_gen_bias_change(
             bias_gen_row.mouse_id = [row.mouse_id]
             bias_gen_row.group = [row.group]
             bias_gen_row.gen_change = [str(int(first_gen)) + ' to ' + str(int(end_gen))]
+            bias_gen_row.first_gen = [int(first_gen)]
+            bias_gen_row.end_gen= [int(end_gen)]
             bias_change = row.lineage_bias - first_gen_row.lineage_bias
             if absolute:
                 bias_change = np.abs(bias_change)
