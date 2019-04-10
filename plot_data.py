@@ -23,7 +23,8 @@ from aggregate_functions import filter_threshold, \
     find_top_percentile_threshold, find_clones_bias_range_at_time, \
     filter_cell_type_threshold, combine_enriched_clones_at_time, \
     mark_changed, sum_abundance_by_change, between_gen_bias_change, \
-    calculate_thresholds_sum_abundance, filter_lineage_bias_threshold
+    calculate_thresholds_sum_abundance, filter_lineage_bias_threshold, \
+    across_gen_bias_change, between_gen_bias_change
 from plotting_functions import plot_max_engraftment, \
     plot_clone_count_by_thresholds, venn_barcode_in_time, \
     plot_clone_enriched_at_time, plot_counts_at_percentile, \
@@ -34,8 +35,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_lineage_average, plot_contributions, plot_weighted_bias_hist, \
     plot_change_contributions, plot_change_contributions_by_group, \
     plot_counts_at_abundance, plot_average_abundance, \
-    swamplot_abundance_cutoff, bias_change_between_gen, \
-    bias_change_across_gens
+    swamplot_abundance_cutoff, plot_bias_change_between_gen, \
+    plot_bias_change_across_gens, plot_bias_change_time_kdes
      
 
 
@@ -84,8 +85,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
-    parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='lineage_bias_from_counts.csv')
-    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/bias_change_t0-01_from-counts.csv')
+    parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/lineage_bias_t0-0_from-counts.csv')
+    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/bias_change_t0-0_from-counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='/home/sakre/Data/stemcell_aging/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
@@ -118,11 +119,11 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
-    if graph_type in ['change_across_gens', 'default']:
-        save_path = args.output_dir + os.sep + 'bias_across'
+    if graph_type in ['bias_change_gen_between_kde', 'default']:
+        save_path = args.output_dir + os.sep + 'bias_change_kde_between'
         thresholds = {
-            'gr': 0.01,
-            'b': 0.01
+            'gr': 0.0,
+            'b': 0.0
             }
         abundance_cutoff = 0.0
 
@@ -135,17 +136,76 @@ def main():
                 by_day=args.by_day,
             )
 
-        bias_change_across_gens(
+        bias_change_df = between_gen_bias_change(
             lineage_bias_df,
-            abundance_cutoff=abundance_cutoff,
-            thresholds=thresholds,
-            magnitude=True,
+            absolute=args.magnitude
+        )
+        
+        plot_bias_change_time_kdes(
+            bias_change_df,
+            absolute_value=args.magnitude,
             group=args.group,
-            by_clone=args.by_clone,
             save=args.save,
             save_path=save_path,
         )
-        bias_change_across_gens(
+    if graph_type in ['bias_change_gen_across_kde']:
+        save_path = args.output_dir + os.sep + 'bias_change_kde_across'
+        thresholds = {
+            'gr': 0.0,
+            'b': 0.0
+            }
+        abundance_cutoff = 0.0
+
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
+
+        bias_change_df = across_gen_bias_change(
+            lineage_bias_df,
+            absolute=args.magnitude
+        )
+        
+        plot_bias_change_time_kdes(
+            bias_change_df,
+            absolute_value=args.magnitude,
+            group=args.group,
+            save=args.save,
+            save_path=save_path,
+        )
+
+    if graph_type in ['change_across_gens']:
+        save_path = args.output_dir + os.sep + 'bias_across'
+        thresholds = {
+            'gr': 0.0,
+            'b': 0.0
+            }
+        abundance_cutoff = 0.0
+
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
+        if args.magnitude:
+            plot_bias_change_across_gens(
+                lineage_bias_df,
+                abundance_cutoff=abundance_cutoff,
+                thresholds=thresholds,
+                magnitude=True,
+                group=args.group,
+                by_clone=args.by_clone,
+                save=args.save,
+                save_path=save_path,
+            )
+        plot_bias_change_across_gens(
             lineage_bias_df,
             abundance_cutoff=abundance_cutoff,
             thresholds=thresholds,
@@ -157,10 +217,10 @@ def main():
         )
 
     if graph_type in ['change_between_gens']:
-        save_path = args.output_dir + os.sep + 'bias_gen_change'
+        save_path = args.output_dir + os.sep + 'bias_between'
         thresholds = {
-            'gr': 0.01,
-            'b': 0.01
+            'gr': 0.0,
+            'b': 0.0
             }
         abundance_cutoff = 0.0
 
@@ -172,7 +232,7 @@ def main():
                 by_day=args.by_day,
             )
 
-        bias_change_between_gen(
+        plot_bias_change_between_gen(
             lineage_bias_df,
             abundance_cutoff=abundance_cutoff,
             thresholds=thresholds,
@@ -182,7 +242,7 @@ def main():
             save=args.save,
             save_path=save_path,
         )
-        bias_change_between_gen(
+        plot_bias_change_between_gen(
             lineage_bias_df,
             abundance_cutoff=abundance_cutoff,
             thresholds=thresholds,

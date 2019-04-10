@@ -18,7 +18,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
     get_max_by_mouse_timepoint, sum_abundance_by_change, find_intersect, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_anytime, \
-    across_gen_bias_change
+    across_gen_bias_change, between_gen_bias_change
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 
@@ -1307,7 +1307,7 @@ def swamplot_abundance_cutoff(
     save_plot(fname, save, save_format)
 
 
-def bias_change_between_gen(
+def plot_bias_change_between_gen(
         lineage_bias_df: pd.DataFrame,
         abundance_cutoff: float,
         thresholds: Dict[str, float],
@@ -1346,7 +1346,7 @@ def bias_change_between_gen(
         lineage_bias_df,
         thresholds
         )
-    between_gen_bias_change_df = bias_change_between_gen(
+    between_gen_bias_change_df = between_gen_bias_change(
         filtered_df,
         absolute=magnitude
         )
@@ -1399,7 +1399,7 @@ def bias_change_between_gen(
             + '.' + save_format
     save_plot(fname, save, save_format)
 
-def bias_change_across_gens(
+def plot_bias_change_across_gens(
         lineage_bias_df: pd.DataFrame,
         abundance_cutoff: float,
         thresholds: Dict[str, float],
@@ -1513,4 +1513,52 @@ def bias_change_across_gens(
             + str(round(abundance_cutoff, 2)).replace('.', '-') \
             + '_' + group \
             + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def plot_bias_change_time_kdes(
+        bias_change_df: pd.DataFrame,
+        absolute_value: bool = True,
+        group: str = 'all',
+        save: bool = False,
+        save_path: str = 'output',
+        save_format: str = 'png'
+    ) -> None:
+    """ Plots KDE of bias change between different generations
+
+    Arguments:
+        bias_change_df {pd.DataFrame} -- dataframe of bias change information
+        threshold {str} -- threshold(t0-01) or abundance(a50-0) that was used to filter data
+
+    Keyword Arguments:
+        absolute_value {bool} -- Whether plot is done on magnitude, or including direction (default: {False})
+        group {str} --  Group filtered for (default: {'all'})
+        save {bool} --  Wether to save plot (default: {False})
+        save_path {str} -- Where to save plot (default: {'output'})
+        save_format {str} --  What file format to save plot (default: {'png'})
+    """
+
+    plt.figure()
+    if group != 'all':
+        bias_change_df = bias_change_df.loc[bias_change_df.group == group]
+
+    x_label = 'Lineage Bias Change'
+    magnitude = ''
+    if absolute_value:
+        bias_change_df.bias_change = bias_change_df.bias_change.abs()
+        x_label = 'Magnitude of ' + x_label
+        magnitude = '_magnitude'
+
+    gen_changes = bias_change_df.gen_change.unique()
+    colors = sns.color_palette('coolwarm', n_colors=len(gen_changes))
+    gen_changes.sort()
+    for i, gen_change in enumerate(gen_changes):
+        kde = sns.kdeplot(bias_change_df[bias_change_df.gen_change == gen_change].bias_change, shade=True, label=gen_change, color=colors[i])
+
+
+    plt.title('Kernel Density Estimate of lineage bias change')
+    plt.suptitle(' Group: ' + group)
+    plt.xlabel(x_label)
+    plt.ylabel('Clone Density at Change')
+
+    fname = save_path + os.sep + 'gen_change_kde_' + group + magnitude + '.' + save_format
     save_plot(fname, save, save_format)
