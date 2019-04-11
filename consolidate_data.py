@@ -3,6 +3,9 @@
 Example usage:
 python consolidate_data.py -i /home/sakre/Data/aging_proc_03122019_long -o output -g /home/sakre/Data/mouse_id_group.csv
 
+Real Example:
+python consolidate_data.py -i /home/sakre/Data/stemcell_aging/aging_proc_03122019_long -o ~/Data/stemcell_aging/aging_proc_03122019_long_consolidated -g ~/Data/stemcell_aging/mouse_id_group.csv
+
 """
 
 import os
