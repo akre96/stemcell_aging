@@ -315,26 +315,43 @@ def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.Da
     norm_data_df = with_baseline_counts_df.assign(norm_percent_engraftment=lambda row: row.percent_engraftment/row.cell_count)
     return norm_data_df
 
-def get_bias_change(lineage_bias_df: pd.DataFrame, save_err: bool = False) -> pd.DataFrame:
-    bias_change_cols = ['code', 'mouse_id', 'group', 'bias_change', 'time_change', 'first_timepoint', 'last_timepoint']
+def get_bias_change(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str = 'day',
+        save_err: bool = False
+    ) -> pd.DataFrame:
+    """ Calculate bias change between a clones first and last timepoint
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- Lineage Bias Dataframe
+    
+    Keyword Arguments:
+        timepoint_col {str} -- timepoint to analyze (default: {'day'})
+        save_err {bool} -- Whether to save any codes across multiple mice (default: {False})
+    
+    Returns:
+        pd.DataFrame -- bias_change dataframe
+    """
+
+    bias_change_cols = ['code', 'mouse_id', 'group', 'bias_change', 'time_change', 'time_unit', 'first_timepoint', 'last_timepoint']
     bias_change_df = pd.DataFrame(columns=bias_change_cols)
     same_code_df = pd.DataFrame()
     for _, group in lineage_bias_df.groupby('code'):
         if len(group) < 2:
             continue
         bias_change_row = pd.DataFrame(columns=bias_change_cols)
-        first_timepoint = group.loc[group['day'].astype(int).idxmin()]
-        last_timepoint = group.loc[group['day'].astype(int).idxmax()]
+        first_timepoint = group.loc[group[timepoint_col].astype(int).idxmin()]
+        last_timepoint = group.loc[group[timepoint_col].astype(int).idxmax()]
         if first_timepoint.code != last_timepoint.code:
             ValueError('Not grouped by same code/clone')
-        if first_timepoint.month == last_timepoint.month:
+        if first_timepoint[timepoint_col] == last_timepoint[timepoint_col]:
             same_code_df = same_code_df.append(group)
             continue
 
         bias_change_row.bias_change = [last_timepoint.lineage_bias - first_timepoint.lineage_bias]
-        bias_change_row.time_change = [last_timepoint.day- first_timepoint.day]
-        bias_change_row.first_timepoint = [first_timepoint.day]
-        bias_change_row.last_timepoint = [last_timepoint.day]
+        bias_change_row.time_change = [last_timepoint[timepoint_col] - first_timepoint[timepoint_col]]
+        bias_change_row.first_timepoint = [first_timepoint[timepoint_col]]
+        bias_change_row.last_timepoint = [last_timepoint[timepoint_col]]
         bias_change_row.code = first_timepoint.code
         bias_change_row.mouse_id = first_timepoint.mouse_id
         bias_change_row.group = first_timepoint.group
