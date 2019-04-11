@@ -18,7 +18,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
     get_max_by_mouse_timepoint, sum_abundance_by_change, find_intersect, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_anytime, \
-    across_gen_bias_change, between_gen_bias_change
+    across_gen_bias_change, between_gen_bias_change, calculate_abundance_change, \
+    day_to_gen
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 
@@ -1235,6 +1236,7 @@ def swamplot_abundance_cutoff(
         cell_type: str,
         abundance_cutoff: float,
         thresholds: Dict[str, float],
+        n_timepoints: int,
         by_day: bool = False,
         color_col: str = 'mouse_id',
         group: str = 'all',
@@ -1249,6 +1251,7 @@ def swamplot_abundance_cutoff(
         cell_type {str} -- cell type to plot
         abundance_cutoff {float} -- cumulative abundance cutoff to calculate threshold at
         thresholds {Dict[str, float]} -- thresholds to filter input by
+        n_timepoints {int} -- number of timepoints required for a clone to have
 
     Keyword Arguments:
         color_col {str} -- column to set hue to (default: {'mouse_id'})
@@ -1270,7 +1273,6 @@ def swamplot_abundance_cutoff(
     if by_day:
         time_col = 'day'
 
-    n_timepoints = input_df[time_col].nunique()
     print('Minimum number of timepoints: ' + str(n_timepoints))
     all_timepoint_df = filter_mice_with_n_timepoints(
         input_df,
@@ -1562,3 +1564,131 @@ def plot_bias_change_time_kdes(
 
     fname = save_path + os.sep + 'gen_change_kde_' + group + magnitude + '.' + save_format
     save_plot(fname, save, save_format)
+
+def plot_abundance_change(
+        abundance_df: pd.DataFrame,
+        abundance_cutoff: float = 0,
+        thresholds: Dict[str, float] = {'gr': 0, 'b': 0},
+        cumulative: bool = False,
+        magnitude: bool = False,
+        by_clone: bool = False,
+        by_day: bool = False,
+        by_gen: bool = False,
+        first_timepoint: int = 1,
+        group: str = 'all',
+        analyzed_cell_types: List[str] = ['gr', 'b'],
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png',
+        cached_change: pd.DataFrame = None,
+        cache_dir: str = ''
+    ) -> None:
+
+
+    if by_day:
+        timepoint_col = 'day'
+    elif by_gen:
+        timepoint_col = 'gen'
+        abundance_df = abundance_df.assign(gen=lambda x: day_to_gen(x.day))
+    else:
+        timepoint_col = 'month'
+
+    if cached_change is not None:
+        abundance_change_df = cached_change
+        if group != 'all':
+            abundance_df = abundance_df[abundance_df.group == group]
+    else:
+        # If not, calculate and save cached
+        if group != 'all':
+            abundance_df = abundance_df[abundance_df.group == group]
+        abundance_change_df = calculate_abundance_change(
+            abundance_df,
+            timepoint_col=timepoint_col,
+            cumulative=cumulative,
+            first_timepoint=first_timepoint
+        )
+        addon = 'between'
+        if cumulative:
+            addon = 'across'
+        abundance_change_df.to_csv(cache_dir + os.sep + addon + '_abundance_change_df.csv', index=False)
+
+    if magnitude:
+        abundance_change_df.abundance_change = abundance_change_df.abundance_change.abs()
+    
+    for cell_type in analyzed_cell_types:
+        
+        plt.figure()
+        cell_change_df = abundance_change_df[abundance_change_df.cell_type == cell_type]
+        if abundance_cutoff != 0:
+            filt_abund = filter_cell_type_threshold(abundance_df, thresholds=thresholds, analyzed_cell_types=[cell_type])
+            if not filt_abund[filt_abund.cell_type != cell_type].empty:
+                ValueError('More cell types than expected')
+            rename_df = cell_change_df.rename(columns={'t1':timepoint_col})
+            cell_change_df = rename_df.merge(
+                filt_abund[['code', 'mouse_id', 'cell_type', timepoint_col]],
+                on=['code', 'mouse_id', 'cell_type', timepoint_col],
+                how='inner',
+                validate='m:m'
+            )
+
+
+        ordered_labels = cell_change_df[['label_change', 't2']].sort_values(['t2'])['label_change'].unique()
+        plt.subplot(2, 1, 1)
+        palette = COLOR_PALETTES['group']
+        sns.pointplot(
+            x='label_change',
+            y='abundance_change',
+            data=group_names_pretty(cell_change_df),
+            order=ordered_labels,
+            hue='group',
+            palette=palette,
+            )
+        plt.xlabel('')
+        if magnitude:
+            plt.ylabel('Magnitude Abundance Change')
+        else:
+            plt.ylabel('Abundance Change')
+        plt.subplot(2, 1, 2)
+        sns.lineplot(
+            x='t2',
+            y='abundance_change',
+            data=cell_change_df,
+            hue='mouse_id',
+            estimator=None,
+            markers=True,
+            style='group',
+            units='code',
+            legend=None
+            )
+
+        if magnitude:
+            plt.ylabel('Magnitude Abundance Change')
+        else:
+            plt.ylabel('Abundance Change')
+
+        fname_addon = ''
+        if magnitude:
+            fname_addon = '_magnitude'
+        if by_clone:
+            fname_addon = fname_addon + '_by-clone'
+        if cumulative:
+            fname_addon = fname_addon + '_across'
+            title_add = ' across time points'
+        else:
+            fname_addon = fname_addon + '_between'
+            title_add = ' between time points'
+
+        title = 'Abundance Change in ' + cell_type.title()  \
+                + ' with Abundance > ' + str(round(thresholds[cell_type],2)) \
+                + '% (WBC) before change'
+        plt.suptitle(title)
+        if group != 'all':
+            plt.title('Group: ' + group.replace('_', ' ').title() + title_add)
+        plt.xlabel('Time (' + timepoint_col.title() + 's)' + title_add)
+        fname = save_path + os.sep + 'abundance_change' \
+                + fname_addon + '_a' \
+                + str(round(abundance_cutoff, 2)).replace('.', '-') \
+                + '_' + group \
+                + '_' + cell_type \
+                + '.' + save_format
+        save_plot(fname, save, save_format)

@@ -3,8 +3,8 @@ Example:
 python plot_data.py \
     -i ~/Data/serial_transplant_data/M_allAniaAnia\ serial\ transpl_percent-engraftment_121018_long.csv \
     -o ~/Data/serial_transplant_data/Graphs \
-    -l ~/Data/serial_transplant_data/lineage_bias/lineage_bias_t0-01_from-counts.csv \
-    -c ~/Data/serial_transplant_data/lineage_bias/bias_change_t0-01_from-counts.csv \
+    -l ~/Data/serial_transplant_data/lineage_bias/lineage_bias_t0-0_from-counts.csv \
+    -c ~/Data/serial_transplant_data/lineage_bias/bias_change_t0-0_from-counts.csv \
     -g clone_count_bar \
     -d --line
 Returns:
@@ -36,7 +36,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_change_contributions, plot_change_contributions_by_group, \
     plot_counts_at_abundance, plot_average_abundance, \
     swamplot_abundance_cutoff, plot_bias_change_between_gen, \
-    plot_bias_change_across_gens, plot_bias_change_time_kdes
+    plot_bias_change_across_gens, plot_bias_change_time_kdes, \
+    plot_abundance_change
      
 
 
@@ -94,11 +95,15 @@ def main():
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
+    parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=int, required=False)
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
+    parser.add_argument('--by-gen', dest='by_gen', help='Plotting done on a generation by generation basis', action="store_true")
     parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
+    parser.add_argument('--cache', dest='cache', help='Use Cached Data', action="store_true")
+    parser.add_argument('--cache-dir', dest='cache_dir', help='Where cache data is stored', default='/home/sakre/Data/cache')
 
     args = parser.parse_args()
     options = args.options
@@ -119,7 +124,52 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
-    if graph_type in ['bias_change_gen_between_kde', 'default']:
+    if graph_type in ['abundance_change', 'default']:
+        if args.time_change == 'across':
+            cumulative = True
+            cache_file = args.cache_dir + os.sep + 'across_abundance_change_df.csv'
+        elif args.time_change == 'between':
+            cumulative = False
+            cache_file = args.cache_dir + os.sep + 'between_abundance_change_df.csv'
+
+        if args.by_day:
+            first_timepoint = present_clones_df.day.min()
+        if args.by_gen:
+            first_timepoint = 1
+        else:
+            first_timepoint = 4
+
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
+
+        cached_change = None
+        if args.cache:
+            cached_change = pd.read_csv(cache_file)
+        plot_abundance_change(
+            present_clones_df,
+            magnitude=args.magnitude,
+            cumulative=cumulative,
+            abundance_cutoff=abundance_cutoff,
+            thresholds=thresholds,
+            by_day=args.by_day,
+            by_gen=args.by_gen,
+            first_timepoint=first_timepoint,
+            group=args.group,
+            analyzed_cell_types=['gr', 'b'],
+            save=args.save,
+            save_path=args.output_dir + os.sep + 'abundance_change',
+            cached_change=cached_change,
+            cache_dir=args.cache_dir,
+        )
+
+    if graph_type in ['bias_change_gen_between_kde']:
         save_path = args.output_dir + os.sep + 'bias_change_kde_between'
         thresholds = {
             'gr': 0.0,
@@ -255,15 +305,24 @@ def main():
 
     if graph_type in ['swarm_abund_cut']:
         save_path = args.output_dir + os.sep + 'swarmplot_abundance'
-        abundance_cutoff = 50
+        abundance_cutoff = 0
+        thresholds = {
+            'gr': 0,
+            'b': 0
+        }
+        if args.by_day:
+            n_timepoints = 1
+        else:
+            n_timepoints = 4
+
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
 
-        _, thresholds = calculate_thresholds_sum_abundance(
-            input_df,
-            abundance_cutoff=abundance_cutoff,
-            by_day=args.by_day,
-        )
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
         group = 'all'
         if args.group:
             group = args.group
@@ -274,6 +333,7 @@ def main():
             abundance_cutoff=abundance_cutoff,
             thresholds=thresholds,
             group=group,
+            n_timepoints=n_timepoints,
             by_day=args.by_day,
             color_col='mouse_id',
             cell_type=cell_type,
@@ -286,9 +346,10 @@ def main():
             present_clones_df,
             abundance_cutoff=abundance_cutoff,
             thresholds=thresholds,
-            color_col='mouse_id',
+            n_timepoints=n_timepoints,
             group=group,
             by_day=args.by_day,
+            color_col='mouse_id',
             cell_type=cell_type,
             save=args.save,
             save_path=save_path,
