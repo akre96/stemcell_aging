@@ -791,3 +791,68 @@ def calculate_abundance_change(
 
     abundance_change_df.time_unit = timepoint_col
     return abundance_change_df
+
+def calculate_bias_change(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str = 'month',
+        cumulative: bool = False,
+        first_timepoint: int = 1,
+    ) -> pd.DataFrame:
+    """ Calculate change in bias across time
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- lineage_bias dataframe
+    
+    Keyword Arguments:
+        timepoint_col {str} -- time change to consider (default: {'month'})
+        cumulative {bool} -- True if looking across time (1-2, 1-3, 1-4, etc..),
+        false if between (1-2, 2-3, 3-4, etc..) (default: {False})
+        first_timepoint {int} -- which timepoint to set as first for cumulative
+    
+    Raises:
+        ValueError -- If set grouped by code,mouse id  has length greater than number of timepoints
+                      raise error
+    
+    Returns:
+        pd.DataFrame -- Bias_change_df
+    """
+
+
+    bias_change_cols = ['mouse_id', 'code', 'group', 'bias_change', 'time_change', 'time_unit', 't1', 't2', 'label_change']
+    bias_change_df = pd.DataFrame(columns=bias_change_cols)
+    unique_timepoints = np.sort(lineage_bias_df[timepoint_col].unique()).tolist()
+    for _, group in lineage_bias_df.groupby(['code', 'mouse_id']):
+        if len(group) < 2:
+            continue
+        sorted_group = group.sort_values(by=[timepoint_col])
+        t1_row = sorted_group.iloc[0]
+        if cumulative and t1_row[timepoint_col] != first_timepoint:
+            continue
+
+        if sorted_group[timepoint_col].nunique() != len(group):
+            print('\n *** mismatch ' + timepoint_col + 's to group length *** \n')
+            print(group)
+            raise ValueError('Non-unique value found for clone at ' + timepoint_col)
+
+        for i in range(len(sorted_group) - 1):
+            t2_row = sorted_group.iloc[i+1]
+            if not cumulative:
+                t1_row = sorted_group.iloc[i]
+                if unique_timepoints[unique_timepoints.index(t1_row[timepoint_col]) + 1] != t2_row[timepoint_col]:
+                    continue
+
+            bias_change_row = pd.DataFrame(columns=bias_change_cols)
+            bias_change_row.code = [t2_row.code]
+            bias_change_row.mouse_id = [t2_row.mouse_id]
+            bias_change_row.group = [t2_row.group]
+            bias_change_row.time_change = [t2_row[timepoint_col] - t1_row[timepoint_col]]
+            bias_change_row.label_change = [(str(int(np.ceil(t1_row[timepoint_col]))) + ' to ' + str(int(np.ceil(t2_row[timepoint_col])))).title()]
+            bias_change_row.t1 = [t1_row[timepoint_col]]
+            bias_change_row.t2 = [t2_row[timepoint_col]]
+            bias_change = t2_row.lineage_bias - t1_row.lineage_bias
+
+            bias_change_row.bias_change = bias_change.tolist()
+            bias_change_df = bias_change_df.append(bias_change_row, ignore_index=True)
+
+    bias_change_df.time_unit = timepoint_col
+    return bias_change_df
