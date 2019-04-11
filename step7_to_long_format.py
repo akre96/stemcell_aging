@@ -5,6 +5,9 @@ Saves output to specified output_directory with same input file name + '_long'
 Example Usage:
 python step7_to_long_format.py -i test/test_data -o output_file_or_folder
 
+Real Example:
+python step7_to_long_format.py -i ~/Data/stemcell_aging/aging_proc_03122019 -p Ania_M -o ~/Data/stemcell_aging/aging_proc_03122019_long
+
 """
 from typing import Match, List, Dict, Any, Tuple
 import sys
