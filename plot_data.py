@@ -18,6 +18,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from lineage_bias import get_bias_change
 from aggregate_functions import filter_threshold, \
     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
     find_top_percentile_threshold, find_clones_bias_range_at_time, \
@@ -86,8 +87,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
-    parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/lineage_bias_t0-0_from-counts.csv')
-    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Code/stemcell_aging/output/lineage_bias/bias_change_t0-0_from-counts.csv')
+    parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
+    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Data/stemcell_aging/lineage_bias/bias_change_t0-0_from-counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='/home/sakre/Data/stemcell_aging/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
@@ -124,7 +125,47 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
-    if graph_type in ['abundance_change', 'default']:
+    if graph_type in ['bias_change_time_kde', 'default']:
+        if args.time_change == 'across':
+            cumulative = True
+        elif args.time_change == 'between':
+            cumulative = False
+        cache_file = args.cache_dir \
+            + os.sep + args.time_change + '_' \
+            + args.group + '_bias_change_df.csv'
+
+        if args.by_day:
+            first_timepoint = present_clones_df.day.min()
+            timepoint_col = 'day'
+        elif args.by_gen:
+            first_timepoint = 1
+            timepoint_col = 'gen'
+        else:
+            first_timepoint = 4
+            timepoint_col = 'month'
+
+        print('Plotting ' + args.time_change + ' ' + timepoint_col + 's')
+        cached_change = None
+        if args.cache:
+            if os.path.exists(cache_file):
+                cached_change = pd.read_csv(cache_file)
+            else:
+                print('\n --- Warning: Cache does not exist, new cache will be generated --- \n')
+
+        plot_bias_change_time_kdes(
+            lineage_bias_df,
+            first_timepoint=first_timepoint,
+            absolute_value=args.magnitude,
+            group=args.group,
+            cumulative=cumulative,
+            timepoint_col=timepoint_col,
+            save=args.save,
+            save_path=args.output_dir + os.sep + 'bias_change',
+            cached_change=cached_change,
+            cache_dir=args.cache_dir,
+        )
+
+    if graph_type in ['abundance_change']:
         if args.time_change == 'across':
             cumulative = True
             cache_file = args.cache_dir + os.sep + 'across_abundance_change_df.csv'
@@ -567,7 +608,7 @@ def main():
             group = 'all'
         else:
             group = args.options
-        save_path = args.output_dir + os.sep + 'Lineage_Bias_Line_Plot'
+        save_path = args.output_dir
         plot_lineage_bias_violin(
             lineage_bias_df,
             group=group,
@@ -647,33 +688,40 @@ def main():
 
 
     if graph_type in ['bias_change_cutoff']:
-        thresholds = ['t'+str(0.00).replace('.', '-')]
+        abundance_cutoff = 0
+        thresholds = {'gr':0, 'b':0}
+        bias_change_df = None
         if args.abundance_cutoff:
-            thresholds = ['a'+str(args.abundance_cutoff).replace('.', '-')]
+            threshold = 'a'+str(args.abundance_cutoff).replace('.', '-')
+
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                analyzed_cell_types=['gr','b'],
+            )
+        if args.cache:
+            cache_file = args.cache_dir + os.sep + 'bias_change_df_a'+str(round(abundance_cutoff, 2)) + '.csv'
+            bias_change_df = pd.read_csv(cache_file)
 
         min_time_difference = 0
         if options not in ['default']:
             min_time_difference = int(options)
 
-        bias_data_dir = os.path.dirname(args.bias_change)
         save_path = args.output_dir + os.sep + 'bias_change_cutoff'
-        for threshold in thresholds:
-            bias_change_file = glob.glob(bias_data_dir + os.sep + 'bias_change_'+ threshold +'_*.csv')
-            if len(bias_change_file) != 1:
-                print('\nMissing file for threshold: ' + str(threshold))
-                print('Results when searching for bias change file:')
-                print(bias_change_file)
-                continue
-            th_change_df = pd.read_csv(bias_change_file[0])
-            plot_bias_change_cutoff(
-                th_change_df,
-                threshold=threshold,
-                absolute_value=True,
-                group=args.group,
-                min_time_difference=min_time_difference,
-                save=args.save,
-                save_path=save_path
-            )
+        
+        plot_bias_change_cutoff(
+            lineage_bias_df=lineage_bias_df,
+            thresholds=thresholds,
+            abundance_cutoff=abundance_cutoff,
+            absolute_value=True,
+            group=args.group,
+            min_time_difference=min_time_difference,
+            save=args.save,
+            save_path=save_path,
+            cache_dir=args.cache_dir,
+            cached_change=bias_change_df
+        )
             
 
 
