@@ -603,10 +603,10 @@ def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum
     return (x_val, y_val)
 
 def calculate_thresholds_sum_abundance(
-    input_df: pd.DataFrame,
-    abundance_cutoff: float = 50.0,
-    by_day: bool = False,
-    analyzed_cell_types: List[str] = ['gr', 'b']
+        input_df: pd.DataFrame,
+        abundance_cutoff: float = 50.0,
+        by_day: bool = False,
+        analyzed_cell_types: List[str] = ['gr', 'b']
     ) -> Tuple[Dict[str, float], Dict[str, float]]:
     """ Calculates abundance thresholds by cell type based on cumulative abundance at month 4
     
@@ -714,7 +714,7 @@ def across_gen_bias_change(
             bias_gen_row.group = [row.group]
             bias_gen_row.gen_change = [str(int(first_gen)) + ' to ' + str(int(end_gen))]
             bias_gen_row.first_gen = [int(first_gen)]
-            bias_gen_row.end_gen= [int(end_gen)]
+            bias_gen_row.end_gen = [int(end_gen)]
             bias_change = row.lineage_bias - first_gen_row.lineage_bias
             if absolute:
                 bias_change = np.abs(bias_change)
@@ -722,3 +722,72 @@ def across_gen_bias_change(
             bias_gen_change_df = bias_gen_change_df.append(bias_gen_row, ignore_index=True)
 
     return bias_gen_change_df
+
+def day_to_gen(day: int):
+    gen = (day-127)/2 + 1
+    return gen
+
+def calculate_abundance_change(
+        abundance_df: pd.DataFrame,
+        timepoint_col: str = 'month',
+        cumulative: bool = False,
+        first_timepoint: int = 1,
+    ) -> pd.DataFrame:
+    """ Calculate change in abundance across time
+    
+    Arguments:
+        abundance_df {pd.DataFrame} -- abundance dataframe
+    
+    Keyword Arguments:
+        timepoint_col {str} -- time change to consider (default: {'month'})
+        cumulative {bool} -- True if looking across time (1-2, 1-3, 1-4, etc..),
+        false if between (1-2, 2-3, 3-4, etc..) (default: {False})
+        first_timepoint {int} -- which timepoint to set as first for cumulative
+    
+    Raises:
+        ValueError -- [description]
+    
+    Returns:
+        pd.DataFrame -- [description]
+    """
+
+
+    abundance_change_cols = ['mouse_id', 'code', 'cell_type', 'group', 'abundance_change', 'time_change', 'time_unit', 't1', 't2', 'label_change']
+    abundance_change_df = pd.DataFrame(columns=abundance_change_cols)
+    unique_timepoints = np.sort(abundance_df[timepoint_col].unique()).tolist()
+    for _, group in abundance_df.groupby(['code', 'mouse_id', 'cell_type']):
+        if len(group) < 2:
+            continue
+        sorted_group = group.sort_values(by=[timepoint_col])
+        t1_row = sorted_group.iloc[0]
+        if cumulative and t1_row[timepoint_col] != first_timepoint:
+            continue
+
+        if sorted_group[timepoint_col].nunique() != len(group):
+            print('\n *** mismatch ' + timepoint_col + 's to group length *** \n')
+            print(group)
+            raise ValueError('Non-unique value found for clone at ' + timepoint_col)
+
+        for i in range(len(sorted_group) - 1):
+            t2_row = sorted_group.iloc[i+1]
+            if not cumulative:
+                t1_row = sorted_group.iloc[i]
+                if unique_timepoints[unique_timepoints.index(t1_row[timepoint_col]) + 1] != t2_row[timepoint_col]:
+                    continue
+
+            abundance_change_row = pd.DataFrame(columns=abundance_change_cols)
+            abundance_change_row.code = [t2_row.code]
+            abundance_change_row.mouse_id = [t2_row.mouse_id]
+            abundance_change_row.cell_type = [t2_row.cell_type]
+            abundance_change_row.group = [t2_row.group]
+            abundance_change_row.time_change = [t2_row[timepoint_col] - t1_row[timepoint_col]]
+            abundance_change_row.label_change = [(str(int(np.ceil(t1_row[timepoint_col]))) + ' to ' + str(int(np.ceil(t2_row[timepoint_col])))).title()]
+            abundance_change_row.t1 = [t1_row[timepoint_col]]
+            abundance_change_row.t2 = [t2_row[timepoint_col]]
+            abundance_change = t2_row.percent_engraftment - t1_row.percent_engraftment
+
+            abundance_change_row.abundance_change = abundance_change.tolist()
+            abundance_change_df = abundance_change_df.append(abundance_change_row, ignore_index=True)
+
+    abundance_change_df.time_unit = timepoint_col
+    return abundance_change_df
