@@ -15,6 +15,7 @@ import argparse
 import json
 import glob
 import os
+import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -38,7 +39,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_counts_at_abundance, plot_average_abundance, \
     swamplot_abundance_cutoff, plot_bias_change_between_gen, \
     plot_bias_change_across_gens, plot_bias_change_time_kdes, \
-    plot_abundance_change
+    plot_abundance_change, plot_bias_change_rest, plot_rest_vs_tracked
      
 
 
@@ -87,6 +88,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
+    parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default='~/Data/stemcell_aging/rest_of_clones')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
     parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Data/stemcell_aging/lineage_bias/bias_change_t0-0_from-counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='/home/sakre/Data/stemcell_aging/Graphs')
@@ -101,6 +103,7 @@ def main():
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
+    parser.add_argument('--plot-rest', dest='plot_rest', help='Whether to plot rest of clones instead of tracked clones', action="store_true")
     parser.add_argument('--by-gen', dest='by_gen', help='Plotting done on a generation by generation basis', action="store_true")
     parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
     parser.add_argument('--cache', dest='cache', help='Use Cached Data', action="store_true")
@@ -119,53 +122,53 @@ def main():
     all_clones_df = filter_threshold(input_df, 0.0, analysed_cell_types)
     graph_type = args.graph_type
 
+    rest_of_clones_abundance_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_abundance_long.csv')
+
+    rest_of_clones_bias_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_lineage_bias.csv')
+
     color_palettes = json.load(open('color_palettes.json', 'r'))
+
+    if args.by_day:
+        print('By Day Set \n')
+        first_timepoint = present_clones_df.day.min()
+        timepoint_col = 'day'
+    elif args.by_gen:
+        print('By Gen Set \n')
+        first_timepoint = 1
+        timepoint_col = 'gen'
+    else:
+        print('By Month Set \n')
+        first_timepoint = 4
+        timepoint_col = 'month'
 
 
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
 
-    if graph_type in ['bias_change_time_kde', 'default']:
-        if args.time_change == 'across':
-            cumulative = True
-        elif args.time_change == 'between':
-            cumulative = False
-        cache_file = args.cache_dir \
-            + os.sep + args.time_change + '_' \
-            + args.group + '_bias_change_df.csv'
-
-        if args.by_day:
-            first_timepoint = present_clones_df.day.min()
-            timepoint_col = 'day'
-        elif args.by_gen:
-            first_timepoint = 1
-            timepoint_col = 'gen'
-        else:
-            first_timepoint = 4
-            timepoint_col = 'month'
-
-        print('Plotting ' + args.time_change + ' ' + timepoint_col + 's')
-        cached_change = None
-        if args.cache:
-            if os.path.exists(cache_file):
-                cached_change = pd.read_csv(cache_file)
-            else:
-                print('\n --- Warning: Cache does not exist, new cache will be generated --- \n')
-
-        plot_bias_change_time_kdes(
-            lineage_bias_df,
-            first_timepoint=first_timepoint,
-            absolute_value=args.magnitude,
-            group=args.group,
-            cumulative=cumulative,
-            timepoint_col=timepoint_col,
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'bias_change',
-            cached_change=cached_change,
-            cache_dir=args.cache_dir,
+    if graph_type in ['default', 'rest_vs_tracked']:
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
+        plot_rest_vs_tracked(
+                lineage_bias_df,
+                rest_of_clones_bias_df,
+                abundance_cutoff=abundance_cutoff,
+                thresholds=thresholds,
+                timepoint_col=timepoint_col,
+                save=args.save,
+                save_path=args.output_dir + os.sep + 'rest_vs_tracked',
         )
 
-    if graph_type in ['abundance_change']:
+    if graph_type in ['bias_change_rest']:
+        if not args.plot_rest:
+            print("plot-rest not set --> EXITING")
+            sys.exit(1)
         if args.time_change == 'across':
             cumulative = True
             cache_file = args.cache_dir + os.sep + 'across_abundance_change_df.csv'
@@ -193,10 +196,141 @@ def main():
         cached_change = None
         if args.cache:
             cached_change = pd.read_csv(cache_file)
+        plot_bias_change_rest(
+            rest_of_clones_bias_df,
+            cumulative=cumulative,
+            by_day=args.by_day,
+            by_gen=args.by_gen,
+            first_timepoint=first_timepoint,
+            save=args.save,
+            save_path=args.output_dir + os.sep + 'bias_change_rest',
+            cached_change=cached_change,
+            cache_dir=args.cache_dir,
+        )
+
+    if graph_type in ['rest_by_phenotype']:
+        for phenotype, group in rest_of_clones_bias_df.groupby('group'):
+            plt.figure()
+            sns.lineplot(
+                x='day',
+                y='lineage_bias',
+                hue='mouse_id',
+                style='code',
+                data=group,
+            )
+            plt.title('Lineage Bias' + ' ' + phenotype.title())
+        for phenotype, group in rest_of_clones_abundance_df.groupby('group'):
+            for cell_type, cell_group in group.groupby('cell_type'):
+                plt.figure()
+                sns.lineplot(
+                    x='day',
+                    y='percent_engraftment',
+                    hue='mouse_id',
+                    style='code',
+                    data=cell_group,
+                )
+                plt.title(phenotype.title() + ' ' + cell_type.title())
+
+    if graph_type in ['bias_change_time_kde']:
+        if args.time_change == 'across':
+            cumulative = True
+        elif args.time_change == 'between':
+            cumulative = False
+        cache_file = args.cache_dir \
+            + os.sep + args.time_change + '_' \
+            + args.group + '_bias_change_df.csv'
+
+        if args.by_day:
+            first_timepoint = present_clones_df.day.min()
+            timepoint_col = 'day'
+        elif args.by_gen:
+            first_timepoint = 1
+            timepoint_col = 'gen'
+        else:
+            first_timepoint = 4
+            timepoint_col = 'month'
+
+        print('Plotting ' + args.time_change + ' ' + timepoint_col + 's')
+        cached_change = None
+        if args.cache:
+            if os.path.exists(cache_file):
+                cached_change = pd.read_csv(cache_file)
+            else:
+                print('\n --- Warning: Cache does not exist, new cache will be generated --- \n')
+
+        if args.plot_rest:
+            print('Plotting Rest of Clones (untracked)')
+            print(args.rest_of_clones)
+            print(rest_of_clones_bias_df)
+            print(rest_of_clones_bias_df.iloc[3:5]['mouse_id'].values.tolist())
+            plot_bias_change_time_kdes(
+                rest_of_clones_bias_df,
+                first_timepoint=first_timepoint,
+                absolute_value=args.magnitude,
+                group=args.group,
+                cumulative=cumulative,
+                timepoint_col=timepoint_col,
+                save=args.save,
+                save_path=args.output_dir + os.sep + 'bias_change_rest',
+                cached_change=cached_change,
+                cache_dir=args.cache_dir,
+                plot_rest=args.plot_rest
+            )
+        else:
+            plot_bias_change_time_kdes(
+                lineage_bias_df,
+                first_timepoint=first_timepoint,
+                absolute_value=args.magnitude,
+                group=args.group,
+                cumulative=cumulative,
+                timepoint_col=timepoint_col,
+                save=args.save,
+                save_path=args.output_dir + os.sep + 'bias_change',
+                cached_change=cached_change,
+                cache_dir=args.cache_dir,
+            )
+
+    if graph_type in ['abundance_change']:
+        if args.time_change == 'across':
+            cumulative = True
+            cache_file = args.cache_dir + os.sep + 'across_abundance_change_df.csv'
+        elif args.time_change == 'between':
+            cumulative = False
+            cache_file = args.cache_dir + os.sep + 'between_abundance_change_df.csv'
+
+        if args.by_day:
+            first_timepoint = present_clones_df.day.min()
+        if args.by_gen:
+            first_timepoint = 1
+        else:
+            first_timepoint = 4
+        
+        if options in ['default', 'first']:
+            filter_end_time = False
+        elif options in ['last']:
+            filter_end_time = True
+        else:
+            print('Error: Filter time point option (-p) must be "first" or "last"')
+            sys.exit(1)
+
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                by_day=args.by_day,
+            )
+
+        cached_change = None
+        if args.cache:
+            cached_change = pd.read_csv(cache_file)
         plot_abundance_change(
             present_clones_df,
             magnitude=args.magnitude,
             cumulative=cumulative,
+            filter_end_time=filter_end_time,
             abundance_cutoff=abundance_cutoff,
             thresholds=thresholds,
             by_day=args.by_day,
@@ -323,26 +457,50 @@ def main():
                 by_day=args.by_day,
             )
 
-        plot_bias_change_between_gen(
-            lineage_bias_df,
-            abundance_cutoff=abundance_cutoff,
-            thresholds=thresholds,
-            magnitude=True,
-            group=args.group,
-            by_clone=args.by_clone,
-            save=args.save,
-            save_path=save_path,
-        )
-        plot_bias_change_between_gen(
-            lineage_bias_df,
-            abundance_cutoff=abundance_cutoff,
-            thresholds=thresholds,
-            magnitude=False,
-            group=args.group,
-            by_clone=args.by_clone,
-            save=args.save,
-            save_path=save_path,
-        )
+        if args.plot_rest:
+            print('Plotting Rest of Clones (untracked)')
+            print(rest_of_clones_bias_df.group)
+            plot_bias_change_between_gen(
+                rest_of_clones_bias_df,
+                abundance_cutoff=abundance_cutoff,
+                thresholds=thresholds,
+                magnitude=True,
+                group=args.group,
+                by_clone=args.by_clone,
+                save=args.save,
+                save_path=save_path + '_rest',
+            )
+            plot_bias_change_between_gen(
+                rest_of_clones_bias_df,
+                abundance_cutoff=abundance_cutoff,
+                thresholds=thresholds,
+                magnitude=False,
+                group=args.group,
+                by_clone=args.by_clone,
+                save=args.save,
+                save_path=save_path + '_rest',
+            )
+        else:
+            plot_bias_change_between_gen(
+                lineage_bias_df,
+                abundance_cutoff=abundance_cutoff,
+                thresholds=thresholds,
+                magnitude=True,
+                group=args.group,
+                by_clone=args.by_clone,
+                save=args.save,
+                save_path=save_path,
+            )
+            plot_bias_change_between_gen(
+                lineage_bias_df,
+                abundance_cutoff=abundance_cutoff,
+                thresholds=thresholds,
+                magnitude=False,
+                group=args.group,
+                by_clone=args.by_clone,
+                save=args.save,
+                save_path=save_path,
+            )
 
     if graph_type in ['swarm_abund_cut']:
         save_path = args.output_dir + os.sep + 'swarmplot_abundance'
@@ -903,7 +1061,6 @@ def main():
         )
 
         print('Abundance cutoff set to: ' + str(abundance_cutoff))
-        month = 4
 
         cell_type = 'gr'
         filt_lineage_bias_gr_df = combine_enriched_clones_at_time(
@@ -1106,21 +1263,20 @@ def main():
 
     # Abundant clones at specific time
     if graph_type == 'engraftment_time':
-        if options == 'default':
-            percentile = 0.995
-            print('Percentile Set To: ' + str(percentile))
-            present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-            dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
-        else:
+        if args.abundance_cutoff:
             print('Thresholds calculated based on cumulative abundance')
-            abundance_cutoff = float(options)
+            abundance_cutoff = args.abundance_cutoff
             _, dominant_thresholds = calculate_thresholds_sum_abundance(
                 present_clones_df,
                 by_day=args.by_day,
                 abundance_cutoff=abundance_cutoff
             )
+        else:
+            percentile = 0.995
+            print('Percentile Set To: ' + str(percentile))
+            present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+            dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
 
-        by_mouse = False
         print(dominant_thresholds)
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
@@ -1131,7 +1287,7 @@ def main():
                                     save=args.save,
                                     save_path=args.output_dir + os.sep + 'Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',
-                                    by_mouse=by_mouse
+                                    by_clone=args.by_clone,
                                    )
     
     if not args.save:

@@ -176,8 +176,7 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame -- DataFrame of lineage bias for clones over time
     """
 
-    lineage_bias_columns = ['user',
-                            'mouse_id',
+    lineage_bias_columns = ['mouse_id',
                             'code',
                             'day',
                             'month',
@@ -219,7 +218,6 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
         new_row['b_percent_engraftment'] = b_engraftment
         new_row['sum_percent_engraftment'] = gr_engraftment + b_engraftment
         new_row['code'] = group.code.unique()
-        new_row['user'] = group.user.unique()
         new_row['day'] = group.day.unique()
         new_row['month'] = group.month.unique()
         new_row['mouse_id'] = group.mouse_id.unique()
@@ -250,7 +248,7 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
     parsed_counts = pd.DataFrame()
     col_names = count_data_raw.columns
     end_cols = [i for i, x in enumerate(col_names.tolist()) if x.find('Unnamed') != -1]
-
+    end_cols.append(len(col_names) - 2)
     for i, end_col_index in enumerate(end_cols):
         parsed_timepoint_data: pd.DataFrame = pd.DataFrame()
         if i == 0:
@@ -264,7 +262,8 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
 
         for cell_type in analyzed_cell_types:
             cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id','day','month','cell_type','cell_count'])
-            cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]]
+            cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]].str.replace(" ", "")
+            print(cell_type_timepoint_data.mouse_id)
             cell_type_timepoint_data['day'] = day
             cell_type_timepoint_data['month'] = month
             cell_type_timepoint_data['cell_type'] = cell_type

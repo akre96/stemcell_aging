@@ -153,7 +153,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_months: List[int],
                                 enrichment_thresholds: Dict[str, float],
                                 analyzed_cell_types: List[str] = ['gr', 'b'],
-                                by_mouse: bool = False,
+                                by_clone: bool = False,
                                 save: bool = False,
                                 save_path: str = './output',
                                 save_format: str = 'png',
@@ -169,7 +169,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
     Keyword Arguments:
         analyzed_cell_types {List[str]} -- Cell types to categorize by (default: {['gr', 'b']})
         group {str} -- Phenotypic group to filter by (default: {'all'})
-        by_mouse {bool} -- wether to set units as mouse_id for lineplot
+        by_clone {bool} -- wether to set units as code for lineplot
         save {bool} --  True to save a figure (default: {False})
         save_path {str} -- Path of saved output (default: {'./output'})
         save_format {str} -- Format to save output figure (default: {'png'})
@@ -204,8 +204,8 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
             plt.subplot(2, 1, 1)
             print('Plotting clones enriched at month '+str(month)+' Cell Type: ' + cell_type)
             cell_df = enriched_df.loc[enriched_df.cell_type == cell_type]
-            if by_mouse:
-                title_addon = 'by-mouse_'
+            if by_clone:
+                title_addon = 'by-clone_'
                 sns.set_palette(sns.color_palette('hls'))
                 sns.lineplot(
                     x='month',
@@ -217,6 +217,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                     legend=False,
                     estimator=None,
                     sort=True,
+                    palette=COLOR_PALETTES['mouse_id']
                 )
             else:
                 sns.lineplot(
@@ -228,10 +229,11 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                     sort=True,
                     palette=COLOR_PALETTES['group']
                 )
-            plt.suptitle(cell_type + ' Clones with Abundance > '
+            plt.suptitle(cell_type.title() + ' Clones with Abundance > '
                         + str(round(enrichment_thresholds[cell_type], 2))
                         + ' % WBC At Month: ' + str(month))
             plt.xlabel('')
+            plt.ylabel('Abundance (%WBC)')
             plt.subplot(2, 1, 2)
             ax = sns.swarmplot(
                 x='month',
@@ -241,6 +243,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                 dodge=True,
                 palette=COLOR_PALETTES['group']
             )
+            plt.ylabel('Abundance (%WBC)')
             fname = save_path \
                     + os.sep \
                     + 'dominant_clones_' + cell_type + '_' + title_addon \
@@ -1498,6 +1501,7 @@ def plot_bias_change_time_kdes(
         # If not, calculate and save cached
         if timepoint_col == 'gen':
             lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen <= 8]
 
         if group != 'all':
             lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
@@ -1552,6 +1556,7 @@ def plot_abundance_change(
         thresholds: Dict[str, float] = {'gr': 0, 'b': 0},
         cumulative: bool = False,
         magnitude: bool = False,
+        filter_end_time: bool = False,
         by_clone: bool = False,
         by_day: bool = False,
         by_gen: bool = False,
@@ -1601,11 +1606,19 @@ def plot_abundance_change(
         plt.figure()
         cell_change_df = abundance_change_df[abundance_change_df.cell_type == cell_type]
         if abundance_cutoff != 0:
-            filt_abund = filter_cell_type_threshold(abundance_df, thresholds=thresholds, analyzed_cell_types=[cell_type])
+            filt_abund = filter_cell_type_threshold(
+                abundance_df,
+                thresholds=thresholds,
+                analyzed_cell_types=[cell_type],
+                )
             if not filt_abund[filt_abund.cell_type != cell_type].empty:
                 ValueError('More cell types than expected')
-            rename_df = cell_change_df.rename(columns={'t1':timepoint_col})
-            cell_change_df = rename_df.merge(
+            if filter_end_time:
+                cell_change_df[timepoint_col] = cell_change_df['t2']
+            else:
+                cell_change_df[timepoint_col] = cell_change_df['t1']
+            
+            cell_change_df = cell_change_df.merge(
                 filt_abund[['code', 'mouse_id', 'cell_type', timepoint_col]],
                 on=['code', 'mouse_id', 'cell_type', timepoint_col],
                 how='inner',
@@ -1639,6 +1652,7 @@ def plot_abundance_change(
             markers=True,
             style='group',
             units='code',
+            palette=COLOR_PALETTES['mouse_id'],
             legend=None
             )
 
@@ -1659,9 +1673,13 @@ def plot_abundance_change(
             fname_addon = fname_addon + '_between'
             title_add = ' between time points'
 
+        if filter_end_time:
+            filter_time = 'after'
+        else:
+            filter_time = 'before'
         title = 'Abundance Change in ' + cell_type.title()  \
                 + ' with Abundance > ' + str(round(thresholds[cell_type],2)) \
-                + '% (WBC) before change'
+                + '% (WBC) ' + filter_time.title() + ' Change'
         plt.suptitle(title)
         if group != 'all':
             plt.title('Group: ' + group.replace('_', ' ').title() + title_add)
@@ -1669,6 +1687,7 @@ def plot_abundance_change(
         fname = save_path + os.sep + 'abundance_change' \
                 + fname_addon + '_a' \
                 + str(round(abundance_cutoff, 2)).replace('.', '-') \
+                + '_' + filter_time \
                 + '_' + group \
                 + '_' + cell_type \
                 + '.' + save_format
@@ -1743,3 +1762,135 @@ def plot_bias_change_cutoff(
 
     fname = save_path + os.sep + 'bias_change_cutoff_a' + str(abundance_cutoff).replace('.', '-') + '_' + group + '_mtd' + str(min_time_difference) + '.' + save_format
     save_plot(fname, save, save_format)
+
+def plot_bias_change_rest(
+        lineage_bias_df: pd.DataFrame,
+        cumulative: bool = False,
+        by_clone: bool = False,
+        by_day: bool = False,
+        by_gen: bool = False,
+        first_timepoint: int = 1,
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png',
+        cached_change: pd.DataFrame = None,
+        cache_dir: str = ''
+    ) -> None:
+
+
+    if by_day:
+        timepoint_col = 'day'
+    elif by_gen:
+        timepoint_col = 'gen'
+        lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
+    else:
+        timepoint_col = 'month'
+
+    if cached_change is not None:
+        bias_change_df = cached_change
+
+    else:
+        # If not, calculate and save cached
+        bias_change_df = calculate_bias_change(
+            lineage_bias_df,
+            timepoint_col=timepoint_col,
+            cumulative=cumulative,
+            first_timepoint=first_timepoint
+        )
+        addon = 'between'
+        if cumulative:
+            addon = 'across'
+        bias_change_df.to_csv(cache_dir + os.sep + addon + '_bias_change_df.csv', index=False)
+
+    
+    bias_change_df = bias_change_df.sort_values(by=['t2'])
+    for group, group_df in bias_change_df.groupby('group'):
+        plt.figure()
+
+        ordered_labels = bias_change_df[['label_change', 't2']].sort_values(['t2'])['label_change'].unique()
+        group_names = ['aging_phenotype', 'no_change']
+        plt.subplot(2, 1, 1)
+        sns.lineplot(
+            x='label_change',
+            y='bias_change',
+            data=group_df,
+            hue='mouse_id',
+            style='code',
+            )
+        plt.ylabel('Bias Change')
+
+        plt.subplot(2, 1, 2)
+        group_df.bias_change = group_df.bias_change.abs()
+        sns.lineplot(
+            x='label_change',
+            y='bias_change',
+            data=group_df,
+            hue='mouse_id',
+            style='code',
+            legend=False,
+            )
+        plt.ylabel('Magnitude Bias Change')
+
+        fname_addon = ''
+        if cumulative:
+            fname_addon = fname_addon + '_across'
+            title_add = ' across time points'
+        else:
+            fname_addon = fname_addon + '_between'
+            title_add = ' between time points'
+
+        title = 'Bias Change in rest of clones ' + group.replace('_'," ").title()
+        plt.suptitle(title)
+        plt.xlabel('Time (' + timepoint_col.title() + 's)' + title_add)
+        fname = save_path + os.sep + 'rest_bias_change' \
+                + fname_addon \
+                + '_' + group \
+                + '.' + save_format
+        save_plot(fname, save, save_format)
+
+def plot_rest_vs_tracked(
+        lineage_bias_df: pd.DataFrame,
+        rest_of_clones_bias_df: pd.DataFrame,
+        abundance_cutoff: float,
+        thresholds: Dict[str, float],
+        timepoint_col = 'day',
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png',
+        cached_change: pd.DataFrame = None,
+        cache_dir: str = ''
+    ) -> None:
+    
+    lineage_bias_df = filter_lineage_bias_anytime(
+        lineage_bias_df,
+        thresholds
+    )
+    lineage_bias_df['code'] = 'Tracked'
+    lineage_bias_df = lineage_bias_df.append(rest_of_clones_bias_df, ignore_index=True)
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
+
+    for mouse_id, mouse_df in lineage_bias_df.groupby('mouse_id'):
+        plt.figure()
+        sns.lineplot(
+            x=timepoint_col,
+            y='lineage_bias',
+            hue='code',
+            data=mouse_df,
+            markers=True,
+        )
+        group = str(mouse_df.iloc[0].group)
+        plt.title('Group: ' + group.replace('_', ' ').title())
+        plt.suptitle(mouse_id  \
+            + ' Lineage Bias, Tracked Clone Abundance Cutoff (anytime): ' \
+            + str(round(abundance_cutoff, 2))
+        )
+        plt.xlabel(timepoint_col.title())
+        plt.ylabel('Lineage Bias')
+        fname = save_path + os.sep + 'rest_vs_tracked' \
+                + '_' + mouse_id \
+                + '_' + group \
+                + '_a' \
+                + str(round(abundance_cutoff, 2)) \
+                + '.' + save_format
+        save_plot(fname, save, save_format)
