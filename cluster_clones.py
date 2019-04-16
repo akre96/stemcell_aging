@@ -1,50 +1,78 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn import metrics
-from sklearn.cluster import AffinityPropagation
-
+import seaborn as sns
+import numpy as np
+from tslearn.clustering import TimeSeriesKMeans
+from tslearn.datasets import CachedDatasets
+from tslearn.preprocessing import TimeSeriesScalerMeanVariance, TimeSeriesResampler
 
 train = pd.read_csv('~/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
-
-train_4m = train[(train.month == 4) & ~(train.group.isna())]
 
 categorical_cols = ['mouse_id', 'group']
 numerical_cols = ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']
 
-X = pd.get_dummies(train_4m[categorical_cols+numerical_cols])
-af = AffinityPropagation().fit(X)
-print(af)
+encoded = pd.get_dummies(train[categorical_cols+numerical_cols])
 
-cluster_centers_indices = af.cluster_centers_indices_
-labels = af.labels_
+# Transform to shape [code, time, nfeatures]
+X_train = np.zeros((len(train[['code','mouse_id']].drop_duplicates()), 4, 3))
+i = 0
+for _, clone_group in train.groupby(['code', 'mouse_id']):
+    j = 0
+    for _, time_group in clone_group.groupby('month'):
+        X_train[i][j] = time_group[numerical_cols].to_numpy()
+        j = j + 1
+    i = i+1
+sz = X_train.shape[1]
 
-n_clusters_ = len(cluster_centers_indices)
+seed=100
+n_clusters=3
 
-print('Estimated number of clusters: %d' % n_clusters_)
-print("Silhouette Coefficient: %0.3f"
-      % metrics.silhouette_score(X, labels, metric='sqeuclidean'))
+# Euclidean k-means
+print("Euclidean k-means")
+km = TimeSeriesKMeans(n_clusters=3, verbose=True, random_state=seed)
+y_pred = km.fit_predict(X_train)
 
-# #############################################################################
-# Plot result
-import matplotlib.pyplot as plt
-from itertools import cycle
+with_label_df = pd.DataFrame()
+for _, clone_group in train.groupby(['code', 'mouse_id']):
+    j = 0
+    clone_test = np.zeros((1, 4, 3))
+    for _, time_group in clone_group.groupby('month'):
+        clone_test[0][j] = time_group[numerical_cols].to_numpy()
+        j = j + 1
+    
+    label = km.predict(clone_test)
+    if len(label) > 1:
+        print(label)
+    clone_group = clone_group.assign(label=label[0])
+    with_label_df = with_label_df.append(clone_group)
 
-plt.close('all')
-plt.figure(1)
-plt.clf()
+plt.figure()
+sns.lineplot(
+    x='month',
+    y='lineage_bias',
+    data=with_label_df,
+    hue='label',
+    style='group',
+)
+plt.ylabel('Lineage Bias')
 
-X = X.to_numpy()
-colors = cycle('bgrcmykbgrcmykbgrcmykbgrcmyk')
-for k, col in zip(range(n_clusters_), colors):
-    class_members = labels == k
-    cluster_center = X[cluster_centers_indices[k]]
-    plt.plot(X[class_members, 0], X[class_members, 1], col + '.')
-    plt.plot(cluster_center[0], cluster_center[1], 'o', markerfacecolor=col,
-             markeredgecolor='k', markersize=14)
-    for x in X[class_members]:
-        plt.plot([cluster_center[0], x[0]], [cluster_center[1], x[1]], col)
+plt.figure()
+sns.lineplot(
+    x='month',
+    y='b_percent_engraftment',
+    data=with_label_df,
+    hue='label',
+    style='group',
+)
+plt.ylabel('B Abundance (%WBC)')
 
-plt.title('Estimated number of clusters: %d' % n_clusters_)
+plt.figure()
+sns.lineplot(
+    x='month',
+    y='gr_percent_engraftment',
+    data=with_label_df,
+    hue='label',
+    style='group',
+)
+plt.ylabel('Gr Abundance (%WBC)')
 plt.show()
-
-
