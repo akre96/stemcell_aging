@@ -856,3 +856,29 @@ def calculate_bias_change(
 
     bias_change_df.time_unit = timepoint_col
     return bias_change_df
+
+def filter_stable_at_timepoint(
+        lineage_bias_df: pd.DataFrame,
+        t1: int,
+        t2: int,
+        timepoint_col: str,
+        bias_change_cutoff: float = 0.5,
+    ) -> pd.DataFrame:
+    t1_df = lineage_bias_df[lineage_bias_df[timepoint_col] == t1].rename(columns={'lineage_bias': 't1_bias'})
+    t2_df = lineage_bias_df[lineage_bias_df[timepoint_col] == t2].rename(columns={'lineage_bias': 't2_bias'})
+    print(t2_df.columns)
+    t2_cols = ['mouse_id', 'code', 't2_bias']
+    combo_df = t1_df.merge(
+        t2_df[t2_cols],
+        how='inner',
+        on=['mouse_id', 'code'],
+        validate='1:1'
+    )
+    combo_df = combo_df.assign(
+        bias_change=lambda x: x.t2_bias - x.t1_bias
+    )
+    filt_codes_df = combo_df[combo_df.bias_change.abs() <= bias_change_cutoff]
+    filt_codes = filt_codes_df.code.unique()
+    filt_bias_df = lineage_bias_df[lineage_bias_df.code.isin(filt_codes)]
+    return filt_bias_df
+

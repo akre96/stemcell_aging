@@ -3,7 +3,7 @@
 
 """
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Any
 import os
 import json
 import pandas as pd
@@ -74,6 +74,7 @@ def plot_clone_count(clone_counts: pd.DataFrame,
             sns.lineplot(x=x_var,
                          y='code',
                          hue='mouse_id',
+                         palette=COLOR_PALETTES['mouse_id'],
                          data=clone_counts_cell,
                          ax=axis,
                          legend=False
@@ -426,6 +427,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
                            threshold: float = 0,
                            abundance: float = 0,
                            by_day: bool = False,
+                           timepoint_col: str = None,
                            save: bool = False,
                            save_path: str = './output',
                            save_format: str = 'png'
@@ -441,9 +443,17 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     x_var = 'month'
     if by_day:
         x_var = 'day'
+    if timepoint_col is not None:
+        x_var = timepoint_col
 
     plt.figure()
-    sns.lineplot(x=x_var, y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=COLOR_PALETTES['group'])
+    sns.lineplot(
+        x=x_var,
+        y='lineage_bias',
+        data=group_names_pretty(lineage_bias_df),
+        hue='group',
+        palette=COLOR_PALETTES['group']
+    )
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
     plt.title(title_addon)
 
@@ -451,7 +461,16 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     save_plot(fname, save, save_format)
 
     plt.figure()
-    sns.lineplot(x=x_var, y='lineage_bias', data=lineage_bias_df, hue='mouse_id', style='group', units='code', estimator=None)
+    sns.lineplot(
+        x=x_var,
+        y='lineage_bias',
+        data=lineage_bias_df,
+        hue='mouse_id',
+        style='group',
+        units='code',
+        estimator=None,
+        palette=COLOR_PALETTES['mouse_id']
+    )
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice by Clone')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -460,7 +479,15 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
 
     plt.figure()
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
-    sns.lineplot(x=x_var, y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    sns.lineplot(
+        x=x_var,
+        y='lineage_bias',
+        data=lineage_bias_group_df,
+        hue='mouse_id',
+        units='code',
+        estimator=None,
+        palette=COLOR_PALETTES['mouse_id']
+    ) 
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in aging_phenotype')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -469,7 +496,15 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
 
     plt.figure()
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
-    sns.lineplot(x=x_var, y='lineage_bias', data=lineage_bias_group_df, hue='mouse_id', units='code', estimator=None) 
+    sns.lineplot(
+        x=x_var,
+        y='lineage_bias',
+        data=lineage_bias_group_df,
+        hue='mouse_id',
+        units='code',
+        estimator=None,
+        palette=COLOR_PALETTES['mouse_id']
+    ) 
     plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in no_change')
     plt.title(title_addon)
     plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
@@ -1196,6 +1231,7 @@ def swamplot_abundance_cutoff(
         thresholds: Dict[str, float],
         n_timepoints: int,
         by_day: bool = False,
+        timepoint_col: str = None,
         color_col: str = 'mouse_id',
         group: str = 'all',
         save: bool = False,
@@ -1230,6 +1266,8 @@ def swamplot_abundance_cutoff(
     time_col = 'month'
     if by_day:
         time_col = 'day'
+    if timepoint_col is not None:
+        time_col = timepoint_col
 
     print('Minimum number of timepoints: ' + str(n_timepoints))
     all_timepoint_df = filter_mice_with_n_timepoints(
@@ -1244,12 +1282,15 @@ def swamplot_abundance_cutoff(
     )
 
     plt.figure()
-    sns.set_palette(sns.color_palette('hls', filtered_df.mouse_id.nunique()))
+    pal = sns.color_palette('hls', filtered_df.mouse_id.nunique())
+    if color_col == 'mouse_id':
+        pal = COLOR_PALETTES['mouse_id']
     sns.swarmplot(
         x=time_col,
         y='percent_engraftment',
         hue=color_col,
-        data=filtered_df
+        data=filtered_df,
+        palette=pal
         )
 
     title = 'Abundance of ' + cell_type.capitalize() \
@@ -1276,7 +1317,9 @@ def plot_bias_change_between_gen(
         group: str = 'all',
         save: bool = False,
         save_path: str = '',
-        save_format: str = 'png'
+        save_format: str = 'png',
+        style: str = None,
+        legend: Any = None,
     ) -> None:
     """ Plots lineage bias change between generations for serial transplant data
 
@@ -1310,6 +1353,8 @@ def plot_bias_change_between_gen(
         filtered_df,
         absolute=magnitude
         )
+    if style is None:
+       style = 'group' 
     if by_clone:
         sns.lineplot(
             x='gen_change',
@@ -1317,9 +1362,10 @@ def plot_bias_change_between_gen(
             data=group_names_pretty(between_gen_bias_change_df),
             hue='mouse_id',
             estimator=None,
-            style='group',
+            style=style,
             units='code',
-            legend=None
+            palette=COLOR_PALETTES['mouse_id'],
+            legend=legend
             )
     else:
         palette = COLOR_PALETTES['group']
@@ -1416,6 +1462,7 @@ def plot_bias_change_across_gens(
             y='bias_change',
             data=group_names_pretty(across_gen_bias_change_df),
             hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id']
             )
         ax.legend_.remove()
 
@@ -1434,6 +1481,7 @@ def plot_bias_change_across_gens(
             y='bias_change',
             data=group_names_pretty(across_gen_bias_change_df),
             hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id'],
             units='code',
             estimator=None,
             legend=None
@@ -1816,6 +1864,7 @@ def plot_bias_change_rest(
             data=group_df,
             hue='mouse_id',
             style='code',
+            palette=COLOR_PALETTES['mouse_id']
             )
         plt.ylabel('Bias Change')
 
@@ -1828,6 +1877,7 @@ def plot_bias_change_rest(
             hue='mouse_id',
             style='code',
             legend=False,
+            palette=COLOR_PALETTES['mouse_id']
             )
         plt.ylabel('Magnitude Bias Change')
 
@@ -1893,4 +1943,61 @@ def plot_rest_vs_tracked(
                 + '_a' \
                 + str(round(abundance_cutoff, 2)) \
                 + '.' + save_format
+        save_plot(fname, save, save_format)
+
+def plot_extreme_bias_abundance(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png',
+    ) -> None:
+
+    for cell_type in ['gr', 'b']:
+        fname_suffix = '_' + cell_type \
+            + '_extreme_bias_abundance.' \
+            +  save_format
+
+        extreme_bin = .0625
+        extreme_myeloid_index = (1-lineage_bias_df.lineage_bias) <= extreme_bin
+        plt.figure()
+        extreme_myeloid_df = lineage_bias_df[extreme_myeloid_index]
+        myeloid_df = pd.DataFrame(extreme_myeloid_df.groupby([timepoint_col, 'group', 'mouse_id'])['gr_percent_engraftment','b_percent_engraftment'].sum()).reset_index()
+
+        # Myeloid Biased Abundance
+        sns.lineplot(
+            x=timepoint_col,
+            y=cell_type+'_percent_engraftment',
+            hue='group',
+            style='group',
+            data=myeloid_df,
+            palette=COLOR_PALETTES['group'],
+            markers=True,
+        )
+        plt.ylabel('Sum ' + cell_type.title() + ' Abundance (%WBC)')
+        plt.title(cell_type.title() + ' Abundance of Extremely Myeloid Biased Clones')
+
+        bias_type = 'myeloid'
+        fname = save_path + os.sep + bias_type + fname_suffix
+        save_plot(fname, save, save_format)
+
+        # Lymhoid Biased Abundance
+        plt.figure()
+        extreme_lymphoid_index = (lineage_bias_df.lineage_bias + 1) <= extreme_bin
+        extreme_lymphoid_df = lineage_bias_df[extreme_lymphoid_index]
+        lymphoid_df = pd.DataFrame(extreme_lymphoid_df.groupby([timepoint_col, 'group', 'mouse_id'])['gr_percent_engraftment','b_percent_engraftment'].sum()).reset_index()
+        sns.lineplot(
+            x=timepoint_col,
+            y=cell_type+'_percent_engraftment',
+            hue='group',
+            style='group',
+            data=lymphoid_df,
+            palette=COLOR_PALETTES['group'],
+            markers=True,
+        )
+        plt.ylabel('Sum ' + cell_type.title() + ' Abundance (%WBC)')
+        plt.title(cell_type.title() + ' Abundance of Extremely Lymphoid Biased Clones')
+
+        bias_type = 'lymphoid'
+        fname = save_path + os.sep + bias_type + fname_suffix
         save_plot(fname, save, save_format)
