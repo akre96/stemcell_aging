@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -6,10 +7,12 @@ from tslearn.clustering import TimeSeriesKMeans
 from tslearn.datasets import CachedDatasets
 from tslearn.preprocessing import TimeSeriesScalerMeanVariance, TimeSeriesResampler
 
+COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 train = pd.read_csv('~/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
 
 categorical_cols = ['mouse_id', 'group']
 numerical_cols = ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']
+numerical_cols = ['b_percent_engraftment']
 
 encoded = pd.get_dummies(train[categorical_cols+numerical_cols])
 
@@ -29,7 +32,7 @@ n_clusters=3
 
 # Euclidean k-means
 print("Euclidean k-means")
-km = TimeSeriesKMeans(n_clusters=3, verbose=True, random_state=seed)
+km = TimeSeriesKMeans(n_clusters=n_clusters, verbose=True, random_state=seed)
 y_pred = km.fit_predict(X_train)
 
 with_label_df = pd.DataFrame()
@@ -51,8 +54,9 @@ sns.lineplot(
     x='month',
     y='lineage_bias',
     data=with_label_df,
-    hue='label',
-    style='group',
+    hue='group',
+    style='label',
+    palette=COLOR_PALETTES['group'],
 )
 plt.ylabel('Lineage Bias')
 
@@ -61,8 +65,9 @@ sns.lineplot(
     x='month',
     y='b_percent_engraftment',
     data=with_label_df,
-    hue='label',
-    style='group',
+    hue='group',
+    style='label',
+    palette=COLOR_PALETTES['group'],
 )
 plt.ylabel('B Abundance (%WBC)')
 
@@ -71,8 +76,9 @@ sns.lineplot(
     x='month',
     y='gr_percent_engraftment',
     data=with_label_df,
-    hue='label',
-    style='group',
+    hue='group',
+    style='label',
+    palette=COLOR_PALETTES['group'],
 )
 plt.ylabel('Gr Abundance (%WBC)')
 plt.show()
