@@ -1089,16 +1089,13 @@ def main():
         if args.timepoint:
             timepoint = args.timepoint
 
-        timepoint_col = 'month'
-        if args.by_day:
-            timepoint_col = 'day'
 
         analysed_cell_types = ['gr', 'b']
         print('Thresholds calculated based on cumulative abundance')
         _, thresholds = calculate_thresholds_sum_abundance(
             present_clones_df,
+            timepoint_col=timepoint_col,
             abundance_cutoff=abundance_cutoff,
-            by_day=args.by_day
         )
 
         print('Abundance cutoff set to: ' + str(abundance_cutoff))
@@ -1112,6 +1109,7 @@ def main():
             analyzed_cell_types=[cell_type],
             lineage_bias=True,
         )
+        print(filt_lineage_bias_gr_df)
         cell_type = 'b'
         filt_lineage_bias_b_df = combine_enriched_clones_at_time(
             input_df=lineage_bias_df,
@@ -1127,6 +1125,7 @@ def main():
             save=args.save,
             timepoint=timepoint,
             timepoint_col=timepoint_col,
+            by_clone=args.by_clone,
             save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/gr',
             save_format='png',
             abundance=abundance_cutoff,
@@ -1134,12 +1133,13 @@ def main():
         plot_lineage_average(
             filt_lineage_bias_b_df,
             title_addon='Filtered by clones with > ' + str(round(thresholds['b'], 2)) + '% WBC abundance in B at ' + timepoint_col.title() + ': ' + str(timepoint),
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
             timepoint=timepoint,
             timepoint_col=timepoint_col,
-            save_format='png',
+            by_clone=args.by_clone,
             abundance=abundance_cutoff,
+            save_format='png',
+            save=args.save,
+            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
         )
     if graph_type == 'perc_bias_month':
         percentile = .995

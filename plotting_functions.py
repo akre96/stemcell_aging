@@ -400,6 +400,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
                          abundance: float = 0,
                          timepoint: str = 'last',
                          timepoint_col: str = 'month',
+                         by_clone: bool = False,
                          save: bool = False,
                          save_path: str = './output',
                          save_format: str = 'png'
@@ -412,14 +413,49 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
     elif abundance:
         fname_prefix += '_a' + str(round(abundance, ndigits=2)).replace('.', '-')
 
+    if by_clone:
+        for phenotype, group in lineage_bias_df.groupby('group'):
+            fname_prefix += '_by-clone'
+            plt.figure()
+            sns.lineplot(
+                x=timepoint_col,
+                y='lineage_bias',
+                data=group_names_pretty(group),
+                hue='mouse_id',
+                legend=False,
+                palette=COLOR_PALETTES['mouse_id'],
+                units='code',
+                estimator=None
+            )
+            plt.xlabel(timepoint_col.title())
+            plt.ylabel('Lineage Bias')
+            plt.suptitle(
+                'Myeloid (+) / Lymphoid (-) Bias in ' \
+                + phenotype.replace('_',' ').title() \
+                + ' Mice'
+            )
+            plt.title(title_addon)
+            fname = fname_prefix \
+                + '_' + phenotype \
+                + '.' + save_format
+            save_plot(fname, save, save_format)
 
-    plt.figure()
-    sns.lineplot(x=timepoint_col, y='lineage_bias', data=group_names_pretty(lineage_bias_df), hue='group', palette=COLOR_PALETTES['group'])
-    plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
-    plt.title(title_addon)
+    else:
+        plt.figure()
+        sns.lineplot(
+            x=timepoint_col,
+            y='lineage_bias',
+            data=group_names_pretty(lineage_bias_df),
+            hue='group',
+            palette=COLOR_PALETTES['group']
+        )
+        plt.suptitle('Myeloid (+) / Lymphoid (-) Bias in All Mice, Overall Trend')
+        plt.title(title_addon)
+        plt.xlabel(timepoint_col.title())
+        plt.ylabel('Lineage Bias')
 
-    fname = fname_prefix + '_average.' + save_format
-    save_plot(fname, save, save_format)
+        fname = fname_prefix + '_average.' + save_format
+        save_plot(fname, save, save_format)
 
 def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
                            title_addon: str = '',

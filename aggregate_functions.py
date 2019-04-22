@@ -172,7 +172,6 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
         pd.DataFrame -- DataFrame with only clones enriched at specified timepoint
     """
     time_df = input_df[input_df[timepoint_col] == enrichment_time]
-
     enriched_at_time_df = time_df[time_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id'])
 
     if lineage_bias:
@@ -192,8 +191,7 @@ def combine_enriched_clones_at_time(
         lineage_bias: bool = False
     ) -> pd.DataFrame:
     """ wrapper of find_enriched_clones_at_time() to combine entries from multiple cell types
-        between_gen_bias_change_df = between_gen_bias_change(lineage_bias_df, absolute=True)
-        sns.lineplot(x='gen_change', y='bias_change', data=between_gen_bias_change_df, hue='group',)    
+
     Arguments:
         input_df {pd.DataFrame} -- data frame with month value
         enrichement_month {int} -- month to check enrichment at
@@ -604,8 +602,8 @@ def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum
 
 def calculate_thresholds_sum_abundance(
         input_df: pd.DataFrame,
+        timepoint_col: str,
         abundance_cutoff: float = 50.0,
-        by_day: bool = False,
         analyzed_cell_types: List[str] = ['gr', 'b']
     ) -> Tuple[Dict[str, float], Dict[str, float]]:
     """ Calculates abundance thresholds by cell type based on cumulative abundance at month 4
@@ -626,13 +624,8 @@ def calculate_thresholds_sum_abundance(
     percentiles: Dict[str, float] = {}
 
     for cell_type in analyzed_cell_types:
-        if by_day:
-            first_day = input_df.day.min()
-            if first_day != 127:
-                print('First day: ' + str(first_day))
-            month_4_cell_df = input_df.loc[(input_df.day == first_day) & (input_df.cell_type == cell_type)]
-        else:
-            month_4_cell_df = input_df.loc[(input_df.month == 4) & (input_df.cell_type == cell_type)]
+        first_day = input_df[timepoint_col].min()
+        month_4_cell_df = input_df.loc[(input_df[timepoint_col] == first_day) & (input_df.cell_type == cell_type)]
 
         contributions = percentile_sum_engraftment(month_4_cell_df, cell_type)
         percentile, _ = find_intersect(
