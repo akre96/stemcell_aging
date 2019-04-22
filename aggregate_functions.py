@@ -8,6 +8,7 @@ import scipy.stats as stats
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from intersection.intersection import intersection
 
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
@@ -484,11 +485,15 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_point
             contribution_df = contribution_df.append(contribution_row, ignore_index=True)
     return contribution_df.reset_index()
 
-def calculate_bias_change_cutoff(bias_change_df: pd.DataFrame) -> float:
+def calculate_bias_change_cutoff(
+        bias_change_df: pd.DataFrame,
+        min_time_difference: int,
+    ) -> float:
     """ Calculates change amount that qualifies as "change"
 
     Arguments:
         bias_change_df {pd.DataFrame} -- change in lineage bias dataframe
+        min_time_difference {int} -- minimum number of days to count use
 
     Returns:
         float -- cutoff value for change
@@ -496,26 +501,37 @@ def calculate_bias_change_cutoff(bias_change_df: pd.DataFrame) -> float:
     ValueError:
         if more than 1 cutoff found, throws error
     """
+    bias_change_df = bias_change_df[bias_change_df.time_change >= min_time_difference] 
     fig = plt.figure()
     kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
+
+    # C0 KDE of all clones
     x, y = kde.get_lines()[0].get_data()
+    y_peak = y.argmax() + 1
+
+    # C1 KDE of "unchanged" clones
+    y1 = np.zeros(x.shape)
+    y_vals = np.append(y[:y_peak], y[:y_peak][::-1])
+    y1[:y_vals.shape[0]] = y_vals
+
+    # C2 KDE of "changed" clones
+    y2 = y - y1
+
+    cutoff_candidates, _ = intersection(x, y1, x, y2)
+
     plt.close(fig=fig)
-    # Calculate first derivative
-    dy_dx = np.diff(y)/np.diff(x)
-    dx_vals = x[1:]
-    cutoff_candidates: List = []
-    for i, _ in enumerate(dy_dx):
-        if i != 0:
-            # numerically check if 2nd derivative > 0 and first derivative ~0
-            if dy_dx[i - 1] <= 0 and dy_dx[i] >= 0:
-                cutoff_candidates.append(dx_vals[i])
+
     if len(cutoff_candidates) > 1:
         print(cutoff_candidates)
         raise ValueError('Too many candidates found')
 
     return cutoff_candidates[0]
 
-def mark_changed(input_df: pd.DataFrame, bias_change_df: pd.DataFrame) -> pd.DataFrame:
+def mark_changed(
+        input_df: pd.DataFrame,
+        bias_change_df: pd.DataFrame,
+        min_time_difference: int
+    ) -> pd.DataFrame:
     """ Adds column to input df based on if clone has 'changed' or not
     
     Arguments:
@@ -525,8 +541,16 @@ def mark_changed(input_df: pd.DataFrame, bias_change_df: pd.DataFrame) -> pd.Dat
     Returns:
         pd.DataFrame -- input_df with changed column
     """
-    cutoff = calculate_bias_change_cutoff(bias_change_df)
-    with_bias_df = input_df.merge(bias_change_df[['code', 'group', 'mouse_id', 'bias_change']], how='left', on=['code', 'group', 'mouse_id'])
+    cutoff = calculate_bias_change_cutoff(
+        bias_change_df,
+        min_time_difference
+    )
+    with_bias_df = input_df.merge(
+        bias_change_df[['code', 'group', 'mouse_id', 'bias_change']],
+        how='left',
+        on=['code', 'group', 'mouse_id'],
+        validate='m:m',
+    )
     with_bias_df['change_cutoff'] = cutoff
     print('Lineage Bias Change Cutoff: ' + str(round(cutoff,2)))
 
@@ -874,4 +898,4 @@ def filter_stable_at_timepoint(
     filt_codes = filt_codes_df.code.unique()
     filt_bias_df = lineage_bias_df[lineage_bias_df.code.isin(filt_codes)]
     return filt_bias_df
-
+    

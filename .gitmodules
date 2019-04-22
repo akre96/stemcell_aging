@@ -1,3 +1,6 @@
 [submodule "pyvenn"]
 	path = pyvenn
 	url = https://github.com/akre96/pyvenn.git
+[submodule "intersection"]
+	path = intersection
+	url = https://github.com/sukhbinder/intersection.git

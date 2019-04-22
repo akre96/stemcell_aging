@@ -21,6 +21,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     across_gen_bias_change, between_gen_bias_change, calculate_abundance_change, \
     day_to_gen, calculate_bias_change
 from lineage_bias import get_bias_change
+from intersection.intersection import intersection
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 
@@ -1004,16 +1005,30 @@ def plot_change_contributions_by_group(
         changed_sum_cell_df.loc[(changed_sum_cell_df.percent_engraftment > 60) & (changed_sum_cell_df.month == 14)].mouse_id
     )
     y_units = '(% WBC)'
-    palette = sns.color_palette(COLOR_PALETTES['group'][:2])
     if percent_of_total:
         y_units = '(% of Tracked ' + cell_type.capitalize() +' cells)'
 
     group = 'both-groups'
 
     if line:
-        sns.lineplot(x='month', y='percent_engraftment', hue='group', units='mouse_id', estimator=None, data=changed_sum_cell_df, palette=palette)
+        sns.lineplot(
+            x='month',
+            y='percent_engraftment',
+            hue='group',
+            units='mouse_id',
+            estimator=None,
+            data=changed_sum_cell_df,
+            palette=COLOR_PALETTES['group']
+            )
     else:
-        sns.barplot(x='month', y='percent_engraftment', hue='group', data=changed_sum_cell_df, palette=palette, alpha=0.8)
+        sns.barplot(
+            x='month',
+            y='percent_engraftment',
+            hue='group',
+            data=changed_sum_cell_df,
+            palette=COLOR_PALETTES['group'],
+            alpha=0.8
+        )
     plt.xlabel('Month')
     plt.ylabel('Cumulative Abundance ' + y_units)
     plt.suptitle(' Cumulative Abundance of Changed ' + cell_type.capitalize() + ' Cells')
@@ -1810,7 +1825,10 @@ def plot_bias_change_cutoff(
     if cached_change is not None:
         bias_change_df = cached_change
     else:
-        filt_lineage_bias_df = filter_lineage_bias_anytime(lineage_bias_df, thresholds=thresholds)
+        filt_lineage_bias_df = filter_lineage_bias_anytime(
+            lineage_bias_df,
+            thresholds=thresholds
+        )
         bias_change_df = get_bias_change(filt_lineage_bias_df)
         bias_change_df.to_csv(cache_dir + os.sep + 'bias_change_df_a'+str(round(abundance_cutoff, 2)) + '.csv', index=False)
         
@@ -1821,23 +1839,41 @@ def plot_bias_change_cutoff(
         bias_change_df = bias_change_df.loc[bias_change_df.group == group]
 
     if absolute_value:
-        kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
+        kde = sns.kdeplot(
+            bias_change_df.bias_change.abs(),
+            kernel='gau',
+            shade=True,
+            color='silver',
+            alpha=.3
+        )
     else:
-        kde = sns.kdeplot(bias_change_df.bias_change, shade=True)
+        kde = sns.kdeplot(
+            bias_change_df.bias_change,
+            kernel='gau',
+            shade=True,
+            color='silver',
+            alpha=.3
+        )
 
+    # C0 KDE of all clones
     x, y = kde.get_lines()[0].get_data()
-    dy = np.diff(y)/np.diff(x)
-    dx = x[1:]
-    cutoff_candidates: List = []
-    for i, val in enumerate(dy):
-        if i != 0:
-            if dy[i - 1] <= 0 and dy[i] >= 0:
-                cutoff_candidates.append(dx[i])
-    if len(cutoff_candidates):
-        plt.vlines(cutoff_candidates[0], 0, max(y))
-        kde.text(cutoff_candidates[0] + .1, max(y)/2, 'Change at: ' + str(round(cutoff_candidates[0],3)))
-    else:
-        print('\n -- WARNING: No cutoff point established -- \n')
+    y_peak = y.argmax() + 1
+
+    # C1 KDE of "unchanged" clones
+    y1 = np.zeros(x.shape)
+    y_vals = np.append(y[:y_peak], y[:y_peak][::-1])
+    y1[:y_vals.shape[0]] = y_vals
+
+    # C2 KDE of "changed" clones
+    y2 = y - y1
+
+    x_c, y_c = intersection(x, y1, x, y2)
+    plt.plot(x, y1, c='deepskyblue')
+    plt.plot(x , y2, c='firebrick')
+    plt.scatter(x_c, y_c, c='k')
+    plt.vlines(x_c[0], 0, max(y))
+    kde.text(x_c[0] + .1, max(y)/1.1, 'Change at: ' + str(round(x_c[0], 3)))
+
     plt.title('Kernel Density Estimate of lineage bias change')
     plt.suptitle('Abundance Cutoff: ' + str(round(abundance_cutoff, 2)) + ' Group: ' + group)
     plt.xlabel('Magnitude of Lineage Bias Change')
@@ -1937,6 +1973,7 @@ def plot_bias_change_rest(
 def plot_rest_vs_tracked(
         lineage_bias_df: pd.DataFrame,
         rest_of_clones_bias_df: pd.DataFrame,
+        y_col: str,
         abundance_cutoff: float,
         thresholds: Dict[str, float],
         timepoint_col = 'day',
@@ -1960,7 +1997,7 @@ def plot_rest_vs_tracked(
         plt.figure()
         sns.lineplot(
             x=timepoint_col,
-            y='lineage_bias',
+            y=y_col,
             hue='code',
             data=mouse_df,
             markers=True,
@@ -1968,14 +2005,17 @@ def plot_rest_vs_tracked(
         group = str(mouse_df.iloc[0].group)
         plt.title('Group: ' + group.replace('_', ' ').title())
         plt.suptitle(mouse_id  \
-            + ' Lineage Bias, Tracked Clone Abundance Cutoff (anytime): ' \
+            + ' ' + y_col.replace('_', ' ').title() \
+            + ' Tracked Clone Abundance Cutoff (anytime): ' \
             + str(round(abundance_cutoff, 2))
         )
         plt.xlabel(timepoint_col.title())
-        plt.ylabel('Lineage Bias')
+        plt.ylabel(y_col.replace('_', ' ').title())
+
         fname = save_path + os.sep + 'rest_vs_tracked' \
                 + '_' + mouse_id \
                 + '_' + group \
+                + '_' + y_col \
                 + '_a' \
                 + str(round(abundance_cutoff, 2)) \
                 + '.' + save_format
@@ -1994,7 +2034,7 @@ def plot_extreme_bias_abundance(
             + '_extreme_bias_abundance.' \
             +  save_format
 
-        extreme_bin = .0625
+        extreme_bin = .2500
         extreme_myeloid_index = (1-lineage_bias_df.lineage_bias) <= extreme_bin
         plt.figure()
         extreme_myeloid_df = lineage_bias_df[extreme_myeloid_index]

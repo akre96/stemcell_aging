@@ -27,7 +27,7 @@ from aggregate_functions import filter_threshold, \
     mark_changed, sum_abundance_by_change, between_gen_bias_change, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_threshold, \
     across_gen_bias_change, between_gen_bias_change, \
-    filter_stable_at_timepoint, day_to_gen
+    filter_stable_at_timepoint, day_to_gen, calculate_bias_change
 from plotting_functions import plot_max_engraftment, \
     plot_clone_count_by_thresholds, venn_barcode_in_time, \
     plot_clone_enriched_at_time, plot_counts_at_percentile, \
@@ -184,6 +184,10 @@ def main():
     if graph_type in ['rest_vs_tracked']:
         abundance_cutoff = 0
         thresholds = {'gr': 0, 'b': 0}
+        plot_col = 'lineage_bias'
+        if args.options != 'default':
+           plot_col = args.options
+
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
@@ -194,6 +198,7 @@ def main():
         plot_rest_vs_tracked(
                 lineage_bias_df,
                 rest_of_clones_bias_df,
+                y_col=plot_col,
                 abundance_cutoff=abundance_cutoff,
                 thresholds=thresholds,
                 timepoint_col=timepoint_col,
@@ -695,16 +700,28 @@ def main():
         
     if graph_type in ['contrib_change_group']:
         save_path = args.output_dir + os.sep + 'changed_contribution'
-        change_marked_df = mark_changed(present_clones_df, bias_change_df)
-        line = False
-        if options != 'default':
-            line = True
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+        if args.cache:
+            change_marked_df = pd.read_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv')
+        else:
+            bias_change_df = get_bias_change(
+                lineage_bias_df,
+            )
+            change_marked_df = mark_changed(
+                present_clones_df,
+                bias_change_df,
+                min_time_difference=mtd
+            )
+            change_marked_df.to_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv', index=False)
+
         percent_of_total = True
         cell_type = 'gr'
         plot_change_contributions_by_group(change_marked_df,
             cell_type=cell_type,
             percent_of_total=percent_of_total,
-            line=line,
+            line=args.line,
             save=args.save,
             save_path=save_path,
             save_format='png',
@@ -713,7 +730,7 @@ def main():
         plot_change_contributions_by_group(change_marked_df,
             cell_type=cell_type,
             percent_of_total=percent_of_total,
-            line=line,
+            line=args.line,
             save=args.save,
             save_path=save_path,
             save_format='png',
@@ -721,17 +738,28 @@ def main():
 
     if graph_type in ['contrib_change_cell']:
         save_path = args.output_dir + os.sep + 'changed_contribution'
-        change_marked_df = mark_changed(present_clones_df, bias_change_df)
-        group = 'all'
-        if options != 'default':
-            group = options
-
+        if args.options != 'default':
+            mtd = int(args.options)
+        if args.cache:
+            change_marked_df = pd.read_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv')
+        else:
+            bias_change_df = get_bias_change(
+                lineage_bias_df,
+            )
+            change_marked_df = mark_changed(
+                present_clones_df,
+                bias_change_df,
+                min_time_difference=mtd
+            )
+            change_marked_df.to_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv', index=False)
+        group = args.group
         percent_of_total = False
-
+        print('Change Cutoff:')
+        print(change_marked_df.change_cutoff.unique())
         cell_type = 'gr'
         plot_change_contributions(change_marked_df,
             cell_type=cell_type,
-            group=group,
+            group=args.group,
             percent_of_total=percent_of_total,
             save=args.save,
             save_path=save_path,
@@ -740,7 +768,7 @@ def main():
         cell_type = 'b'
         plot_change_contributions(change_marked_df,
             cell_type=cell_type,
-            group=group,
+            group=args.group,
             percent_of_total=percent_of_total,
             save=args.save,
             save_path=save_path,
