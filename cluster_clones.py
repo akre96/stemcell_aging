@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 from tslearn.clustering import TimeSeriesKMeans
 from tslearn.datasets import CachedDatasets
 from tslearn.preprocessing import TimeSeriesScalerMeanVariance, TimeSeriesResampler
@@ -15,10 +16,13 @@ categorical_cols = ['mouse_id', 'group']
 numerical_cols = ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']
 numerical_cols = ['gr_percent_engraftment']
 
+#scaler = StandardScaler()
+#train[numerical_cols] = scaler.fit_transform(train[numerical_cols])
+
 encoded = pd.get_dummies(train[categorical_cols+numerical_cols])
 
 # Transform to shape [code, time, nfeatures]
-X_train = np.zeros((len(train[['code','mouse_id']].drop_duplicates()), 4, 3))
+X_train = np.zeros((len(train[['code', 'mouse_id']].drop_duplicates()), 4, 3))
 i = 0
 for _, clone_group in train.groupby(['code', 'mouse_id']):
     j = 0
@@ -47,36 +51,51 @@ for _, clone_group in train.groupby(['code', 'mouse_id']):
     label = km.predict(clone_test)
     if len(label) > 1:
         print(label)
-    clone_group = clone_group.assign(label=label[0])
+    clone_group = clone_group.assign(label=str(label[0]))
     with_label_df = with_label_df.append(clone_group)
 
-plt.figure()
-sns.lineplot(
-    x='month',
-    y='lineage_bias',
-    data=with_label_df,
-    style='group',
-    hue='label',
-)
-plt.ylabel('Lineage Bias')
+for gname, group_df in with_label_df.groupby('group'):
+    plt.figure()
+    plt.subplot(3, 1, 1)
+    sns.lineplot(
+        x='month',
+        y='lineage_bias',
+        data=group_df,
+        hue='label',
+        legend=None,
+        palette=COLOR_PALETTES['cluster_label'],
+    )
+    plt.ylabel('Lineage Bias')
 
-plt.figure()
-sns.lineplot(
-    x='month',
-    y='b_percent_engraftment',
-    data=with_label_df,
-    style='group',
-    hue='label',
-)
-plt.ylabel('B Abundance (%WBC)')
+    plt.subplot(3, 1, 2)
+    sns.lineplot(
+        x='month',
+        y='b_percent_engraftment',
+        data=group_df,
+        hue='label',
+        legend=None,
+        palette=COLOR_PALETTES['cluster_label'],
+    )
+    plt.ylabel('B Abundance (%WBC)')
 
-plt.figure()
-sns.lineplot(
-    x='month',
-    y='gr_percent_engraftment',
-    data=with_label_df,
-    style='group',
-    hue='label',
-)
-plt.ylabel('Gr Abundance (%WBC)')
+    plt.subplot(3, 1, 3)
+    sns.lineplot(
+        x='month',
+        y='gr_percent_engraftment',
+        data=group_df,
+        hue='label',
+        palette=COLOR_PALETTES['cluster_label'],
+    )
+    plt.ylabel('Gr Abundance (%WBC)')
+    plt.suptitle('Group: ' + gname.title())
+
+for name, cluster in with_label_df.groupby(['group','label']):
+    print(
+        'Group: ' \
+        + name[0] \
+        + ' Label: ' \
+        + name[1] \
+        + ' Unique Clones: ' \
+        + str(cluster.code.nunique())
+    )
 plt.show()
