@@ -19,7 +19,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     get_max_by_mouse_timepoint, sum_abundance_by_change, find_intersect, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_anytime, \
     across_gen_bias_change, between_gen_bias_change, calculate_abundance_change, \
-    day_to_gen, calculate_bias_change
+    day_to_gen, calculate_bias_change, filter_biased_clones_at_timepoint
 from lineage_bias import get_bias_change
 from intersection.intersection import intersection
 
@@ -2077,3 +2077,66 @@ def plot_extreme_bias_abundance(
         bias_type = 'lymphoid'
         fname = save_path + os.sep + bias_type + fname_suffix
         save_plot(fname, save, save_format)
+
+def plot_extreme_bias_time(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        timepoint: int,
+        y_col: str,
+        bias_cutoff: float,
+        group: str = 'all',
+        by_clone: bool = False,
+        save: bool = False,
+        save_path: str = '',
+        save_format: str = 'png',
+    ) -> None:
+    fname_addon = ''
+    if group != 'all':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
+
+    biased_at_time_df = filter_biased_clones_at_timepoint(
+        lineage_bias_df,
+        bias_cutoff,
+        timepoint,
+        timepoint_col
+    )
+    y_title = y_col.replace('_',' ').replace('engraftment','Abundance').title()
+    plt.figure()
+    if by_clone:
+        fname_addon += '_by-clone'
+        sns.lineplot(
+            x=timepoint_col,
+            y=y_col,
+            data=biased_at_time_df,
+            hue='mouse_id',
+            units='code',
+            style='group',
+            estimator=None,
+            legend=None,
+            palette=COLOR_PALETTES['mouse_id']
+        )
+    else:
+        sns.lineplot(
+            x=timepoint_col,
+            y=y_col,
+            data=biased_at_time_df,
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+        )
+    plt.ylabel(y_title)
+    plt.xlabel(timepoint_col.title())
+    plot_title = y_title + ' of Clones more biased than ' \
+        + str(round(bias_cutoff, 2)) + ' at ' \
+        + timepoint_col.title() + ' ' + str(timepoint)
+    plt.suptitle(plot_title)
+    plt.title('Group: ' + group.replace('_', ' ').title())
+
+    fname = save_path + os.sep + 'extreme_bias_' \
+        + str(round(bias_cutoff, 2)).replace('.','-') \
+        + '_' + timepoint_col[0] \
+        + str(timepoint) \
+        + '_' + group \
+        + fname_addon \
+        + '_' + y_col + '.' + save_format
+    save_plot(fname, save, save_format)
+    

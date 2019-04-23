@@ -41,7 +41,8 @@ from plotting_functions import plot_max_engraftment, \
     swamplot_abundance_cutoff, plot_bias_change_between_gen, \
     plot_bias_change_across_gens, plot_bias_change_time_kdes, \
     plot_abundance_change, plot_bias_change_rest, \
-    plot_rest_vs_tracked, plot_extreme_bias_abundance
+    plot_rest_vs_tracked, plot_extreme_bias_abundance, \
+    plot_extreme_bias_time
      
 
 
@@ -99,6 +100,7 @@ def main():
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
+    parser.add_argument('-b', '--bias-cutoff', dest='bias_cutoff', help='Cutoff for extreme bias', type=float, required=False)
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=int, required=False)
@@ -110,6 +112,7 @@ def main():
     parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
     parser.add_argument('--cache', dest='cache', help='Use Cached Data', action="store_true")
     parser.add_argument('--cache-dir', dest='cache_dir', help='Where cache data is stored', default='/home/sakre/Data/cache')
+    parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False)
 
     args = parser.parse_args()
     options = args.options
@@ -123,6 +126,28 @@ def main():
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
     all_clones_df = filter_threshold(input_df, 0.0, analysed_cell_types)
     graph_type = args.graph_type
+    if graph_type == 'default':
+        print('\n -- Plotting Default Plot(s) -- \n')
+    else:
+        print('\n -- Graph Type: ' + graph_type + ' -- \n')
+    
+    if options != 'default':
+        print(' -- Extra Options Set: ' + options + ' -- \n')
+
+    if args.group != 'all':
+        print(' - Group Filtering Set to: ' + args.group)
+    else:
+        print(' - No Group Filtering')
+    
+    if args.by_clone:
+        print(' - Plotting by clone set')
+
+    if args.magnitude:
+        print(' - Plot Magnitude set')
+
+    if args.cache:
+        print(' - Using Cached Data')
+    
 
     rest_of_clones_abundance_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_abundance_long.csv')
 
@@ -131,23 +156,51 @@ def main():
     color_palettes = json.load(open('color_palettes.json', 'r'))
 
     if args.by_day:
-        print('By Day Set \n')
+        print(' - Time By Day Set \n')
         first_timepoint = present_clones_df.day.min()
         timepoint_col = 'day'
     elif args.by_gen:
-        print('By Gen Set \n')
+        print(' - Time By Generation Set \n')
         first_timepoint = 1
         timepoint_col = 'gen'
         lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
         present_clones_df = present_clones_df.assign(gen=lambda x: day_to_gen(x.day))
     else:
-        print('By Month Set \n')
+        print(' - Time By Month Set \n')
         first_timepoint = 4
         timepoint_col = 'month'
 
 
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
+    
+    if graph_type in ['default', 'extreme_bias_time']:
+        save_path = args.output_dir + os.sep + 'extreme_bias_time'
+
+        bias_cutoff = .9
+        if args.bias_cutoff:
+            bias_cutoff = args.bias_cutoff
+        
+        # Timepoint defaults to 4 months
+        timepoint = 4
+        if args.timepoint:
+            timepoint = args.timepoint
+        
+        y_col = 'lineage_bias'
+        if args.y_col:
+            y_col = args.y_col
+
+        plot_extreme_bias_time(
+            lineage_bias_df,
+            timepoint_col,
+            timepoint,
+            y_col,
+            bias_cutoff,
+            group=args.group,
+            by_clone=args.by_clone,
+            save=args.save,
+            save_path=save_path,
+        )
 
     if graph_type in ['extreme_bias_abund']:
         save_path = args.output_dir + os.sep + 'extreme_bias_abundance'

@@ -127,6 +127,44 @@ def filter_lineage_bias_anytime(
     )
     return anytime_thresh_df
 
+def filter_biased_clones_at_timepoint(
+        lineage_bias_df: pd.DataFrame,
+        bias_cutoff: float,
+        timepoint: int,
+        timepoint_col: str
+    ) -> pd.DataFrame:
+    """ Filter for clones with lineage bias at specified extreme, at timepoint
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- Lineage Bias Data Frame
+        bias_cutoff {float} -- Value of Lineage bias to be more extreme than
+        timepoint {int} -- timepoint to inspect
+        timepoint_col {str} -- column to look for timepoint in
+
+    Raises:
+        ValueError -- If bias_cutoff set to 0
+    
+    Returns:
+        pd.DataFrame -- filtered lineage_bias_df with clones extreme at timepoint
+    """
+    
+    # If cutoff is positive, check extreme as >, otherwise as <
+    if bias_cutoff > 0:
+        filt_df = lineage_bias_df[lineage_bias_df.lineage_bias > bias_cutoff]
+    elif bias_cutoff < 0:
+        filt_df = lineage_bias_df[lineage_bias_df.lineage_bias < bias_cutoff]
+    else:
+        raise ValueError('bias_cutoff cannot be 0')
+
+    filt_df = filt_df[filt_df[timepoint_col] == timepoint]
+    passing_clones = filt_df[['mouse_id', 'code']]
+    biased_at_timepoint_df = lineage_bias_df.merge(
+        passing_clones,
+        how='inner',
+        on=['mouse_id', 'code'],
+        validate='m:1',
+    )
+    return biased_at_timepoint_df
 
 def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     """ Count unique clones per cell type
