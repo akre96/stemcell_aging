@@ -19,7 +19,7 @@ import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from lineage_bias import get_bias_change
+from lineage_bias import get_bias_change, parse_wbc_count_file
 from aggregate_functions import filter_threshold, \
     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
     find_top_percentile_threshold, find_clones_bias_range_at_time, \
@@ -42,7 +42,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_bias_change_across_gens, plot_bias_change_time_kdes, \
     plot_abundance_change, plot_bias_change_rest, \
     plot_rest_vs_tracked, plot_extreme_bias_abundance, \
-    plot_extreme_bias_time
+    plot_extreme_bias_time, plot_bias_dist_at_time
      
 
 
@@ -93,7 +93,8 @@ def main():
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
     parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default='~/Data/stemcell_aging/rest_of_clones')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
-    parser.add_argument('-c', '--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Data/stemcell_aging/lineage_bias/bias_change_t0-0_from-counts.csv')
+    parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default='/home/sakre/Data/stemcell_aging/OT_2.0_WBCs_051818-modified.txt')
+    parser.add_argument('--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Data/stemcell_aging/lineage_bias/bias_change_t0-0_from-counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='/home/sakre/Data/stemcell_aging/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
@@ -112,7 +113,7 @@ def main():
     parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
     parser.add_argument('--cache', dest='cache', help='Use Cached Data', action="store_true")
     parser.add_argument('--cache-dir', dest='cache_dir', help='Where cache data is stored', default='/home/sakre/Data/cache')
-    parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False)
+    parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False, default='lineage_bias')
 
     args = parser.parse_args()
     options = args.options
@@ -121,6 +122,7 @@ def main():
     bias_change_df = pd.read_csv(args.bias_change)
 
     analysed_cell_types = ['gr', 'b']
+    cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'b', 'wbc'])
 
     presence_threshold = 0.0
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
@@ -139,6 +141,9 @@ def main():
     else:
         print(' - No Group Filtering')
     
+    if args.y_col:
+        print(' - Plotting y_axis as: ' + args.y_col)
+
     if args.by_clone:
         print(' - Plotting by clone set')
 
@@ -164,7 +169,11 @@ def main():
         first_timepoint = 1
         timepoint_col = 'gen'
         lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
+        input_df = input_df.assign(gen=lambda x: day_to_gen(x.day))
         present_clones_df = present_clones_df.assign(gen=lambda x: day_to_gen(x.day))
+        cell_count_df = cell_count_df.assign(gen=lambda x: day_to_gen(x.day))
+        rest_of_clones_abundance_df = rest_of_clones_abundance_df.assign(gen=lambda x: day_to_gen(x.day))
+        rest_of_clones_bias_df = rest_of_clones_bias_df.assign(gen=lambda x: day_to_gen(x.day))
     else:
         print(' - Time By Month Set \n')
         first_timepoint = 4
@@ -174,7 +183,23 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
     
-    if graph_type in ['default', 'extreme_bias_time']:
+
+    if graph_type in ['bias_dist_abund']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_time'
+        abundance_thresholds = [0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+
+        plot_bias_dist_at_time(
+            lineage_bias_df,
+            abundance_thresholds,
+            timepoint_col,
+            group=args.group,
+            save=args.save,
+            save_path=save_path,
+        )
+
+
+
+    if graph_type in ['extreme_bias_time']:
         save_path = args.output_dir + os.sep + 'extreme_bias_time'
 
         bias_cutoff = .9
@@ -182,7 +207,7 @@ def main():
             bias_cutoff = args.bias_cutoff
         
         # Timepoint defaults to 4 months
-        timepoint = 4
+        timepoint = first_timepoint
         if args.timepoint:
             timepoint = args.timepoint
         
@@ -238,19 +263,20 @@ def main():
         abundance_cutoff = 0
         thresholds = {'gr': 0, 'b': 0}
         plot_col = 'lineage_bias'
-        if args.options != 'default':
-           plot_col = args.options
+        if args.y_col:
+           plot_col = args.y_col
 
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col,
             )
         plot_rest_vs_tracked(
                 lineage_bias_df,
                 rest_of_clones_bias_df,
+                cell_count_df,
                 y_col=plot_col,
                 abundance_cutoff=abundance_cutoff,
                 thresholds=thresholds,
@@ -261,7 +287,7 @@ def main():
 
     if graph_type in ['bias_change_rest']:
         if not args.plot_rest:
-            print("plot-rest not set --> EXITING")
+            print("\n !! plot-rest not set --> EXITING !! \n")
             sys.exit(1)
         if args.time_change == 'across':
             cumulative = True
@@ -888,9 +914,13 @@ def main():
             group = 'all'
         else:
             group = args.options
+        filt_bias_df = lineage_bias_df[
+            (lineage_bias_df.gr_percent_engraftment >= 0.05) \
+            | (lineage_bias_df.b_percent_engraftment >= 0.05)
+        ]
         save_path = args.output_dir
         plot_lineage_bias_violin(
-            lineage_bias_df,
+            filt_bias_df,
             group=group,
             save=args.save,
             save_path=save_path,
@@ -1160,24 +1190,27 @@ def main():
                                        save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
                                        group=group)
 
-    # Lineage Bias Line Plots by percentile
     if graph_type == 'abund_bias_time':
         abundance_cutoff = 0
+        thresholds = {
+            'gr': 0,
+            'b': 0
+        }
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
+            print('Thresholds calculated based on cumulative abundance')
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                timepoint_col=timepoint_col,
+                abundance_cutoff=abundance_cutoff,
+            )
 
-        timepoint = 4
+        timepoint = first_timepoint
         if args.timepoint:
             timepoint = args.timepoint
 
 
         analysed_cell_types = ['gr', 'b']
-        print('Thresholds calculated based on cumulative abundance')
-        _, thresholds = calculate_thresholds_sum_abundance(
-            present_clones_df,
-            timepoint_col=timepoint_col,
-            abundance_cutoff=abundance_cutoff,
-        )
 
         print('Abundance cutoff set to: ' + str(abundance_cutoff))
 
@@ -1190,7 +1223,6 @@ def main():
             analyzed_cell_types=[cell_type],
             lineage_bias=True,
         )
-        print(filt_lineage_bias_gr_df)
         cell_type = 'b'
         filt_lineage_bias_b_df = combine_enriched_clones_at_time(
             input_df=lineage_bias_df,
@@ -1206,8 +1238,9 @@ def main():
             save=args.save,
             timepoint=timepoint,
             timepoint_col=timepoint_col,
+            y_col=args.y_col,
             by_clone=args.by_clone,
-            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/gr',
+            save_path=args.output_dir + os.sep + args.y_col.title() + '_Line_Plot/gr',
             save_format='png',
             abundance=abundance_cutoff,
         )
@@ -1218,9 +1251,10 @@ def main():
             timepoint_col=timepoint_col,
             by_clone=args.by_clone,
             abundance=abundance_cutoff,
+            y_col=args.y_col,
             save_format='png',
             save=args.save,
-            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
+            save_path=args.output_dir + os.sep + args.y_col.title() + '_Line_Plot/b',
         )
     if graph_type == 'perc_bias_month':
         percentile = .995
