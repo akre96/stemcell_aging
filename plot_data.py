@@ -102,6 +102,7 @@ def main():
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
     parser.add_argument('-b', '--bias-cutoff', dest='bias_cutoff', help='Cutoff for extreme bias', type=float, required=False)
+    parser.add_argument('-f', '--filter-bias-abund', dest='filter_bias_abund', help='Abundance threshold to filter lineage bias data', type=float, required=False, default=0.01)
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=int, required=False)
@@ -149,6 +150,13 @@ def main():
 
     if args.magnitude:
         print(' - Plot Magnitude set')
+    
+    if args.filter_bias_abund:
+        print(' - Lineage Bias Min Abundance set to: ' + str(args.filter_bias_abund))
+        lineage_bias_df = lineage_bias_df[
+            (lineage_bias_df.gr_percent_engraftment >= args.filter_bias_abund) \
+            | (lineage_bias_df.b_percent_engraftment >= args.filter_bias_abund)
+        ]
 
     if args.cache:
         print(' - Using Cached Data')
@@ -200,7 +208,9 @@ def main():
 
 
     if graph_type in ['extreme_bias_time']:
-        save_path = args.output_dir + os.sep + 'extreme_bias_time'
+        save_path = args.output_dir + os.sep \
+            + 'extreme_bias_time' + os.sep \
+            + str(args.filter_bias_abund).replace('.', '-')
 
         bias_cutoff = .9
         if args.bias_cutoff:
@@ -217,11 +227,11 @@ def main():
 
         plot_extreme_bias_time(
             lineage_bias_df,
+            present_clones_df,
             timepoint_col,
             timepoint,
             y_col,
             bias_cutoff,
-            group=args.group,
             by_clone=args.by_clone,
             save=args.save,
             save_path=save_path,
@@ -1232,6 +1242,11 @@ def main():
             analyzed_cell_types=[cell_type],
             lineage_bias=True,
         )
+        save_path=args.output_dir + os.sep \
+            + args.y_col.title() + '_Line_Plot' \
+            + os.sep + 'min_abund' \
+            + str(args.filter_bias_abund).replace('.', '-') \
+            + os.sep
         plot_lineage_average(
             filt_lineage_bias_gr_df,
             title_addon='Filtered by clones with > ' + str(round(thresholds['gr'], 2)) + '% WBC abundance in GR at ' + timepoint_col.title() + ': ' + str(timepoint),
@@ -1240,7 +1255,7 @@ def main():
             timepoint_col=timepoint_col,
             y_col=args.y_col,
             by_clone=args.by_clone,
-            save_path=args.output_dir + os.sep + args.y_col.title() + '_Line_Plot/gr',
+            save_path=save_path+'gr',
             save_format='png',
             abundance=abundance_cutoff,
         )
@@ -1254,7 +1269,7 @@ def main():
             y_col=args.y_col,
             save_format='png',
             save=args.save,
-            save_path=args.output_dir + os.sep + args.y_col.title() + '_Line_Plot/b',
+            save_path=save_path+'b'
         )
     if graph_type == 'perc_bias_month':
         percentile = .995
