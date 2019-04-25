@@ -54,7 +54,20 @@ for _, clone_group in train.groupby(['code', 'mouse_id']):
     clone_group = clone_group.assign(label=str(label[0]))
     with_label_df = with_label_df.append(clone_group)
 
-for gname, group_df in with_label_df.groupby('group'):
+lb_sum_data_df = pd.DataFrame(
+    with_label_df.groupby(['mouse_id','month','label', 'group']).lineage_bias.mean()
+).reset_index()
+b_sum_data_df = pd.DataFrame(
+    with_label_df.groupby(['mouse_id','month','label', 'group']).b_percent_engraftment.sum()
+).reset_index()
+gr_sum_data_df = pd.DataFrame(
+    with_label_df.groupby(['mouse_id','month','label', 'group']).gr_percent_engraftment.sum()
+).reset_index()
+sum_data_df = lb_sum_data_df.merge(b_sum_data_df, on=['mouse_id', 'month', 'label', 'group'])
+sum_data_df = sum_data_df.merge(gr_sum_data_df, on=['mouse_id', 'month', 'label', 'group'])
+
+
+for gname, group_df in sum_data_df.groupby('group'):
     plt.figure()
     plt.subplot(3, 1, 1)
     sns.lineplot(
@@ -65,7 +78,7 @@ for gname, group_df in with_label_df.groupby('group'):
         legend=None,
         palette=COLOR_PALETTES['cluster_label'],
     )
-    plt.ylabel('Lineage Bias')
+    plt.ylabel('Lineage Bias Average by Mouse')
 
     plt.subplot(3, 1, 2)
     sns.lineplot(
@@ -76,7 +89,7 @@ for gname, group_df in with_label_df.groupby('group'):
         legend=None,
         palette=COLOR_PALETTES['cluster_label'],
     )
-    plt.ylabel('B Abundance (%WBC)')
+    plt.ylabel('B Abundance (%WBC) Sum Per Mouse')
 
     plt.subplot(3, 1, 3)
     sns.lineplot(
@@ -86,10 +99,50 @@ for gname, group_df in with_label_df.groupby('group'):
         hue='label',
         palette=COLOR_PALETTES['cluster_label'],
     )
-    plt.ylabel('Gr Abundance (%WBC)')
+    plt.ylabel('Gr Abundance (%WBC) Sum Per Mouse')
     plt.suptitle('Group: ' + gname.title())
 
-for name, cluster in with_label_df.groupby(['group','label']):
+    plt.figure()
+    plt.subplot(3, 1, 1)
+    sns.lineplot(
+        x='month',
+        y='lineage_bias',
+        data=group_df,
+        hue='label',
+        legend=None,
+        units='mouse_id',
+        estimator=None,
+        palette=COLOR_PALETTES['cluster_label'],
+    )
+    plt.ylabel('Lineage Bias Average by Mouse')
+
+    plt.subplot(3, 1, 2)
+    sns.lineplot(
+        x='month',
+        y='b_percent_engraftment',
+        data=group_df,
+        hue='label',
+        legend=None,
+        units='mouse_id',
+        estimator=None,
+        palette=COLOR_PALETTES['cluster_label'],
+    )
+    plt.ylabel('B Abundance (%WBC) Sum Per Mouse')
+
+    plt.subplot(3, 1, 3)
+    sns.lineplot(
+        x='month',
+        y='gr_percent_engraftment',
+        data=group_df,
+        hue='label',
+        units='mouse_id',
+        estimator=None,
+        palette=COLOR_PALETTES['cluster_label'],
+    )
+    plt.ylabel('Gr Abundance (%WBC) Sum Per Mouse')
+    plt.suptitle('Group: ' + gname.title())
+
+for name, cluster in with_label_df.groupby(['group', 'label']):
     print(
         'Group: ' \
         + name[0] \
