@@ -7,10 +7,13 @@ from lineage_bias import parse_wbc_count_file, \
     create_lineage_bias_df
 
 def calculate_unbarcoded_abundance(row) -> np.float:
-    return ((row.donor_perc/100) * (1 - row.GFP_perc/100) * row.cell_perc/100)
+    return 100 * ((row.donor_perc/100) * (1 - row.GFP_perc/100) * row.cell_perc/100)
+
+def calculate_total_clones(row) -> np.float:
+    return row.cell_perc
 
 def calculate_host_clones(row) -> np.float:
-    return ((1 - row.donor_perc/100) * row.cell_perc/100)
+    return 100 * ((1 - row.donor_perc/100) * row.cell_perc/100)
 
 def main():
     """ Calculate and save lineage bias
@@ -37,7 +40,11 @@ def main():
 
     with_percent_df = pd.DataFrame()
     for name, group in cells_df.groupby(['cell_type']):
-        div = 100 * np.divide(group.sort_values(by=['mouse_id', 'day']).cell_count, wbcs_df.sort_values(by=['mouse_id','day']).cell_count)
+        if len(group) != len(wbcs_df):
+            print(group)
+            print(wbcs_df)
+            raise ValueError('WBC DF not same length as cell group')
+        div = 100 * np.divide(group.sort_values(by=['mouse_id', 'day']).cell_count, wbcs_df.sort_values(by=['mouse_id', 'day']).cell_count)
         div_series = pd.Series(div, name='cell_perc')
         res = pd.concat([group.sort_values(by=['mouse_id', 'day']), div_series], axis=1)
         with_percent_df = with_percent_df.append(res, ignore_index=True)
@@ -51,13 +58,16 @@ def main():
         on=['mouse_id', 'cell_type', 'day', 'month']
     )
 
-    unbarcoded_df = full_df.assign(percent_engraftment = lambda x: calculate_unbarcoded_abundance(x))
-    unbarcoded_df['code'] = 'unbarcoded'
+    unbarcoded_df = full_df.assign(percent_engraftment=lambda x: calculate_unbarcoded_abundance(x))
+    unbarcoded_df['code'] = 'Unbarcoded Clones'
 
-    host_clones_df = full_df.assign(percent_engraftment = lambda x: calculate_host_clones(x))
-    host_clones_df['code'] = 'host_clones'
+    host_clones_df = full_df.assign(percent_engraftment=lambda x: calculate_host_clones(x))
+    host_clones_df['code'] = 'Host Clones'
 
-    rest_of_clones_df = pd.concat([unbarcoded_df, host_clones_df], ignore_index=True)
+    total_clones_df = full_df.assign(percent_engraftment=lambda x: calculate_total_clones(x))
+    total_clones_df['code'] = 'Total Clones'
+
+    rest_of_clones_df = pd.concat([total_clones_df, unbarcoded_df, host_clones_df], ignore_index=True)
     rest_of_clones_df = rest_of_clones_df.merge(group_info_df, how='left', on=['mouse_id'])
     rest_of_clones_df.to_csv(args.output_dir + os.sep + 'rest_of_clones_abundance_long.csv')
 
