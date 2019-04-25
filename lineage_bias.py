@@ -209,7 +209,7 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
         # Check no more than 2 cell types (gr and b)
         if len(group) > 2:
             print(group)
-            raise ValueError('More cell types than expected')
+            raise ValueError('More than two cell types detected for clone')
 
         new_row = pd.DataFrame(columns=lineage_bias_columns)
         new_row['has_null'] = [group.norm_percent_engraftment.isnull().values.any()]
@@ -263,7 +263,6 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
         for cell_type in analyzed_cell_types:
             cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id','day','month','cell_type','cell_count'])
             cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]].str.replace(" ", "")
-            print(cell_type_timepoint_data.mouse_id)
             cell_type_timepoint_data['day'] = day
             cell_type_timepoint_data['month'] = month
             cell_type_timepoint_data['cell_type'] = cell_type
