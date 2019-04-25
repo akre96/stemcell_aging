@@ -67,5 +67,11 @@
         "8": "#4cd137",
         "9": "#192a56",
         "0": "#487eb0"
+    },
+    "code": {
+        "Tracked": "#4cd137",
+        "Unbarcoded Clones": "#00a8ff",
+        "Host Clones": "#e84118",
+        "Total Clones": "#2f3640"
     }
 }
