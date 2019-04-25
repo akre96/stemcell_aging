@@ -1995,24 +1995,24 @@ def plot_rest_vs_tracked(
     lineage_bias_df['code'] = 'Tracked'
     lineage_bias_df = lineage_bias_df.append(rest_of_clones_bias_df, ignore_index=True)
 
-    total_df = pd.DataFrame(columns=lineage_bias_df.columns)
-    for mt, group in cell_count_df.groupby(['mouse_id', timepoint_col]):
-        mt_row = pd.DataFrame(columns=lineage_bias_df.columns)
-        mouse_id = mt[0]
-        time = mt[1]
-        gr = group[group.cell_type == 'gr'].cell_count
-        b = group[group.cell_type == 'b'].cell_count
-        wbc = group[group.cell_type == 'wbc'].cell_count
-        bias = calc_bias(gr.values[0], b.values[0])
-        mt_row.gr_percent_engraftment = [gr.values[0]/wbc.values[0]]
-        mt_row.b_percent_engraftment = [b.values[0]/wbc.values[0]]
-        mt_row.lineage_bias = [bias]
-        mt_row.mouse_id = [mouse_id]
-        mt_row.code = ['Total']
-        mt_row[timepoint_col] = [time]
-        total_df = total_df.append(mt_row)
+    #total_df = pd.DataFrame(columns=lineage_bias_df.columns)
+    #for mt, group in cell_count_df.groupby(['mouse_id', timepoint_col]):
+        #mt_row = pd.DataFrame(columns=lineage_bias_df.columns)
+        #mouse_id = mt[0]
+        #time = mt[1]
+        #gr = group[group.cell_type == 'gr'].cell_count
+        #b = group[group.cell_type == 'b'].cell_count
+        #wbc = group[group.cell_type == 'wbc'].cell_count
+        #bias = calc_bias(gr.values[0], b.values[0])
+        #mt_row.gr_percent_engraftment = [gr.values[0]/wbc.values[0]]
+        #mt_row.b_percent_engraftment = [b.values[0]/wbc.values[0]]
+        #mt_row.lineage_bias = [bias]
+        #mt_row.mouse_id = [mouse_id]
+        #mt_row.code = ['Total']
+        #mt_row[timepoint_col] = [time]
+        #total_df = total_df.append(mt_row)
 
-    lineage_bias_df = lineage_bias_df.append(total_df, ignore_index=True)
+    #lineage_bias_df = lineage_bias_df.append(total_df, ignore_index=True)
 
     for mouse_id, mouse_df in lineage_bias_df.groupby('mouse_id'):
         plt.figure()
@@ -2020,19 +2020,30 @@ def plot_rest_vs_tracked(
             x=timepoint_col,
             y=y_col,
             hue='code',
-            data=mouse_df,
+            data=mouse_df[mouse_df.code == 'Tracked'],
             markers=True,
+            palette=COLOR_PALETTES['code']
+        )
+        y_title = y_col.replace('_percent_engraftment',' Abundance (% WBC)')
+        plt.ylabel('Tracked ' + y_title.replace('_', ' ').title())
+        ax2 = plt.twinx()
+        sns.lineplot(
+            x=timepoint_col,
+            y=y_col,
+            hue='code',
+            data=mouse_df[mouse_df.code != 'Tracked'],
+            markers=True,
+            palette=COLOR_PALETTES['code']
         )
         group = str(mouse_df.iloc[0].group)
         plt.title('Group: ' + group.replace('_', ' ').title())
-        y_title = y_col.replace('_percent_engraftment',' Abundance (% WBC)')
+        plt.ylabel(y_title.replace('_', ' ').title())
         plt.suptitle(mouse_id  \
             + ' ' + y_title.replace('_', ' ').title() \
             + ' Tracked Clone Abundance Cutoff (anytime): ' \
             + str(round(abundance_cutoff, 2))
         )
         plt.xlabel(timepoint_col.title())
-        plt.ylabel(y_col.replace('_', ' ').title())
 
         fname = save_path + os.sep  \
                 + group + os.sep \
@@ -2102,19 +2113,17 @@ def plot_extreme_bias_abundance(
 
 def plot_extreme_bias_time(
         lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
         timepoint: int,
         y_col: str,
         bias_cutoff: float,
-        group: str = 'all',
         by_clone: bool = False,
         save: bool = False,
         save_path: str = '',
         save_format: str = 'png',
     ) -> None:
     fname_addon = ''
-    if group != 'all':
-        lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
 
     biased_at_time_df = filter_biased_clones_at_timepoint(
         lineage_bias_df,
@@ -2122,22 +2131,54 @@ def plot_extreme_bias_time(
         timepoint,
         timepoint_col
     )
-    y_title = y_col.replace('_',' ').replace('percent engraftment', 'Abundance (%WBC)').title()
-    plt.figure()
+    filtered_clones = biased_at_time_df.code.unique()
+    ct = None
+    if y_col == 'gr_percent_engraftment':
+        ct = 'gr'
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == ct]
+    elif y_col == 'b_percent_engraftment':
+        ct = 'b'
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == ct]
+    if ct:
+        biased_at_time_df = clonal_abundance_df[clonal_abundance_df.code.isin(filtered_clones)] 
+        biased_at_time_df = biased_at_time_df.rename(columns={'percent_engraftment': y_col})
+        
+        
+
+    y_title = y_col.replace('_', ' ').replace('percent engraftment', 'Abundance (%WBC)').title()
     if by_clone:
-        fname_addon += '_by-clone'
-        sns.lineplot(
-            x=timepoint_col,
-            y=y_col,
-            data=biased_at_time_df,
-            hue='mouse_id',
-            units='code',
-            style='group',
-            estimator=None,
-            legend=None,
-            palette=COLOR_PALETTES['mouse_id']
-        )
+        for group, group_df in biased_at_time_df.groupby('group'):
+            plt.figure()
+            fname_addon += '_by-clone'
+            sns.lineplot(
+                x=timepoint_col,
+                y=y_col,
+                data=group_df,
+                hue='mouse_id',
+                units='code',
+                style='group',
+                estimator=None,
+                legend=None,
+                palette=COLOR_PALETTES['mouse_id']
+            )
+            plt.ylabel(y_title)
+            plt.xlabel(timepoint_col.title())
+            plot_title = y_title + ' of Clones more biased than ' \
+                + str(round(bias_cutoff, 2)) + ' at ' \
+                + timepoint_col.title() + ' ' + str(timepoint)
+            plt.suptitle(plot_title)
+            plt.title('Group: ' + group.replace('_', ' ').title())
+
+            fname = save_path + os.sep + 'extreme_bias_' \
+                + str(round(bias_cutoff, 2)).replace('.','-') \
+                + '_' + timepoint_col[0] \
+                + str(timepoint) \
+                + '_' + group \
+                + fname_addon \
+                + '_' + y_col + '.' + save_format
+            save_plot(fname, save, save_format)
     else:
+        plt.figure()
         sns.lineplot(
             x=timepoint_col,
             y=y_col,
@@ -2145,22 +2186,20 @@ def plot_extreme_bias_time(
             hue='group',
             palette=COLOR_PALETTES['group'],
         )
-    plt.ylabel(y_title)
-    plt.xlabel(timepoint_col.title())
-    plot_title = y_title + ' of Clones more biased than ' \
-        + str(round(bias_cutoff, 2)) + ' at ' \
-        + timepoint_col.title() + ' ' + str(timepoint)
-    plt.suptitle(plot_title)
-    plt.title('Group: ' + group.replace('_', ' ').title())
+        plt.ylabel(y_title)
+        plt.xlabel(timepoint_col.title())
+        plot_title = y_title + ' of Clones more biased than ' \
+            + str(round(bias_cutoff, 2)) + ' at ' \
+            + timepoint_col.title() + ' ' + str(timepoint)
+        plt.suptitle(plot_title)
 
-    fname = save_path + os.sep + 'extreme_bias_' \
-        + str(round(bias_cutoff, 2)).replace('.','-') \
-        + '_' + timepoint_col[0] \
-        + str(timepoint) \
-        + '_' + group \
-        + fname_addon \
-        + '_' + y_col + '.' + save_format
-    save_plot(fname, save, save_format)
+        fname = save_path + os.sep + 'extreme_bias_' \
+            + str(round(bias_cutoff, 2)).replace('.','-') \
+            + '_' + timepoint_col[0] \
+            + str(timepoint) \
+            + fname_addon \
+            + '_' + y_col + '.' + save_format
+        save_plot(fname, save, save_format)
     
 def plot_bias_dist_at_time(
         lineage_bias_df: pd.DataFrame,
