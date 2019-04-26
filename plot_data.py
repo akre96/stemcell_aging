@@ -194,7 +194,7 @@ def main():
 
     if graph_type in ['bias_dist_abund']:
         save_path = args.output_dir + os.sep + 'bias_distribution_time'
-        abundance_thresholds = [0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
+        abundance_thresholds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
 
         plot_bias_dist_at_time(
             lineage_bias_df,
@@ -691,14 +691,15 @@ def main():
 
     if graph_type in ['avg_abund_by_sum']:
         save_path = args.output_dir + os.sep + 'Average_Abundance'
-        abundance_cutoff = 50
-        if options != 'default':
-            abundance_cutoff = float(options)
+        abundance_cutoff = 0
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
         analysed_cell_types = ['gr', 'b']
         print('Thresholds calculated based on cumulative abundance')
         _, thresholds = calculate_thresholds_sum_abundance(
             present_clones_df,
-            abundance_cutoff=abundance_cutoff
+            abundance_cutoff=abundance_cutoff,
+            timepoint_col=timepoint_col,
         )
         filter_df = filter_cell_type_threshold(
             present_clones_df,
@@ -726,35 +727,17 @@ def main():
     if graph_type in ['sum_abund_counts']:
         save_path = args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time'
         abundance_cutoff = 50
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
 
-        if options not in ['default', 'bar', 'line']:
-            abundance_cutoff = float(options)
-
-        line = True
         plot_counts_at_abundance(present_clones_df,
                                  abundance_cutoff=abundance_cutoff,
+                                 timepoint_col=timepoint_col,
                                  analyzed_cell_types=analysed_cell_types,
                                  save=args.save,
-                                 line=line,
+                                 line=args.line,
                                  save_path=save_path,
-                                 group='all',
-                                 )
-        plot_counts_at_abundance(present_clones_df,
-                                 abundance_cutoff=abundance_cutoff,
-                                 analyzed_cell_types=analysed_cell_types,
-                                 save=args.save,
-                                 save_path=save_path,
-                                 line=line,
-                                 group='no_change',
-                                 )
-        plot_counts_at_abundance(present_clones_df,
-                                 abundance_cutoff=abundance_cutoff,
-                                 analyzed_cell_types=analysed_cell_types,
-                                 save=args.save,
-                                 line=line,
-                                 save_path=save_path,
-                                 group='aging_phenotype',
+                                 group=args.group,
                                  )
 
     if graph_type in ['bias_eng_hist']:
@@ -1112,7 +1095,7 @@ def main():
 
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
-        line = ((args.options == 'line') | ( args.options == 'default'))
+        line = args.by_clone
         plot_counts_at_percentile(present_clones_df,
                                   percentile=percentile,
                                   thresholds=dominant_thresholds,
@@ -1120,25 +1103,7 @@ def main():
                                   save=args.save,
                                   line=line,
                                   save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                  group='aging_phenotype',
-                                 )
-        plot_counts_at_percentile(present_clones_df,
-                                  percentile=percentile,
-                                  thresholds=dominant_thresholds,
-                                  analyzed_cell_types=analysed_cell_types,
-                                  save=args.save,
-                                  line=line,
-                                  save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                  group='no_change',
-                                 )
-        plot_counts_at_percentile(present_clones_df,
-                                  percentile=percentile,
-                                  thresholds=dominant_thresholds,
-                                  analyzed_cell_types=analysed_cell_types,
-                                  save=args.save,
-                                  line=line,
-                                  save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                  group='all',
+                                  group=args.group,
                                  )
 
     # Venn diagram of present clones
@@ -1249,7 +1214,7 @@ def main():
             + os.sep
         plot_lineage_average(
             filt_lineage_bias_gr_df,
-            title_addon='Filtered by clones with > ' + str(round(thresholds['gr'], 2)) + '% WBC abundance in GR at ' + timepoint_col.title() + ': ' + str(timepoint),
+            title_addon='Filtered by clones with Gr > ' + str(round(thresholds['gr'], 2)) + '% WBC abundance in GR at ' + timepoint_col.title() + ': ' + str(timepoint),
             save=args.save,
             timepoint=timepoint,
             timepoint_col=timepoint_col,
@@ -1261,7 +1226,7 @@ def main():
         )
         plot_lineage_average(
             filt_lineage_bias_b_df,
-            title_addon='Filtered by clones with > ' + str(round(thresholds['b'], 2)) + '% WBC abundance in B at ' + timepoint_col.title() + ': ' + str(timepoint),
+            title_addon='Filtered by clones with B > ' + str(round(thresholds['b'], 2)) + '% WBC abundance in B at ' + timepoint_col.title() + ': ' + str(timepoint),
             timepoint=timepoint,
             timepoint_col=timepoint_col,
             by_clone=args.by_clone,
@@ -1326,14 +1291,12 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
 
-        if options != 'default':
-            abundance_cutoff = float(options)
         analysed_cell_types = ['gr', 'b']
         print('Thresholds calculated based on cumulative abundance')
         _, thresholds = calculate_thresholds_sum_abundance(
             present_clones_df,
             abundance_cutoff=abundance_cutoff,
-            by_day=args.by_day,
+            timepoint_col=timepoint_col
         )
 
         filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(
