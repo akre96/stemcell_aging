@@ -991,7 +991,7 @@ def plot_change_contributions_by_group(
         save {bool} -- (default: {False})
         save_path {str} -- (default: {'./output'})
         save_format {str} -- (default: {'png'})
-    
+
     Returns:
         None -- plt.show() to view plot
     """
@@ -1115,6 +1115,7 @@ def plot_weighted_bias_hist(
 def plot_counts_at_abundance(
         input_df: pd.DataFrame,
         abundance_cutoff: float,
+        timepoint_col: str,
         analyzed_cell_types: List[str] = ['gr', 'b'],
         group: str = 'all',
         line: bool = False,
@@ -1143,6 +1144,7 @@ def plot_counts_at_abundance(
 
     _, thresholds = calculate_thresholds_sum_abundance(
         input_df,
+        timepoint_col=timepoint_col,
         abundance_cutoff=abundance_cutoff
     )
 
@@ -1179,6 +1181,7 @@ def plot_counts_at_abundance(
                 y='code',
                 hue='mouse_id',
                 data=clone_counts_cell,
+                palette=COLOR_PALETTES['mouse_id'],
                 ax=axis,
                 legend=False
             )
@@ -1258,13 +1261,24 @@ def plot_average_abundance(
 
 
     plt.figure()
-    sns.set_palette(sns.color_palette(COLOR_PALETTES['group'][:2]))
     cell_df = input_df.loc[input_df.cell_type == cell_type]
     if by_group:
         cell_df = group_names_pretty(cell_df)
-        sns.lineplot(x='month', y='percent_engraftment', hue='group', data=cell_df)
+        sns.lineplot(
+            x='month',
+            y='percent_engraftment',
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            data=cell_df
+        )
     else:
-        sns.lineplot(x='month', y='percent_engraftment', hue='mouse_id', data=cell_df)
+        sns.lineplot(
+            x='month',
+            y='percent_engraftment',
+            hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id'],
+            data=cell_df
+        )
 
     title = 'Average Abundance of ' + cell_type.capitalize() \
           + ' with Abundance > ' \
