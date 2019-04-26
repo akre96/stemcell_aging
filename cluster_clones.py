@@ -14,7 +14,7 @@ train = train[train.group.isin(['aging_phenotype','no_change'])]
 
 categorical_cols = ['mouse_id', 'group']
 numerical_cols = ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']
-numerical_cols = ['gr_percent_engraftment']
+numerical_cols = ['b_percent_engraftment']
 
 #scaler = StandardScaler()
 #train[numerical_cols] = scaler.fit_transform(train[numerical_cols])
