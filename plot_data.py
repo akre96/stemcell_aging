@@ -27,7 +27,7 @@ from aggregate_functions import filter_threshold, \
     mark_changed, sum_abundance_by_change, between_gen_bias_change, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_threshold, \
     across_gen_bias_change, between_gen_bias_change, \
-    filter_stable_at_timepoint, day_to_gen, calculate_bias_change
+    day_to_gen, calculate_bias_change
 from plotting_functions import plot_max_engraftment, \
     plot_clone_count_by_thresholds, venn_barcode_in_time, \
     plot_clone_enriched_at_time, plot_counts_at_percentile, \
@@ -42,7 +42,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_bias_change_across_gens, plot_bias_change_time_kdes, \
     plot_abundance_change, plot_bias_change_rest, \
     plot_rest_vs_tracked, plot_extreme_bias_abundance, \
-    plot_extreme_bias_time, plot_bias_dist_at_time
+    plot_extreme_bias_time, plot_bias_dist_at_time, plot_stable_clones
      
 
 
@@ -246,27 +246,32 @@ def main():
             save_path=save_path,
         )
 
-    if graph_type in ['stable_bias_line']:
-        bias_change_cutoff = 0.5
+    if graph_type in ['stable_bias']:
+        bias_change_cutoff = args.bias_cutoff
         timepoints = lineage_bias_df[timepoint_col].unique()
         timepoints.sort()
-        second_timepoint = timepoints[1]
-        print(second_timepoint)
-        stable_clone_df = filter_stable_at_timepoint(
+        print(' - Bias Change Cutoff Set to: ' + str(bias_change_cutoff))
+
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+        plot_stable_clones(
             lineage_bias_df,
+            bias_change_cutoff,
             t1=first_timepoint,
-            t2=second_timepoint,
             timepoint_col=timepoint_col,
-            bias_change_cutoff=bias_change_cutoff,
-        )
-        plot_lineage_bias_line(
-            stable_clone_df,
-            title_addon='Filtered By Clones With < ' + str(round(bias_change_cutoff,2)) + ' Change in Lineage Bias Between First Two Timepoints',
-            timepoint_col=timepoint_col,
+            clonal_abundance_df=present_clones_df,
+            thresholds=thresholds,
+            y_col=args.y_col,
             save=args.save,
             save_path=args.output_dir + os.sep + 'Stable_Lineage_Bias_Line_Plot',
             save_format='png',
-            by_day=args.by_day,
         )
 
     if graph_type in ['rest_vs_tracked']:
@@ -907,13 +912,9 @@ def main():
             group = 'all'
         else:
             group = args.options
-        filt_bias_df = lineage_bias_df[
-            (lineage_bias_df.gr_percent_engraftment >= 0.05) \
-            | (lineage_bias_df.b_percent_engraftment >= 0.05)
-        ]
         save_path = args.output_dir
         plot_lineage_bias_violin(
-            filt_bias_df,
+            lineage_bias_df,
             group=group,
             save=args.save,
             save_path=save_path,

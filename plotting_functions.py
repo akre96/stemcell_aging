@@ -19,11 +19,19 @@ from aggregate_functions import filter_threshold, count_clones, \
     get_max_by_mouse_timepoint, sum_abundance_by_change, find_intersect, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_anytime, \
     across_gen_bias_change, between_gen_bias_change, calculate_abundance_change, \
-    day_to_gen, calculate_bias_change, filter_biased_clones_at_timepoint
+    day_to_gen, calculate_bias_change, filter_biased_clones_at_timepoint, \
+    bias_clones_to_abundance, filter_stable_initially
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
+
+def y_col_to_title(y_col: str) -> str:
+    y_title = y_col.replace('_', ' ').replace(
+        'percent engraftment',
+        'Abundance (%WBC)'
+    ).title()
+    return y_title
 
 def save_plot(file_name: str, save: bool, save_format: str) -> None:
     if save:
@@ -461,16 +469,19 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
         fname = fname_prefix + '_average.' + save_format
         save_plot(fname, save, save_format)
 
-def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
-                           title_addon: str = '',
-                           percentile: float = 0,
-                           threshold: float = 0,
-                           abundance: float = 0,
-                           by_day: bool = False,
-                           timepoint_col: str = None,
-                           save: bool = False,
-                           save_path: str = './output',
-                           save_format: str = 'png'
+def plot_lineage_bias_line(
+    lineage_bias_df: pd.DataFrame,
+    clonal_abundance_df: pd.DataFrame = None,
+    title_addon: str = '',
+    percentile: float = 0,
+    threshold: float = 0,
+    abundance: float = 0,
+    y_col: str = 'lineage_bias',
+    by_day: bool = False,
+    timepoint_col: str = None,
+    save: bool = False,
+    save_path: str = './output',
+    save_format: str = 'png'
                           ) -> None:
     fname_prefix = save_path + os.sep + 'lineplot_bias'
     if percentile:
@@ -489,7 +500,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     plt.figure()
     sns.lineplot(
         x=x_var,
-        y='lineage_bias',
+        y=y_col,
         data=group_names_pretty(lineage_bias_df),
         hue='group',
         palette=COLOR_PALETTES['group']
@@ -503,7 +514,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     plt.figure()
     sns.lineplot(
         x=x_var,
-        y='lineage_bias',
+        y=y_col,
         data=lineage_bias_df,
         hue='mouse_id',
         style='group',
@@ -521,7 +532,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'aging_phenotype']
     sns.lineplot(
         x=x_var,
-        y='lineage_bias',
+        y=y_col,
         data=lineage_bias_group_df,
         hue='mouse_id',
         units='code',
@@ -538,7 +549,7 @@ def plot_lineage_bias_line(lineage_bias_df: pd.DataFrame,
     lineage_bias_group_df = lineage_bias_df.loc[lineage_bias_df.group == 'no_change']
     sns.lineplot(
         x=x_var,
-        y='lineage_bias',
+        y=y_col,
         data=lineage_bias_group_df,
         hue='mouse_id',
         units='code',
@@ -2038,8 +2049,8 @@ def plot_rest_vs_tracked(
             markers=True,
             palette=COLOR_PALETTES['code']
         )
-        y_title = y_col.replace('_percent_engraftment',' Abundance (% WBC)')
-        plt.ylabel('Tracked ' + y_title.replace('_', ' ').title())
+        y_title = y_col_to_title(y_col)
+        plt.ylabel('Tracked ' + y_title)
         ax2 = plt.twinx()
         sns.lineplot(
             x=timepoint_col,
@@ -2051,9 +2062,9 @@ def plot_rest_vs_tracked(
         )
         group = str(mouse_df.iloc[0].group)
         plt.title('Group: ' + group.replace('_', ' ').title())
-        plt.ylabel(y_title.replace('_', ' ').title())
+        plt.ylabel(y_title)
         plt.suptitle(mouse_id  \
-            + ' ' + y_title.replace('_', ' ').title() \
+            + ' ' + y_title \
             + ' Tracked Clone Abundance Cutoff (anytime): ' \
             + str(round(abundance_cutoff, 2))
         )
@@ -2146,20 +2157,17 @@ def plot_extreme_bias_time(
         timepoint_col
     )
     filtered_clones = biased_at_time_df.code.unique()
-    ct = None
-    if y_col == 'gr_percent_engraftment':
-        ct = 'gr'
-        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == ct]
-    elif y_col == 'b_percent_engraftment':
-        ct = 'b'
-        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == ct]
-    if ct:
-        biased_at_time_df = clonal_abundance_df[clonal_abundance_df.code.isin(filtered_clones)] 
-        biased_at_time_df = biased_at_time_df.rename(columns={'percent_engraftment': y_col})
-        
+    
+    # Find abundance data if not looking at lineage bias
+    if y_col != 'lineage_bias':
+        biased_at_time_df = bias_clones_to_abundance(
+            biased_at_time_df,
+            clonal_abundance_df,
+            y_col
+        )
         
 
-    y_title = y_col.replace('_', ' ').replace('percent engraftment', 'Abundance (%WBC)').title()
+    y_title = y_col_to_title(y_col)
     if by_clone:
         for group, group_df in biased_at_time_df.groupby('group'):
             plt.figure()
@@ -2247,3 +2255,79 @@ def plot_bias_dist_at_time(
             + timepoint_col[0] + str(t) \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_stable_clones(
+        lineage_bias_df: pd.DataFrame,
+        bias_change_cutoff: float,
+        t1: int,
+        timepoint_col: str,
+        clonal_abundance_df: pd.DataFrame = None,
+        thresholds: Dict[str,float] = {'gr': 0, 'b': 0},
+        y_col: str = 'lineage_bias',
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+
+    stable_clone_df = filter_stable_initially(
+        lineage_bias_df,
+        t1=t1,
+        timepoint_col=timepoint_col,
+        bias_change_cutoff=bias_change_cutoff,
+    )
+    fname_prefix = save_path + os.sep + 'stable_clones'
+    y_title = y_col_to_title(y_col)
+    x_title = timepoint_col.title()
+
+    if y_col != 'lineage_bias':
+        stable_clone_df = bias_clones_to_abundance(
+            stable_clone_df,
+            clonal_abundance_df,
+            y_col
+        )
+
+    if thresholds != {'gr': 0, 'b': 0}:
+        print('\n !! WARNING: Threshold filtering not implemented !! \n')
+    
+    plt.figure()
+    sns.lineplot(
+        x=timepoint_col,
+        y=y_col,
+        data=group_names_pretty(stable_clone_df),
+        hue='group',
+        palette=COLOR_PALETTES['group']
+    )
+    plt.ylabel(y_title)
+    plt.xlabel(x_title)
+    title = 'Bias Change < ' +str(bias_change_cutoff) \
+        + ' between ' + timepoint_col.title() + ' ' + str(t1) \
+        + ' And Next Time Point per clone'
+    plt.title(title)
+    
+
+    fname = fname_prefix + '_' + y_col + '_' \
+        + timepoint_col[0] + str(t1) \
+        + '_average.' + save_format
+    save_plot(fname, save, save_format)
+    for gname, group_df in stable_clone_df.groupby('group'):
+        plt.figure()
+        sns.lineplot(
+            x=timepoint_col,
+            y=y_col,
+            data=group_df,
+            hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id'],
+            units='code',
+            estimator=None,
+            legend=False,
+        )
+        plt.suptitle('Group: ' + gname.replace('_', ' ').title())
+        plt.title(title)
+        plt.ylabel(y_title)
+        plt.xlabel(x_title)
+        fname = fname_prefix + '_' + y_col + '_' \
+            + timepoint_col[0] + str(t1) \
+            + '_' + gname + '_' + 'by-clone_' \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
+
