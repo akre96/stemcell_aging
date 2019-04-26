@@ -685,6 +685,10 @@ def calculate_thresholds_sum_abundance(
     thresholds: Dict[str, float] = {}
     percentiles: Dict[str, float] = {}
 
+    print(
+        '\n -- Calculating Threshold for Based on Cumulative Abundance ' \
+        + str(abundance_cutoff) + ' -- \n'
+    )
     for cell_type in analyzed_cell_types:
         first_day = input_df[timepoint_col].min()
         month_4_cell_df = input_df.loc[(input_df[timepoint_col] == first_day) & (input_df.cell_type == cell_type)]
@@ -703,11 +707,12 @@ def calculate_thresholds_sum_abundance(
         )
         thresholds[cell_type] = percentile_threshold[cell_type]
         percentiles[cell_type] = percentile
+        print(
+            cell_type.title() \
+            + ' Percentile: ' + str(percentile) \
+            + ' Threshold: ' + str(thresholds[cell_type])
+        )
     
-    print('\nPercentiles: ')
-    print(percentiles)
-    print('\nThresholds: ')
-    print(thresholds)
     return (percentiles, thresholds)
 
 def between_gen_bias_change(
@@ -912,28 +917,56 @@ def calculate_bias_change(
     bias_change_df.time_unit = timepoint_col
     return bias_change_df
 
-def filter_stable_at_timepoint(
+def filter_stable_initially(
         lineage_bias_df: pd.DataFrame,
-        t1: int,
-        t2: int,
         timepoint_col: str,
+        t1: int,
         bias_change_cutoff: float = 0.5,
     ) -> pd.DataFrame:
-    t1_df = lineage_bias_df[lineage_bias_df[timepoint_col] == t1].rename(columns={'lineage_bias': 't1_bias'})
-    t2_df = lineage_bias_df[lineage_bias_df[timepoint_col] == t2].rename(columns={'lineage_bias': 't2_bias'})
-    print(t2_df.columns)
-    t2_cols = ['mouse_id', 'code', 't2_bias']
-    combo_df = t1_df.merge(
-        t2_df[t2_cols],
-        how='inner',
-        on=['mouse_id', 'code'],
-        validate='1:1'
-    )
-    combo_df = combo_df.assign(
-        bias_change=lambda x: x.t2_bias - x.t1_bias
-    )
-    filt_codes_df = combo_df[combo_df.bias_change.abs() <= bias_change_cutoff]
-    filt_codes = filt_codes_df.code.unique()
-    filt_bias_df = lineage_bias_df[lineage_bias_df.code.isin(filt_codes)]
-    return filt_bias_df
+    stable_df = pd.DataFrame(columns=lineage_bias_df.columns)
+    for _, code_df in lineage_bias_df.groupby(['mouse_id', 'code']):
+        if len(code_df) == 1:
+            continue
+        code_df = code_df.sort_values(by=timepoint_col)
+        t1_df = code_df.iloc[0]
+        if t1_df[timepoint_col] != t1:
+            continue
+
+        t2_df = code_df.iloc[1]
+        if np.abs(t2_df.lineage_bias - t1_df.lineage_bias) <= bias_change_cutoff:
+            stable_df = stable_df.append(code_df)
+
+    return stable_df
     
+def bias_clones_to_abundance(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        y_col: str,
+    ) -> pd.DataFrame:
+    """ Find Abundance for clones filtered based on lineage bias
+    Formats output in expected way for lineage_bias_df's, i.e
+    the abundance column is gr_percent_engraftment instead of just
+    percent_engraftment.
+
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- Lineage Bias DF Filtered for desired clones
+        clonal_abundance_df {pd.DataFrame} -- Clonal Abundance DF
+        y_col {str} -- Column being analyzed
+
+    Returns:
+        pd.DataFrame -- DF in form of Lineage bias, containing only abundance informatio
+    """
+    filtered_clones = lineage_bias_df.code.unique()
+    cell_type = None
+    if y_col == 'gr_percent_engraftment':
+        cell_type = 'gr'
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == cell_type]
+    elif y_col == 'b_percent_engraftment':
+        cell_type = 'b'
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == cell_type]
+    if cell_type:
+        bias_clones_abundance_df = clonal_abundance_df[clonal_abundance_df.code.isin(filtered_clones)]
+        bias_clones_abundance_df = bias_clones_abundance_df.rename(columns={'percent_engraftment': y_col})
+    else:
+        raise ValueError('No Cell Type Detected To Find Abundance In')
+    return bias_clones_abundance_df
