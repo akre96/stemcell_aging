@@ -820,6 +820,7 @@ def plot_bias_change_hist(bias_change_df: pd.DataFrame,
 
 
 def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
+                             timepoint_col: str,
                              title_addon: str = '',
                              percentile: float = 0,
                              group: str = 'all',
@@ -827,7 +828,6 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
                              save: bool = False,
                              save_path: str = './output',
                              save_format: str = 'png',
-                             by_day: bool = False,
                             ) -> None:
     """ Creats violin plot of lineage bias over time
     
@@ -851,9 +851,7 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
     fname_prefix = save_path + os.sep + 'violin_bias'
     plt.figure()
 
-    x_var = 'month'
-    if by_day:
-        x_var = 'day'
+    x_var = timepoint_col
     if percentile:
         fname_prefix += '_p' + str(round(100*percentile, ndigits=2)).replace('.', '-')
     elif threshold:
@@ -932,9 +930,7 @@ def plot_contributions(
 
 def plot_change_contributions(
         changed_marked_df: pd.DataFrame,
-        cell_type: str,
-        group: str = 'all',
-        percent_of_total: bool = False,
+        timepoint_col: str,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -957,29 +953,50 @@ def plot_change_contributions(
     """
 
 
-    plt.figure()
-    changed_sum_df = sum_abundance_by_change(changed_marked_df, percent_of_total=percent_of_total)
-    changed_sum_cell_df = changed_sum_df.loc[changed_sum_df.cell_type == cell_type]
-    y_units = '(% WBC)'
-    palette = sns.color_palette(COLOR_PALETTES['change_status_3'])
-    if percent_of_total:
-        y_units = '(% of Tracked ' + cell_type.capitalize() +' cells)'
-        palette = sns.color_palette(COLOR_PALETTES['change_status_2'])
+    if timepoint_col == 'gen':
+        changed_marked_df = changed_marked_df[changed_marked_df.gen != 8.5]
+    percent_of_total = True
+    changed_sum_df = sum_abundance_by_change(
+        changed_marked_df,
+        timepoint_col=timepoint_col,
+        percent_of_total=percent_of_total
+    )
 
-    if group != 'all':
-        changed_sum_df = changed_sum_df.loc[changed_sum_df.group == group]
+    for cell_type, cell_df in changed_sum_df.groupby('cell_type'):
+        last_time_per_mouse_df = pd.DataFrame(columns=changed_sum_df.columns)
+        for label, g_df in cell_df.groupby(['mouse_id', 'change_status']):
+            if label[1] == 'Unchanged':
+                continue
+            sort_df = g_df.sort_values(by=timepoint_col)
+            last_time_per_mouse_df = last_time_per_mouse_df.append(sort_df.iloc[-1], ignore_index=True)
+        last_time_per_mouse_df = last_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
+        last_time_per_mouse_df = last_time_per_mouse_df.assign(total=100)
+        sns.set(style="whitegrid")
 
-    sns.barplot(x='month', y='percent_engraftment', hue='change_status', data=changed_sum_cell_df, palette=palette)
-    plt.xlabel('Month')
-    plt.ylabel('Cumulative Abundance ' + y_units)
-    plt.suptitle(cell_type.capitalize() + ' Changed vs Not-Changed Cumulative Abundance')
-    plt.title('Group: ' + group)
-    plt.gca().legend().set_title('')
+        for group, g_df in last_time_per_mouse_df.groupby('group'):
+            plt.figure()
+            sns.barplot(
+                x='total',
+                y='mouse_id',
+                data=g_df,
+                color=COLOR_PALETTES['change_status']['Unchanged'],
+            )
+            sns.barplot(
+                x='percent_engraftment',
+                y='mouse_id',
+                data=g_df,
+                color=COLOR_PALETTES['group'][group],
+                label='Changed'
+            )
+            plt.xlabel('Contribution of Changed Cells')
+            plt.ylabel('')
+            plt.suptitle(cell_type.title() + ' Changed vs Not-Changed Cumulative Abundance')
+            plt.title('Group: ' + group.replace('_', ' ').title())
+            plt.gca().legend().remove()
+            sns.despine(left=True, bottom=True)
 
-    fname = save_path + os.sep + 'contribution_changed_' + cell_type + '_' + group + '.' + save_format
-    if percent_of_total:
-        fname = save_path + os.sep + 'percent_contribution_changed_' + cell_type + '_' + group + '.' + save_format
-    save_plot(fname, save, save_format)
+            fname = save_path + os.sep + 'percent_contribution_changed_' + cell_type + '_' + group + '.' + save_format
+            save_plot(fname, save, save_format)
 
 def plot_change_contributions_by_group(
         changed_marked_df: pd.DataFrame,
@@ -2143,18 +2160,19 @@ def plot_extreme_bias_time(
         timepoint: int,
         y_col: str,
         bias_cutoff: float,
+        invert_selection: bool = False,
         by_clone: bool = False,
         save: bool = False,
         save_path: str = '',
         save_format: str = 'png',
     ) -> None:
     fname_addon = ''
-
     biased_at_time_df = filter_biased_clones_at_timepoint(
         lineage_bias_df,
         bias_cutoff,
         timepoint,
-        timepoint_col
+        timepoint_col,
+        within_cutoff=invert_selection
     )
     filtered_clones = biased_at_time_df.code.unique()
     
@@ -2168,6 +2186,14 @@ def plot_extreme_bias_time(
         
 
     y_title = y_col_to_title(y_col)
+    if invert_selection:
+        plot_title = y_title + ' of Clones less biased than +/- ' \
+            + str(round(bias_cutoff, 2)) + ' at ' \
+            + timepoint_col.title() + ' ' + str(timepoint)
+    else:
+        plot_title = y_title + ' of Clones more biased than ' \
+            + str(round(bias_cutoff, 2)) + ' at ' \
+            + timepoint_col.title() + ' ' + str(timepoint)
     if by_clone:
         for group, group_df in biased_at_time_df.groupby('group'):
             plt.figure()
@@ -2178,26 +2204,31 @@ def plot_extreme_bias_time(
                 data=group_df,
                 hue='mouse_id',
                 units='code',
-                style='group',
                 estimator=None,
                 legend=None,
                 palette=COLOR_PALETTES['mouse_id']
             )
             plt.ylabel(y_title)
             plt.xlabel(timepoint_col.title())
-            plot_title = y_title + ' of Clones more biased than ' \
-                + str(round(bias_cutoff, 2)) + ' at ' \
-                + timepoint_col.title() + ' ' + str(timepoint)
             plt.suptitle(plot_title)
             plt.title('Group: ' + group.replace('_', ' ').title())
 
-            fname = save_path + os.sep + 'extreme_bias_' \
-                + str(round(bias_cutoff, 2)).replace('.','-') \
-                + '_' + timepoint_col[0] \
-                + str(timepoint) \
-                + '_' + group \
-                + fname_addon \
-                + '_' + y_col + '.' + save_format
+            if invert_selection:
+                fname = save_path + os.sep + 'within_bias' \
+                    + str(round(bias_cutoff, 2)).replace('.','-') \
+                    + '_' + timepoint_col[0] \
+                    + str(timepoint) \
+                    + '_' + group \
+                    + fname_addon \
+                    + '_' + y_col + '.' + save_format
+            else:
+                fname = save_path + os.sep + 'extreme_bias_' \
+                    + str(round(bias_cutoff, 2)).replace('.','-') \
+                    + '_' + timepoint_col[0] \
+                    + str(timepoint) \
+                    + '_' + group \
+                    + fname_addon \
+                    + '_' + y_col + '.' + save_format
             save_plot(fname, save, save_format)
     else:
         plt.figure()
@@ -2210,17 +2241,22 @@ def plot_extreme_bias_time(
         )
         plt.ylabel(y_title)
         plt.xlabel(timepoint_col.title())
-        plot_title = y_title + ' of Clones more biased than ' \
-            + str(round(bias_cutoff, 2)) + ' at ' \
-            + timepoint_col.title() + ' ' + str(timepoint)
         plt.suptitle(plot_title)
 
-        fname = save_path + os.sep + 'extreme_bias_' \
-            + str(round(bias_cutoff, 2)).replace('.','-') \
-            + '_' + timepoint_col[0] \
-            + str(timepoint) \
-            + fname_addon \
-            + '_' + y_col + '.' + save_format
+        if invert_selection:
+            fname = save_path + os.sep + 'within_bias' \
+                + str(round(bias_cutoff, 2)).replace('.','-') \
+                + '_' + timepoint_col[0] \
+                + str(timepoint) \
+                + fname_addon \
+                + '_' + y_col + '.' + save_format
+        else:
+            fname = save_path + os.sep + 'extreme_bias_' \
+                + str(round(bias_cutoff, 2)).replace('.','-') \
+                + '_' + timepoint_col[0] \
+                + str(timepoint) \
+                + fname_addon \
+                + '_' + y_col + '.' + save_format
         save_plot(fname, save, save_format)
     
 def plot_bias_dist_at_time(
@@ -2329,5 +2365,84 @@ def plot_stable_clones(
             + timepoint_col[0] + str(t1) \
             + '_' + gname + '_' + 'by-clone_' \
             + '.' + save_format
+        save_plot(fname, save, save_format)
+
+
+def plot_bias_dist_mean_abund(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        cutoffs: List[float],
+        y_col: str = 'sum_abundance',
+        by_group: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change']
+    bias_dist_df = pd.DataFrame(columns=df_cols)
+    for name, group in lineage_bias_df.groupby(['code', 'mouse_id', 'group']):
+        if len(group) < 2:
+            continue
+        bias_change_row = pd.DataFrame(columns=df_cols)
+        sorted_group = group.sort_values(by=timepoint_col)
+        t1 = sorted_group.iloc[0]
+        t2 = sorted_group.iloc[-1]
+        if y_col == 'sum_abundance':
+            avg_val = (sorted_group['gr_percent_engraftment'] + sorted_group['b_percent_engraftment']).mean()
+        else:
+            avg_val = sorted_group[y_col].mean()
+        bias_change = t2.lineage_bias - t1.lineage_bias
+        bias_change_row['code'] = [name[0]]
+        bias_change_row['mouse_id'] = [name[1]]
+        bias_change_row['group'] = [name[2]]
+        bias_change_row['average_'+y_col] = [avg_val]
+        bias_change_row['bias_change'] = [bias_change]
+        bias_dist_df = bias_dist_df.append(bias_change_row, ignore_index=True)
+    
+    if by_group:
+        for gname, g_df in bias_dist_df.groupby('group'):
+            plt.figure()
+            pal = sns.color_palette('coolwarm', len(cutoffs))
+            i=0
+            for cutoff in cutoffs:
+                c = pal[i]
+                i += 1
+                filt_df = g_df[g_df['average_'+y_col] >= cutoff]
+                sns.distplot(
+                    filt_df.bias_change,
+                    rug=True,
+                    hist=False,
+                    color=c,
+                    label=str(cutoff)
+                )
+
+            plt.suptitle(y_col_to_title('average_'+y_col))
+            plt.title(gname.replace('_',' ').title())
+            plt.xlabel('Overall Change in Bias Per Clone')
+            fname = save_path + os.sep +'bias_change_dist_' \
+                + y_col \
+                + '_' + gname \
+                + '.' + save_format
+            save_plot(fname, save, save_format)
+    else:
+        plt.figure()
+        pal = sns.color_palette('coolwarm', len(cutoffs))
+        i=0
+        for cutoff in cutoffs:
+            c = pal[i]
+            i += 1
+            filt_df = bias_dist_df[bias_dist_df['average_'+y_col] >= cutoff]
+            sns.distplot(
+                filt_df.bias_change,
+                rug=True,
+                hist=False,
+                color=c,
+                label=str(cutoff)
+            )
+
+        plt.title(y_col_to_title('average_'+y_col))
+        plt.xlabel('Overall Change in Bias Per Clone')
+        fname = save_path + os.sep +'bias_change_dist_' \
+            + y_col + '.' + save_format
         save_plot(fname, save, save_format)
 

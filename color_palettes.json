@@ -19,6 +19,10 @@
         "#8cc35c",
         "#ff6547"
     ],
+    "change_status": {
+        "Unchanged": "#cccccc",
+        "Total": "#cccccc"
+    },
     "time_point": "coolwarm",
     "mouse_id": {
         "M1": "#00a8ff",

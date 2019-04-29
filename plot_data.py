@@ -42,7 +42,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_bias_change_across_gens, plot_bias_change_time_kdes, \
     plot_abundance_change, plot_bias_change_rest, \
     plot_rest_vs_tracked, plot_extreme_bias_abundance, \
-    plot_extreme_bias_time, plot_bias_dist_at_time, plot_stable_clones
+    plot_extreme_bias_time, plot_bias_dist_at_time, \
+    plot_stable_clones, plot_bias_dist_mean_abund
      
 
 
@@ -102,6 +103,7 @@ def main():
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
     parser.add_argument('-b', '--bias-cutoff', dest='bias_cutoff', help='Cutoff for extreme bias', type=float, required=False)
+    parser.add_argument('--invert', dest='invert', help='Invert the selection being done while filtering', action='store_true')
     parser.add_argument('-f', '--filter-bias-abund', dest='filter_bias_abund', help='Abundance threshold to filter lineage bias data', type=float, required=False, default=0.01)
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
@@ -192,6 +194,52 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
     
 
+
+    # Plot the contribution of changed clones to each cell type for each mouse
+    #     at the last timepoint for that mouse
+    #if graph_type in ['horiz_contrib_change']:
+
+
+        
+    # Plots distribution of change in bias from a clones first to last timepoint
+    #    Each line is the result of filtering the above based on cutoffs of abundance
+    #    Plots 1 figure for filters on b, gr, and combined abundance
+    if graph_type in ['bias_mean_abund_dist']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_mean_abund'
+        abundance_thresholds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.7, 0.9, 1]
+        plot_bias_dist_mean_abund(
+            lineage_bias_df,
+            timepoint_col,
+            cutoffs=abundance_thresholds,
+            y_col='b_percent_engraftment',
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+        )
+        abundance_thresholds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.4]
+        plot_bias_dist_mean_abund(
+            lineage_bias_df,
+            timepoint_col,
+            cutoffs=abundance_thresholds,
+            y_col='gr_percent_engraftment',
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+        )
+        abundance_thresholds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.7, 0.9, 1]
+        plot_bias_dist_mean_abund(
+            lineage_bias_df,
+            timepoint_col,
+            cutoffs=abundance_thresholds,
+            y_col='sum_abundance',
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+        )
+
+
+
+
     if graph_type in ['bias_dist_abund']:
         save_path = args.output_dir + os.sep + 'bias_distribution_time'
         abundance_thresholds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5]
@@ -205,8 +253,6 @@ def main():
             save_path=save_path,
         )
 
-
-
     if graph_type in ['extreme_bias_time']:
         save_path = args.output_dir + os.sep \
             + 'extreme_bias_time' + os.sep \
@@ -215,6 +261,7 @@ def main():
         bias_cutoff = .9
         if args.bias_cutoff:
             bias_cutoff = args.bias_cutoff
+        
         
         # Timepoint defaults to 4 months
         timepoint = first_timepoint
@@ -225,17 +272,32 @@ def main():
         if args.y_col:
             y_col = args.y_col
 
-        plot_extreme_bias_time(
-            lineage_bias_df,
-            present_clones_df,
-            timepoint_col,
-            timepoint,
-            y_col,
-            bias_cutoff,
-            by_clone=args.by_clone,
-            save=args.save,
-            save_path=save_path,
-        )
+        if args.invert:
+            plot_extreme_bias_time(
+                lineage_bias_df,
+                present_clones_df,
+                timepoint_col,
+                timepoint,
+                y_col,
+                bias_cutoff,
+                invert_selection=args.invert,
+                by_clone=args.by_clone,
+                save=args.save,
+                save_path=save_path,
+            )
+        else:
+            for cutoff in [bias_cutoff, -1 * bias_cutoff]:
+                plot_extreme_bias_time(
+                    lineage_bias_df,
+                    present_clones_df,
+                    timepoint_col,
+                    timepoint,
+                    y_col,
+                    cutoff,
+                    by_clone=args.by_clone,
+                    save=args.save,
+                    save_path=save_path,
+                )
 
     if graph_type in ['extreme_bias_abund']:
         save_path = args.output_dir + os.sep + 'extreme_bias_abundance'
@@ -822,6 +884,7 @@ def main():
         else:
             bias_change_df = get_bias_change(
                 lineage_bias_df,
+                timepoint_col=timepoint_col,
             )
             change_marked_df = mark_changed(
                 present_clones_df,
@@ -833,20 +896,8 @@ def main():
         percent_of_total = False
         print('Change Cutoff:')
         print(change_marked_df.change_cutoff.unique())
-        cell_type = 'gr'
         plot_change_contributions(change_marked_df,
-            cell_type=cell_type,
-            group=args.group,
-            percent_of_total=percent_of_total,
-            save=args.save,
-            save_path=save_path,
-            save_format='png',
-        )
-        cell_type = 'b'
-        plot_change_contributions(change_marked_df,
-            cell_type=cell_type,
-            group=args.group,
-            percent_of_total=percent_of_total,
+            timepoint_col=timepoint_col,
             save=args.save,
             save_path=save_path,
             save_format='png',
@@ -919,7 +970,7 @@ def main():
             save=args.save,
             save_path=save_path,
             save_format='png',
-            by_day=args.by_day
+            timepoint_col=timepoint_col,
         )
 
     if graph_type in ['max_eng_mouse']:
