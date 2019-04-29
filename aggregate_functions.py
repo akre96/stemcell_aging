@@ -131,7 +131,8 @@ def filter_biased_clones_at_timepoint(
         lineage_bias_df: pd.DataFrame,
         bias_cutoff: float,
         timepoint: int,
-        timepoint_col: str
+        timepoint_col: str,
+        within_cutoff: bool,
     ) -> pd.DataFrame:
     """ Filter for clones with lineage bias at specified extreme, at timepoint
     
@@ -140,6 +141,7 @@ def filter_biased_clones_at_timepoint(
         bias_cutoff {float} -- Value of Lineage bias to be more extreme than
         timepoint {int} -- timepoint to inspect
         timepoint_col {str} -- column to look for timepoint in
+        within_cutoff {bool} -- Check for clones NOT extremely biased instead
 
     Raises:
         ValueError -- If bias_cutoff set to 0
@@ -148,13 +150,16 @@ def filter_biased_clones_at_timepoint(
         pd.DataFrame -- filtered lineage_bias_df with clones extreme at timepoint
     """
     
-    # If cutoff is positive, check extreme as >, otherwise as <
-    if bias_cutoff > 0:
-        filt_df = lineage_bias_df[lineage_bias_df.lineage_bias > bias_cutoff]
-    elif bias_cutoff < 0:
-        filt_df = lineage_bias_df[lineage_bias_df.lineage_bias < bias_cutoff]
+    if within_cutoff:
+        filt_df = lineage_bias_df[lineage_bias_df.lineage_bias.abs() < np.abs(bias_cutoff)]
     else:
-        raise ValueError('bias_cutoff cannot be 0')
+        # If cutoff is positive, check extreme as >, otherwise as <
+        if bias_cutoff > 0:
+            filt_df = lineage_bias_df[lineage_bias_df.lineage_bias > bias_cutoff]
+        elif bias_cutoff < 0:
+            filt_df = lineage_bias_df[lineage_bias_df.lineage_bias < bias_cutoff]
+        else:
+            raise ValueError('bias_cutoff cannot be 0')
 
     filt_df = filt_df[filt_df[timepoint_col] == timepoint]
     passing_clones = filt_df[['mouse_id', 'code']]
@@ -581,7 +586,7 @@ def mark_changed(
     """
     cutoff = calculate_bias_change_cutoff(
         bias_change_df,
-        min_time_difference
+        min_time_difference,
     )
     with_bias_df = input_df.merge(
         bias_change_df[['code', 'group', 'mouse_id', 'bias_change']],
@@ -590,7 +595,7 @@ def mark_changed(
         validate='m:m',
     )
     with_bias_df['change_cutoff'] = cutoff
-    print('Lineage Bias Change Cutoff: ' + str(round(cutoff,2)))
+    print('Lineage Bias Change Cutoff: ' + str(round(cutoff, 2)))
 
     with_change_df = with_bias_df.assign(
         changed=lambda row: row.bias_change.abs() >= cutoff,
@@ -598,7 +603,11 @@ def mark_changed(
 
     return with_change_df
 
-def sum_abundance_by_change(with_change_contribution_df: pd.DataFrame, percent_of_total: bool = False) -> pd.DataFrame:
+def sum_abundance_by_change(
+        with_change_contribution_df: pd.DataFrame,
+        percent_of_total: bool = False,
+        timepoint_col: str = 'month'
+    ) -> pd.DataFrame:
     """ Cumulative abundance at percentiles
     
     Arguments:
@@ -611,15 +620,15 @@ def sum_abundance_by_change(with_change_contribution_df: pd.DataFrame, percent_o
         pd.DataFrame -- sum of abundance in chagen vs not changed at each time point, per cell_type, mouse_id
     """
 
-    total_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', 'month']).percent_engraftment.sum()).reset_index()
-    by_change_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', 'month', 'changed']).percent_engraftment.sum()).reset_index()
+    total_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', timepoint_col]).percent_engraftment.sum()).reset_index()
+    by_change_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', timepoint_col, 'changed']).percent_engraftment.sum()).reset_index()
     total_sum['changed'] = 'Total'
     total_sum['total_abundance'] = total_sum['percent_engraftment']
     if percent_of_total:
         total_merged_df = by_change_sum.merge(
-            total_sum[['mouse_id', 'cell_type', 'group', 'month', 'total_abundance']],
+            total_sum[['mouse_id', 'cell_type', 'group', timepoint_col, 'total_abundance']],
             how='left',
-            on=['mouse_id', 'cell_type', 'group', 'month']
+            on=['mouse_id', 'cell_type', 'group', timepoint_col]
         )
         all_change_data_sum = total_merged_df.assign(
             percent_engraftment=lambda x: 100*x.percent_engraftment/x.total_abundance
