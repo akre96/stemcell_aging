@@ -197,7 +197,7 @@ def main():
     
 
 
-    if graph_type in ['abund_swarm_time', 'default']:
+    if graph_type in ['abund_swarm_time']:
         save_path = args.output_dir + os.sep + 'abund_at_first_timepoint'
         abundance_cutoff = 0
         thresholds = {'gr': 0, 'b': 0}
