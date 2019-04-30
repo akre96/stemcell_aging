@@ -600,6 +600,13 @@ def mark_changed(
     with_change_df = with_bias_df.assign(
         changed=lambda row: row.bias_change.abs() >= cutoff,
     )
+    with_change_df['change_type'] = np.sign(with_change_df.bias_change)
+    with_change_df = with_change_df.assign(
+        change_type=with_change_df.change_type.map({
+            -1: 'Lymphoid',
+            1: 'Myeloid'
+        })
+    )
 
     return with_change_df
 
@@ -621,7 +628,7 @@ def sum_abundance_by_change(
     """
 
     total_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', timepoint_col]).percent_engraftment.sum()).reset_index()
-    by_change_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', timepoint_col, 'changed']).percent_engraftment.sum()).reset_index()
+    by_change_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', timepoint_col, 'changed', 'change_type']).percent_engraftment.sum()).reset_index()
     total_sum['changed'] = 'Total'
     total_sum['total_abundance'] = total_sum['percent_engraftment']
     if percent_of_total:

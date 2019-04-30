@@ -939,7 +939,6 @@ def plot_change_contributions(
     
     Arguments:
         changed_marked_df {pd.DataFrame} -- bias_change with clones marked as changed
-        cell_type {str} -- cell type to analyze
     
     Keyword Arguments:
         group {str} -- group to filter for (default: {'all'})
@@ -964,16 +963,27 @@ def plot_change_contributions(
 
     for cell_type, cell_df in changed_sum_df.groupby('cell_type'):
         last_time_per_mouse_df = pd.DataFrame(columns=changed_sum_df.columns)
-        for label, g_df in cell_df.groupby(['mouse_id', 'change_status']):
+        first_time_per_mouse_df = pd.DataFrame(columns=changed_sum_df.columns)
+        for label, g_df in cell_df.groupby(['mouse_id', 'change_status', 'change_type']):
             if label[1] == 'Unchanged':
                 continue
             sort_df = g_df.sort_values(by=timepoint_col)
             last_time_per_mouse_df = last_time_per_mouse_df.append(sort_df.iloc[-1], ignore_index=True)
+            first_time_per_mouse_df = first_time_per_mouse_df.append(sort_df.iloc[0])
+
         last_time_per_mouse_df = last_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
+        first_time_per_mouse_df = first_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
         last_time_per_mouse_df = last_time_per_mouse_df.assign(total=100)
+        first_time_per_mouse_df = first_time_per_mouse_df.assign(total=100)
+
         sns.set(style="whitegrid")
 
         for group, g_df in last_time_per_mouse_df.groupby('group'):
+            for m, m_df in g_df.groupby('mouse_id'):
+                lymph = m_df[m_df.change_type == 'Lymphoid']
+                myl = m_df[m_df.change_type == 'Myeloid']
+                g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid')].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
+
             plt.figure()
             sns.barplot(
                 x='total',
@@ -984,18 +994,62 @@ def plot_change_contributions(
             sns.barplot(
                 x='percent_engraftment',
                 y='mouse_id',
-                data=g_df,
-                color=COLOR_PALETTES['group'][group],
-                label='Changed'
+                data=g_df[g_df.change_type == 'Myeloid'],
+                color=COLOR_PALETTES['change_type']['Myeloid'],
+                label='Myeloid'
+            )
+            sns.barplot(
+                x='percent_engraftment',
+                y='mouse_id',
+                data=g_df[g_df.change_type == 'Lymphoid'],
+                color=COLOR_PALETTES['change_type']['Lymphoid'],
+                label='Lymphoid'
             )
             plt.xlabel('Contribution of Changed Cells')
             plt.ylabel('')
             plt.suptitle(cell_type.title() + ' Changed vs Not-Changed Cumulative Abundance')
             plt.title('Group: ' + group.replace('_', ' ').title())
-            plt.gca().legend().remove()
+            plt.gca().legend(title='Change Direction', loc='lower right')
             sns.despine(left=True, bottom=True)
 
             fname = save_path + os.sep + 'percent_contribution_changed_' + cell_type + '_' + group + '.' + save_format
+            save_plot(fname, save, save_format)
+
+        for group, g_df in first_time_per_mouse_df.groupby('group'):
+            for m, m_df in g_df.groupby('mouse_id'):
+                lymph = m_df[m_df.change_type == 'Lymphoid']
+                myl = m_df[m_df.change_type == 'Myeloid']
+                g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid')].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
+
+            plt.figure()
+            sns.barplot(
+                x='total',
+                y='mouse_id',
+                data=g_df,
+                color=COLOR_PALETTES['change_status']['Unchanged'],
+            )
+            sns.barplot(
+                x='percent_engraftment',
+                y='mouse_id',
+                data=g_df[g_df.change_type == 'Myeloid'],
+                color=COLOR_PALETTES['change_type']['Myeloid'],
+                label='Myeloid'
+            )
+            sns.barplot(
+                x='percent_engraftment',
+                y='mouse_id',
+                data=g_df[g_df.change_type == 'Lymphoid'],
+                color=COLOR_PALETTES['change_type']['Lymphoid'],
+                label='Lymphoid'
+            )
+            plt.xlabel('Contribution of Changed Cells')
+            plt.ylabel('')
+            plt.suptitle(cell_type.title() + ' Changed vs Not-Changed Cumulative Abundance - First Timepoint')
+            plt.title('Group: ' + group.replace('_', ' ').title())
+            plt.gca().legend(title='Change Direction', loc='lower right')
+            sns.despine(left=True, bottom=True)
+
+            fname = save_path + os.sep + 'percent_contribution_changed_init' + cell_type + '_' + group + '.' + save_format
             save_plot(fname, save, save_format)
 
 def plot_change_contributions_by_group(

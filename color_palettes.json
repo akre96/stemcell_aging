@@ -23,6 +23,10 @@
         "Unchanged": "#cccccc",
         "Total": "#cccccc"
     },
+    "change_type": {
+        "Myeloid": "#8c7ae6",
+        "Lymphoid": "#00a8ff"
+    },
     "time_point": "coolwarm",
     "mouse_id": {
         "M1": "#00a8ff",
