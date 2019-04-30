@@ -1,4 +1,5 @@
 import json
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -7,15 +8,21 @@ from sklearn.preprocessing import StandardScaler
 from tslearn.clustering import TimeSeriesKMeans
 from tslearn.datasets import CachedDatasets
 from tslearn.preprocessing import TimeSeriesScalerMeanVariance, TimeSeriesResampler
+from plotting_functions import save_plot
 
+save=True
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 train = pd.read_csv('~/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
+data = train[train.group.isin(['aging_phenotype','no_change'])]
 train = train[train.group.isin(['aging_phenotype','no_change'])]
 
 categorical_cols = ['mouse_id', 'group']
 numerical_cols = ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']
-numerical_cols = ['b_percent_engraftment']
+numerical_cols = ['lineage_bias']
 
+initials = [x[:3] for x in numerical_cols]
+save_folder = '_'.join(initials)
+save_path = '/home/sakre/Data/stemcell_aging/Graphs/Cluster_Exploration/'+save_folder
 #scaler = StandardScaler()
 #train[numerical_cols] = scaler.fit_transform(train[numerical_cols])
 
@@ -41,7 +48,7 @@ km = TimeSeriesKMeans(n_clusters=n_clusters, verbose=True, random_state=seed)
 y_pred = km.fit_predict(X_train)
 
 with_label_df = pd.DataFrame()
-for _, clone_group in train.groupby(['code', 'mouse_id']):
+for _, clone_group in data.groupby(['code', 'mouse_id']):
     j = 0
     clone_test = np.zeros((1, 4, 3))
     for _, time_group in clone_group.groupby('month'):
@@ -54,93 +61,42 @@ for _, clone_group in train.groupby(['code', 'mouse_id']):
     clone_group = clone_group.assign(label=str(label[0]))
     with_label_df = with_label_df.append(clone_group)
 
-lb_sum_data_df = pd.DataFrame(
+lb_mean_data_df = pd.DataFrame(
     with_label_df.groupby(['mouse_id','month','label', 'group']).lineage_bias.mean()
-).reset_index()
+).reset_index().rename(columns={'lineage_bias': 'Average Lineage Bias'})
 b_sum_data_df = pd.DataFrame(
     with_label_df.groupby(['mouse_id','month','label', 'group']).b_percent_engraftment.sum()
-).reset_index()
+).reset_index().rename(columns={'b_percent_engraftment':'Sum B Abundance'})
 gr_sum_data_df = pd.DataFrame(
     with_label_df.groupby(['mouse_id','month','label', 'group']).gr_percent_engraftment.sum()
-).reset_index()
-sum_data_df = lb_sum_data_df.merge(b_sum_data_df, on=['mouse_id', 'month', 'label', 'group'])
+).reset_index().rename(columns={'gr_percent_engraftment':'Sum Gr Abundance'})
+b_mean_data_df = pd.DataFrame(
+    with_label_df.groupby(['mouse_id','month','label', 'group']).b_percent_engraftment.mean()
+).reset_index().rename(columns={'b_percent_engraftment':'Average B Abundance'})
+gr_mean_data_df = pd.DataFrame(
+    with_label_df.groupby(['mouse_id','month','label', 'group']).gr_percent_engraftment.mean()
+).reset_index().rename(columns={'gr_percent_engraftment':'Average Gr Abundance'})
+sum_data_df = lb_mean_data_df.merge(b_sum_data_df, on=['mouse_id', 'month', 'label', 'group'])
 sum_data_df = sum_data_df.merge(gr_sum_data_df, on=['mouse_id', 'month', 'label', 'group'])
+sum_data_df = sum_data_df.merge(gr_mean_data_df, on=['mouse_id', 'month', 'label', 'group'])
+sum_data_df = sum_data_df.merge(b_mean_data_df, on=['mouse_id', 'month', 'label', 'group'])
 
 
-for gname, group_df in sum_data_df.groupby('group'):
-    plt.figure()
-    plt.subplot(3, 1, 1)
+for y_col in ['Sum B Abundance', 'Sum Gr Abundance', 'Average Gr Abundance', 'Average B Abundance', 'Average Lineage Bias']:
+    plt.figure(figsize=(8, 14))
     sns.lineplot(
         x='month',
-        y='lineage_bias',
-        data=group_df,
-        hue='label',
-        legend=None,
-        palette=COLOR_PALETTES['cluster_label'],
-    )
-    plt.ylabel('Lineage Bias Average by Mouse')
-
-    plt.subplot(3, 1, 2)
-    sns.lineplot(
-        x='month',
-        y='b_percent_engraftment',
-        data=group_df,
-        hue='label',
-        legend=None,
-        palette=COLOR_PALETTES['cluster_label'],
-    )
-    plt.ylabel('B Abundance (%WBC) Sum Per Mouse')
-
-    plt.subplot(3, 1, 3)
-    sns.lineplot(
-        x='month',
-        y='gr_percent_engraftment',
-        data=group_df,
+        y=y_col,
+        data=sum_data_df,
         hue='label',
         palette=COLOR_PALETTES['cluster_label'],
+        style='group',
+        err_style='bars',
+        linewidth=2,
     )
-    plt.ylabel('Gr Abundance (%WBC) Sum Per Mouse')
-    plt.suptitle('Group: ' + gname.title())
-
-    plt.figure()
-    plt.subplot(3, 1, 1)
-    sns.lineplot(
-        x='month',
-        y='lineage_bias',
-        data=group_df,
-        hue='label',
-        legend=None,
-        units='mouse_id',
-        estimator=None,
-        palette=COLOR_PALETTES['cluster_label'],
-    )
-    plt.ylabel('Lineage Bias Average by Mouse')
-
-    plt.subplot(3, 1, 2)
-    sns.lineplot(
-        x='month',
-        y='b_percent_engraftment',
-        data=group_df,
-        hue='label',
-        legend=None,
-        units='mouse_id',
-        estimator=None,
-        palette=COLOR_PALETTES['cluster_label'],
-    )
-    plt.ylabel('B Abundance (%WBC) Sum Per Mouse')
-
-    plt.subplot(3, 1, 3)
-    sns.lineplot(
-        x='month',
-        y='gr_percent_engraftment',
-        data=group_df,
-        hue='label',
-        units='mouse_id',
-        estimator=None,
-        palette=COLOR_PALETTES['cluster_label'],
-    )
-    plt.ylabel('Gr Abundance (%WBC) Sum Per Mouse')
-    plt.suptitle('Group: ' + gname.title())
+    plt.title(y_col)
+    fname = save_path + os.sep + y_col.lower().replace(' ', '_') + '.png'
+    save_plot(fname, save, 'png')
 
 for name, cluster in with_label_df.groupby(['group', 'label']):
     print(
@@ -151,4 +107,5 @@ for name, cluster in with_label_df.groupby(['group', 'label']):
         + ' Unique Clones: ' \
         + str(cluster.code.nunique())
     )
-plt.show()
+if not save:
+    plt.show()
