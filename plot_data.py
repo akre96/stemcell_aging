@@ -17,6 +17,7 @@ import glob
 import os
 import sys
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from lineage_bias import get_bias_change, parse_wbc_count_file
@@ -43,7 +44,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_abundance_change, plot_bias_change_rest, \
     plot_rest_vs_tracked, plot_extreme_bias_abundance, \
     plot_extreme_bias_time, plot_bias_dist_at_time, \
-    plot_stable_clones, plot_bias_dist_mean_abund
+    plot_stable_clones, plot_bias_dist_mean_abund, \
+    plot_abund_swarm_box
      
 
 
@@ -195,10 +197,29 @@ def main():
     
 
 
-    # Plot the contribution of changed clones to each cell type for each mouse
-    #     at the last timepoint for that mouse
-    #if graph_type in ['horiz_contrib_change']:
-
+    if graph_type in ['abund_swarm_time', 'default']:
+        save_path = args.output_dir + os.sep + 'abund_at_first_timepoint'
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+        first_timepoint_df = present_clones_df[present_clones_df[timepoint_col] == first_timepoint]
+        filt_df = filter_cell_type_threshold(
+            first_timepoint_df,
+            thresholds=thresholds,
+            analyzed_cell_types=['gr', 'b'],
+        )
+        plot_abund_swarm_box(
+            filt_df,
+            thresholds,
+            save=args.save,
+            save_path=save_path,
+        )
 
         
     # Plots distribution of change in bias from a clones first to last timepoint

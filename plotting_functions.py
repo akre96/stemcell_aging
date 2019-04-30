@@ -2446,3 +2446,44 @@ def plot_bias_dist_mean_abund(
             + y_col + '.' + save_format
         save_plot(fname, save, save_format)
 
+def plot_abund_swarm_box(
+        clonal_abundance_df: pd.DataFrame,
+        thresholds: Dict[str, float],
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+
+    clonal_abundance_df = group_names_pretty(clonal_abundance_df)
+    for cell_type, cell_df in clonal_abundance_df.groupby('cell_type'):
+        plt.figure()
+        str_th = str(round(thresholds[cell_type], 2))
+        plt.title(
+            cell_type.title() \
+                + ' Clones With Abundance > ' \
+                + str_th
+        )
+        ax = sns.boxplot(
+            x='group',
+            y='percent_engraftment',
+            color='white',
+            data=cell_df,
+            whis=np.inf,
+            dodge=False,
+        )
+        sns.swarmplot(
+            x='group',
+            hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id'],
+            y='percent_engraftment',
+            data=cell_df,
+            color=".2",
+            ax=ax
+        )
+        plt.ylabel('Abundance (% WBC)')
+        plt.xlabel('Group')
+        ax.legend().remove()
+        fname = save_path + os.sep + 'abund_first_timepoint_ ' \
+            + cell_type + '_a' + str_th.replace('.', '-') \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
