@@ -986,3 +986,31 @@ def bias_clones_to_abundance(
     else:
         raise ValueError('No Cell Type Detected To Find Abundance In')
     return bias_clones_abundance_df
+
+def calculate_first_last_bias_change_with_avg_data(
+    lineage_bias_df: pd.DataFrame,
+    y_col: str,
+    timepoint_col: str,
+    ) -> pd.DataFrame:
+
+    df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change']
+    bias_dist_df = pd.DataFrame(columns=df_cols)
+    for name, group in lineage_bias_df.groupby(['code', 'mouse_id', 'group']):
+        if len(group) < 2:
+            continue
+        bias_change_row = pd.DataFrame(columns=df_cols)
+        sorted_group = group.sort_values(by=timepoint_col)
+        t1 = sorted_group.iloc[0]
+        t2 = sorted_group.iloc[-1]
+        if y_col == 'sum_abundance':
+            avg_val = (sorted_group['gr_percent_engraftment'] + sorted_group['b_percent_engraftment']).mean()
+        else:
+            avg_val = sorted_group[y_col].mean()
+        bias_change = t2.lineage_bias - t1.lineage_bias
+        bias_change_row['code'] = [name[0]]
+        bias_change_row['mouse_id'] = [name[1]]
+        bias_change_row['group'] = [name[2]]
+        bias_change_row['average_'+y_col] = [avg_val]
+        bias_change_row['bias_change'] = [bias_change]
+        bias_dist_df = bias_dist_df.append(bias_change_row, ignore_index=True)
+    return bias_dist_df

@@ -20,7 +20,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_anytime, \
     across_gen_bias_change, between_gen_bias_change, calculate_abundance_change, \
     day_to_gen, calculate_bias_change, filter_biased_clones_at_timepoint, \
-    bias_clones_to_abundance, filter_stable_initially
+    bias_clones_to_abundance, filter_stable_initially, \
+    calculate_first_last_bias_change_with_avg_data
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -2432,27 +2433,12 @@ def plot_bias_dist_mean_abund(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
-    df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change']
-    bias_dist_df = pd.DataFrame(columns=df_cols)
-    for name, group in lineage_bias_df.groupby(['code', 'mouse_id', 'group']):
-        if len(group) < 2:
-            continue
-        bias_change_row = pd.DataFrame(columns=df_cols)
-        sorted_group = group.sort_values(by=timepoint_col)
-        t1 = sorted_group.iloc[0]
-        t2 = sorted_group.iloc[-1]
-        if y_col == 'sum_abundance':
-            avg_val = (sorted_group['gr_percent_engraftment'] + sorted_group['b_percent_engraftment']).mean()
-        else:
-            avg_val = sorted_group[y_col].mean()
-        bias_change = t2.lineage_bias - t1.lineage_bias
-        bias_change_row['code'] = [name[0]]
-        bias_change_row['mouse_id'] = [name[1]]
-        bias_change_row['group'] = [name[2]]
-        bias_change_row['average_'+y_col] = [avg_val]
-        bias_change_row['bias_change'] = [bias_change]
-        bias_dist_df = bias_dist_df.append(bias_change_row, ignore_index=True)
     
+    bias_dist_df = calculate_first_last_bias_change_with_avg_data(
+        lineage_bias_df,
+        y_col,
+        timepoint_col,
+    )
     if by_group:
         for gname, g_df in bias_dist_df.groupby('group'):
             plt.figure()
@@ -2551,26 +2537,11 @@ def plot_bias_dist_mean_abund_group_vs(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
-    df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change']
-    bias_dist_df = pd.DataFrame(columns=df_cols)
-    for name, group in lineage_bias_df.groupby(['code', 'mouse_id', 'group']):
-        if len(group) < 2:
-            continue
-        bias_change_row = pd.DataFrame(columns=df_cols)
-        sorted_group = group.sort_values(by=timepoint_col)
-        t1 = sorted_group.iloc[0]
-        t2 = sorted_group.iloc[-1]
-        if y_col == 'sum_abundance':
-            avg_val = (sorted_group['gr_percent_engraftment'] + sorted_group['b_percent_engraftment']).mean()
-        else:
-            avg_val = sorted_group[y_col].mean()
-        bias_change = t2.lineage_bias - t1.lineage_bias
-        bias_change_row['code'] = [name[0]]
-        bias_change_row['mouse_id'] = [name[1]]
-        bias_change_row['group'] = [name[2]]
-        bias_change_row['average_'+y_col] = [avg_val]
-        bias_change_row['bias_change'] = [bias_change]
-        bias_dist_df = bias_dist_df.append(bias_change_row, ignore_index=True)
+    bias_dist_df = calculate_first_last_bias_change_with_avg_data(
+        lineage_bias_df,
+        y_col,
+        timepoint_col
+    )
     
     plt.figure()
     for gname, g_df in bias_dist_df.groupby('group'):
