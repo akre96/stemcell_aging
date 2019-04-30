@@ -2541,3 +2541,57 @@ def plot_abund_swarm_box(
             + cell_type + '_a' + str_th.replace('.', '-') \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_bias_dist_mean_abund_group_vs(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        cutoff: float,
+        y_col: str = 'sum_abundance',
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change']
+    bias_dist_df = pd.DataFrame(columns=df_cols)
+    for name, group in lineage_bias_df.groupby(['code', 'mouse_id', 'group']):
+        if len(group) < 2:
+            continue
+        bias_change_row = pd.DataFrame(columns=df_cols)
+        sorted_group = group.sort_values(by=timepoint_col)
+        t1 = sorted_group.iloc[0]
+        t2 = sorted_group.iloc[-1]
+        if y_col == 'sum_abundance':
+            avg_val = (sorted_group['gr_percent_engraftment'] + sorted_group['b_percent_engraftment']).mean()
+        else:
+            avg_val = sorted_group[y_col].mean()
+        bias_change = t2.lineage_bias - t1.lineage_bias
+        bias_change_row['code'] = [name[0]]
+        bias_change_row['mouse_id'] = [name[1]]
+        bias_change_row['group'] = [name[2]]
+        bias_change_row['average_'+y_col] = [avg_val]
+        bias_change_row['bias_change'] = [bias_change]
+        bias_dist_df = bias_dist_df.append(bias_change_row, ignore_index=True)
+    
+    plt.figure()
+    for gname, g_df in bias_dist_df.groupby('group'):
+        c = COLOR_PALETTES['group'][gname]
+        filt_df = g_df[g_df['average_'+y_col] >= cutoff]
+        sns.distplot(
+            filt_df.bias_change,
+            rug=True,
+            hist=False,
+            color=c,
+            label=gname.replace('_', ' ').title(),
+            kde_kws={"linewidth": "3"}
+        )
+
+        plt.title(
+            y_col_to_title('average_'+y_col) \
+            + ' > ' + str(cutoff)
+        )
+        plt.xlabel('Overall Change in Bias Per Clone')
+        fname = save_path + os.sep +'bias_change_dist_vs_group_' \
+            + y_col \
+            + '_' + str(cutoff).replace('.','-') \
+            + '.' + save_format
+        save_plot(fname, save, save_format)

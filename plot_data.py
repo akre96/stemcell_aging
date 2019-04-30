@@ -45,7 +45,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_rest_vs_tracked, plot_extreme_bias_abundance, \
     plot_extreme_bias_time, plot_bias_dist_at_time, \
     plot_stable_clones, plot_bias_dist_mean_abund, \
-    plot_abund_swarm_box
+    plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs
      
 
 
@@ -103,6 +103,7 @@ def main():
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
+    parser.add_argument('-t', '--threshold', dest='threshold', help='Set threshold for filtering', type=float, required=False)
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
     parser.add_argument('-b', '--bias-cutoff', dest='bias_cutoff', help='Cutoff for extreme bias', type=float, required=False)
     parser.add_argument('--invert', dest='invert', help='Invert the selection being done while filtering', action='store_true')
@@ -154,6 +155,9 @@ def main():
 
     if args.magnitude:
         print(' - Plot Magnitude set')
+
+    if args.threshold:
+        print(' - Threshold set to: ' + str(args.threshold))
     
     if args.filter_bias_abund:
         print(' - Lineage Bias Min Abundance set to: ' + str(args.filter_bias_abund))
@@ -176,6 +180,7 @@ def main():
         print(' - Time By Day Set \n')
         first_timepoint = present_clones_df.day.min()
         timepoint_col = 'day'
+    # Adds generation calculation for serial transplant data
     elif args.by_gen:
         print(' - Time By Generation Set \n')
         first_timepoint = 1
@@ -196,6 +201,36 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
     
 
+    if graph_type in ['bias_change_mean_dist_vs_group']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_mean_abund_vs_g'
+        if args.threshold:
+            threshold = args.threshold
+        else:
+            threshold = 0.01
+        plot_bias_dist_mean_abund_group_vs(
+            lineage_bias_df,
+            timepoint_col,
+            cutoff=threshold,
+            y_col='b_percent_engraftment',
+            save=args.save,
+            save_path=save_path,
+        )
+        plot_bias_dist_mean_abund_group_vs(
+            lineage_bias_df,
+            timepoint_col,
+            cutoff=threshold,
+            y_col='gr_percent_engraftment',
+            save=args.save,
+            save_path=save_path,
+        )
+        plot_bias_dist_mean_abund_group_vs(
+            lineage_bias_df,
+            timepoint_col,
+            cutoff=threshold,
+            y_col='sum_abundance',
+            save=args.save,
+            save_path=save_path,
+        )
 
     if graph_type in ['abund_swarm_time']:
         save_path = args.output_dir + os.sep + 'abund_at_first_timepoint'
@@ -225,7 +260,7 @@ def main():
     # Plots distribution of change in bias from a clones first to last timepoint
     #    Each line is the result of filtering the above based on cutoffs of abundance
     #    Plots 1 figure for filters on b, gr, and combined abundance
-    if graph_type in ['bias_mean_abund_dist']:
+    if graph_type in ['bias_change_mean_abund_dist']:
         save_path = args.output_dir + os.sep + 'bias_distribution_mean_abund'
         abundance_thresholds = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.7, 0.9, 1]
         plot_bias_dist_mean_abund(
