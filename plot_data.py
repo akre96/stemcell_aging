@@ -45,7 +45,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_rest_vs_tracked, plot_extreme_bias_abundance, \
     plot_extreme_bias_time, plot_bias_dist_at_time, \
     plot_stable_clones, plot_bias_dist_mean_abund, \
-    plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs
+    plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs, \
+    plot_bias_change_mean_scatter
      
 
 
@@ -201,6 +202,32 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
     
 
+    if graph_type in ['bias_change_mean_scatter']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_mean_scatter'
+        plot_bias_change_mean_scatter(
+            lineage_bias_df,
+            timepoint_col,
+            y_col='gr_percent_engraftment',
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+        )
+        plot_bias_change_mean_scatter(
+            lineage_bias_df,
+            timepoint_col,
+            y_col='sum_abundance',
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+        )
+        plot_bias_change_mean_scatter(
+            lineage_bias_df,
+            timepoint_col,
+            by_group=args.by_group,
+            y_col='b_percent_engraftment',
+            save=args.save,
+            save_path=save_path,
+        )
     if graph_type in ['bias_change_mean_dist_vs_group']:
         save_path = args.output_dir + os.sep + 'bias_distribution_mean_abund_vs_g'
         if args.threshold:

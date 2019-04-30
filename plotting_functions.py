@@ -30,7 +30,7 @@ COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 def y_col_to_title(y_col: str) -> str:
     y_title = y_col.replace('_', ' ').replace(
         'percent engraftment',
-        'Abundance (%WBC)'
+        'Abundance'
     ).title()
     return y_title
 
@@ -2564,5 +2564,62 @@ def plot_bias_dist_mean_abund_group_vs(
         fname = save_path + os.sep +'bias_change_dist_vs_group_' \
             + y_col \
             + '_' + str(cutoff).replace('.','-') \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
+
+def plot_bias_change_mean_scatter(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        y_col: str = 'sum_abundance',
+        by_group: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    bias_dist_df = calculate_first_last_bias_change_with_avg_data(
+        lineage_bias_df,
+        y_col,
+        timepoint_col
+    )
+    
+    if by_group:
+        for gname, g_df in bias_dist_df.groupby('group'):
+            plt.figure()
+            sns.scatterplot(
+                x='average_'+y_col,
+                y='bias_change',
+                data=g_df,
+                hue='mouse_id',
+                palette=COLOR_PALETTES['mouse_id'],
+                legend=None,
+            )
+            plt.hlines(0, 0, g_df['average_'+y_col].max(), linestyles='dashed', color='lightgrey')
+
+            plt.title('Group: ' + gname.replace('_', ' ').title())
+            plt.suptitle(y_col_to_title('average_'+y_col))
+            plt.xlabel(y_col_to_title('average_'+y_col) + ' (% WBC)')
+            plt.ylabel('Overall Change in Bias Per Clone')
+            fname = save_path + os.sep + y_col + '_vs_bias_change' \
+                + '_' + gname \
+                + '.' + save_format
+            save_plot(fname, save, save_format)
+    else:
+        plt.figure()
+        sns.scatterplot(
+            x='average_'+y_col,
+            y='bias_change',
+            data=bias_dist_df,
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            legend=None,
+        )
+        plt.hlines(0, 0, bias_dist_df['average_'+y_col].max(), linestyles='dashed', color='lightgrey')
+
+        plt.title(
+            y_col_to_title('average_'+y_col)
+        )
+        plt.xlabel(y_col_to_title('average_'+y_col) + ' (% WBC)')
+        plt.ylabel('Overall Change in Bias Per Clone')
+        fname = save_path + os.sep + y_col + '_vs_bias_change' \
             + '.' + save_format
         save_plot(fname, save, save_format)
