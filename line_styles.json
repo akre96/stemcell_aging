@@ -4,5 +4,11 @@
         "aging_phenotype" : "dashed",
         "No Change" : "solid",
         "Aging Phenotype" : "dashed"
+    },
+    "group_dashes": {
+        "no_change" : [1, 0],
+        "aging_phenotype" : [6, 2],
+        "No Change" : [1, 0],
+        "Aging Phenotype" : [6, 2]
     }
 }
