@@ -202,11 +202,12 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
     
 
-    if graph_type in ['bias_dist_time_groups', 'default']:
+    if graph_type in ['bias_dist_time_groups']:
         save_path = args.output_dir + os.sep + 'bias_distribution_group'
         plot_kde_bias_time_vs_group(
             lineage_bias_df,
             timepoint_col,
+            by_group=args.by_group,
             save=args.save,
             save_path=save_path,
         )

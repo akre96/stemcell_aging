@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
+from colour import Color
 from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
     combine_enriched_clones_at_time, count_clones_at_percentile, \
@@ -2623,3 +2624,70 @@ def plot_bias_change_mean_scatter(
         fname = save_path + os.sep + y_col + '_vs_bias_change' \
             + '.' + save_format
         save_plot(fname, save, save_format)
+def plot_kde_bias_time_vs_group(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        by_group: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    plt.figure()
+    i: int = 0
+    plt.suptitle(
+        'Distribution of Lineage Bias at Each ' + timepoint_col.title()
+    )
+    plt.ylabel('')
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+    if by_group:
+        plt.title('By Group')
+        for group, g_df in lineage_bias_df.groupby('group'):
+            max_color = Color(COLOR_PALETTES['group'][group])
+            min_luminance = .9
+            luminances = np.linspace(
+                min_luminance,
+                max_color.luminance,
+                num=lineage_bias_df[timepoint_col].nunique()
+            )
+            j: int = 0
+            if not i:
+                legend: Any = 'brief'
+            else:
+                legend = None
+
+            for t, t_df in g_df.groupby(timepoint_col):
+                color = max_color
+                color.set_luminance(luminances[j])
+                sns.distplot(
+                    t_df.lineage_bias,
+                    color=color.hex_l,
+                    label=t,
+                    hist=False
+                )
+                j += 1
+
+            i += 1
+        plt.xlabel('Lineage Bias')
+        file_name = save_path + os.sep \
+            + 'bias_dist_time_group.' + save_format
+        save_plot(file_name, save, save_format)
+    else:
+        pal = sns.color_palette(
+            palette=COLOR_PALETTES['time_point'],
+            n_colors=lineage_bias_df[timepoint_col].nunique()
+        )
+        k: int = 0
+        for t, t_df in lineage_bias_df.groupby(timepoint_col):
+            sns.distplot(
+                t_df.lineage_bias,
+                color=pal[k],
+                label=t,
+                rug=True,
+                hist=False,
+            )
+            k += 1
+        plt.xlabel('Lineage Bias')
+        file_name = save_path + os.sep \
+            + 'bias_dist_time.' + save_format
+        save_plot(file_name, save, save_format)
