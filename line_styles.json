@@ -1,0 +1,8 @@
+{
+    "group": {
+        "no_change" : "solid",
+        "aging_phenotype" : "dashed",
+        "No Change" : "solid",
+        "Aging Phenotype" : "dashed"
+    }
+}
