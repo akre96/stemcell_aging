@@ -27,6 +27,7 @@ from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
+LINE_STYLES = json.load(open('line_styles.json', 'r'))
 
 def y_col_to_title(y_col: str) -> str:
     y_title = y_col.replace('_', ' ').replace(
@@ -2624,7 +2625,7 @@ def plot_bias_change_mean_scatter(
         fname = save_path + os.sep + y_col + '_vs_bias_change' \
             + '.' + save_format
         save_plot(fname, save, save_format)
-def plot_kde_bias_time_vs_group(
+def plot_kde_bias_over_time(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         by_group: bool = False,
@@ -2690,4 +2691,56 @@ def plot_kde_bias_time_vs_group(
         plt.xlabel('Lineage Bias')
         file_name = save_path + os.sep \
             + 'bias_dist_time.' + save_format
+        save_plot(file_name, save, save_format)
+
+def plot_kde_bias_at_time(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        timepoint: int,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+        by_mouse: bool = False,
+    ) -> None:
+    plt.figure()
+    i: int = 0
+    plt.title(
+        'Distribution of Lineage Bias at ' \
+            + timepoint_col.title() \
+            + ' ' + str(timepoint)
+    )
+    plt.ylabel('')
+    t_df = lineage_bias_df[lineage_bias_df[timepoint_col] == timepoint]
+    if by_mouse:
+        for group, g_df in t_df.groupby('group'):
+            for mouse_id, m_df in g_df.groupby('mouse_id'):
+                sns.kdeplot(
+                    m_df.lineage_bias,
+                    color=COLOR_PALETTES['mouse_id'][mouse_id],
+                    label=mouse_id,
+                    linestyle=LINE_STYLES['group'][group]
+                )
+        b, t = plt.ylim()
+        if t > 2:
+            plt.ylim(0, 2)
+        plt.xlabel('Lineage Bias')
+        file_name = save_path + os.sep \
+            + 'bias_dist_at_' + timepoint_col[0] \
+            + str(timepoint) + '_by-mouse' \
+            + '.' + save_format
+        save_plot(file_name, save, save_format)
+    else:
+        for group, g_df in t_df.groupby('group'):
+            sns.kdeplot(
+                g_df.lineage_bias,
+                color=COLOR_PALETTES['group'][group],
+                label=group,
+                linestyle=LINE_STYLES['group'][group],
+                linewidth=2.5
+            )
+        plt.xlabel('Lineage Bias')
+        file_name = save_path + os.sep \
+            + 'bias_dist_at_' + timepoint_col[0] \
+            + str(timepoint) \
+            + '.' + save_format
         save_plot(file_name, save, save_format)

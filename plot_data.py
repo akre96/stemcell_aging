@@ -46,7 +46,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_extreme_bias_time, plot_bias_dist_at_time, \
     plot_stable_clones, plot_bias_dist_mean_abund, \
     plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs, \
-    plot_bias_change_mean_scatter, plot_kde_bias_time_vs_group
+    plot_bias_change_mean_scatter, plot_kde_bias_over_time, \
+    plot_kde_bias_at_time
      
 
 
@@ -115,6 +116,7 @@ def main():
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
+    parser.add_argument('--by-mouse', dest='by_mouse', help='Whether to plot mouse color instead of group for certain graphs', action="store_true")
     parser.add_argument('--plot-rest', dest='plot_rest', help='Whether to plot rest of clones instead of tracked clones', action="store_true")
     parser.add_argument('--by-gen', dest='by_gen', help='Plotting done on a generation by generation basis', action="store_true")
     parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
@@ -202,9 +204,23 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
     
 
-    if graph_type in ['bias_dist_time_groups']:
-        save_path = args.output_dir + os.sep + 'bias_distribution_group'
-        plot_kde_bias_time_vs_group(
+    if graph_type in ['bias_dist_at_time']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_at_time'
+        timepoint = first_timepoint
+        if args.timepoint:
+            timepoint = args.timepoint
+        plot_kde_bias_at_time(
+            lineage_bias_df,
+            timepoint_col,
+            timepoint,
+            by_mouse=args.by_mouse,
+            save=args.save,
+            save_path=save_path,
+        )
+
+    if graph_type in ['bias_dist_over_time']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_over_time'
+        plot_kde_bias_over_time(
             lineage_bias_df,
             timepoint_col,
             by_group=args.by_group,
