@@ -46,7 +46,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_extreme_bias_time, plot_bias_dist_at_time, \
     plot_stable_clones, plot_bias_dist_mean_abund, \
     plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs, \
-    plot_bias_change_mean_scatter
+    plot_bias_change_mean_scatter, plot_kde_bias_time_vs_group
      
 
 
@@ -108,7 +108,7 @@ def main():
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
     parser.add_argument('-b', '--bias-cutoff', dest='bias_cutoff', help='Cutoff for extreme bias', type=float, required=False)
     parser.add_argument('--invert', dest='invert', help='Invert the selection being done while filtering', action='store_true')
-    parser.add_argument('-f', '--filter-bias-abund', dest='filter_bias_abund', help='Abundance threshold to filter lineage bias data', type=float, required=False, default=0.01)
+    parser.add_argument('-f', '--filter-bias-abund', dest='filter_bias_abund', help='Abundance threshold to filter lineage bias data', type=float, required=False, default=0.05)
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=int, required=False)
@@ -201,6 +201,15 @@ def main():
     if args.save:
         print('\n*** Saving Plots Enabled ***\n')
     
+
+    if graph_type in ['bias_dist_time_groups', 'default']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_group'
+        plot_kde_bias_time_vs_group(
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+        )
 
     if graph_type in ['bias_change_mean_scatter']:
         save_path = args.output_dir + os.sep + 'bias_distribution_mean_scatter'
