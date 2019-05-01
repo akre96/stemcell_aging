@@ -165,6 +165,7 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
 def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_months: List[int],
                                 enrichment_thresholds: Dict[str, float],
+                                timepoint_col: str,
                                 analyzed_cell_types: List[str] = ['gr', 'b'],
                                 by_clone: bool = False,
                                 save: bool = False,
@@ -196,7 +197,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
         enriched_df = combine_enriched_clones_at_time(
             filtered_df,
             enrichment_time=month,
-            timepoint_col='month',
+            timepoint_col=timepoint_col,
             thresholds=enrichment_thresholds,
             analyzed_cell_types=analyzed_cell_types,
             )
@@ -221,7 +222,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                 title_addon = 'by-clone_'
                 sns.set_palette(sns.color_palette('hls'))
                 sns.lineplot(
-                    x='month',
+                    x=timepoint_col,
                     y='percent_engraftment',
                     hue='mouse_id',
                     style='group',
@@ -234,7 +235,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                 )
             else:
                 sns.lineplot(
-                    x='month',
+                    x=timepoint_col,
                     y='percent_engraftment',
                     hue='group',
                     data=cell_df,
@@ -244,12 +245,13 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                 )
             plt.suptitle(cell_type.title() + ' Clones with Abundance > '
                         + str(round(enrichment_thresholds[cell_type], 2))
-                        + ' % WBC At Month: ' + str(month))
+                        + ' % WBC At ' + timepoint_col.title() 
+                        + ': ' + str(month))
             plt.xlabel('')
             plt.ylabel('Abundance (%WBC)')
             plt.subplot(2, 1, 2)
             ax = sns.swarmplot(
-                x='month',
+                x=timepoint_col,
                 y='percent_engraftment',
                 hue='group',
                 data=cell_df,
@@ -261,7 +263,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                     + os.sep \
                     + 'dominant_clones_' + cell_type + '_' + title_addon \
                     + str(round(enrichment_thresholds[cell_type], 2)).replace('.', '-') \
-                    + '_' + 'm' + str(month) + '.' + save_format
+                    + '_' + timepoint_col[0] + str(month) + '.' + save_format
             save_plot(fname, save, save_format)
 
 def clustermap_clone_abundance(filtered_df: pd.DataFrame,
@@ -428,6 +430,8 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
 
     if by_clone:
         fname_prefix += '_by-clone'
+        ymax = lineage_bias_df[y_col].max()
+        ymin = lineage_bias_df[y_col].min()
         for phenotype, group in lineage_bias_df.groupby('group'):
             plt.figure()
             sns.lineplot(
@@ -435,6 +439,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
                 y=y_col,
                 data=group_names_pretty(group),
                 hue='mouse_id',
+                style='group',
                 legend=False,
                 palette=COLOR_PALETTES['mouse_id'],
                 units='code',
@@ -449,6 +454,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
                 + ' Mice'
             )
             plt.title(title_addon)
+            plt.ylim(ymin, ymax)
             fname = fname_prefix \
                 + '_' + phenotype \
                 + '.' + save_format

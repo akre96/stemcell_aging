@@ -829,7 +829,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col
             )
         group = 'all'
         if args.group:
@@ -1563,22 +1563,23 @@ def main():
             abundance_cutoff = args.abundance_cutoff
             _, dominant_thresholds = calculate_thresholds_sum_abundance(
                 present_clones_df,
-                by_day=args.by_day,
-                abundance_cutoff=abundance_cutoff
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
             )
         else:
             percentile = 0.995
             print('Percentile Set To: ' + str(percentile))
-            present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
+            present_at_month_4 = present_clones_df.loc[present_clones_df[timepoint_col] == first_timepoint]
             dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
 
         print(dominant_thresholds)
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 
-        plot_clone_enriched_at_time(all_clones_df,
-                                    [4, 14],
+        plot_clone_enriched_at_time(present_clones_df,
+                                    [first_timepoint],
                                     dominant_thresholds,
+                                    timepoint_col=timepoint_col,
                                     save=args.save,
                                     save_path=args.output_dir + os.sep + 'Dominant_Clone_Abundance_Over_Time',
                                     save_format='png',

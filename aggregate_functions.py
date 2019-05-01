@@ -215,6 +215,7 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
     Returns:
         pd.DataFrame -- DataFrame with only clones enriched at specified timepoint
     """
+    print(input_df)
     time_df = input_df[input_df[timepoint_col] == enrichment_time]
     enriched_at_time_df = time_df[time_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id'])
 
@@ -238,7 +239,7 @@ def combine_enriched_clones_at_time(
 
     Arguments:
         input_df {pd.DataFrame} -- data frame with month value
-        enrichement_month {int} -- month to check enrichment at
+        enrichement_time {int} -- month to check enrichment at
         threshold {float} -- threshold for enrichment
         analyzed_cell_types {List[str]} -- cell types to analyze
     
