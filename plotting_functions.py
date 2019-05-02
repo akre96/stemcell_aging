@@ -8,6 +8,7 @@ import os
 import json
 import pandas as pd
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
@@ -22,7 +23,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     across_gen_bias_change, between_gen_bias_change, calculate_abundance_change, \
     day_to_gen, calculate_bias_change, filter_biased_clones_at_timepoint, \
     bias_clones_to_abundance, filter_stable_initially, \
-    calculate_first_last_bias_change_with_avg_data
+    calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
+    add_average_abundance_to_lineage_bias, abundant_clone_transplant_survival
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -999,6 +1001,7 @@ def plot_change_contributions(
                 y='mouse_id',
                 data=g_df,
                 color=COLOR_PALETTES['change_status']['Unchanged'],
+                label="Unchanged"
             )
             sns.barplot(
                 x='percent_engraftment',
@@ -1016,8 +1019,8 @@ def plot_change_contributions(
             )
             plt.xlabel('Contribution of Changed Cells')
             plt.ylabel('')
-            plt.suptitle(cell_type.title() + ' Changed vs Not-Changed Cumulative Abundance')
-            plt.title('Group: ' + group.replace('_', ' ').title())
+            plt.suptitle(cell_type.title() + 'Cumulative Abundance of Clones by Bias Change')
+            plt.title('Group: ' + group.replace('_', ' ').title() + ' - Last Time Point')
             plt.gca().legend(title='Change Direction', loc='lower right')
             sns.despine(left=True, bottom=True)
 
@@ -1036,6 +1039,7 @@ def plot_change_contributions(
                 y='mouse_id',
                 data=g_df,
                 color=COLOR_PALETTES['change_status']['Unchanged'],
+                label='Unchanged'
             )
             sns.barplot(
                 x='percent_engraftment',
@@ -1053,8 +1057,8 @@ def plot_change_contributions(
             )
             plt.xlabel('Contribution of Changed Cells')
             plt.ylabel('')
-            plt.suptitle(cell_type.title() + ' Changed vs Not-Changed Cumulative Abundance - First Timepoint')
-            plt.title('Group: ' + group.replace('_', ' ').title())
+            plt.suptitle(cell_type.title() + 'Cumulative Abundance of Clones by Bias Change')
+            plt.title('Group: ' + group.replace('_', ' ').title() + ' - First Time Point')
             plt.gca().legend(title='Change Direction', loc='lower right')
             sns.despine(left=True, bottom=True)
 
@@ -1903,6 +1907,7 @@ def plot_abundance_change(
 def plot_bias_change_cutoff(
         lineage_bias_df: pd.DataFrame,
         thresholds: Dict[str, float],
+        timepoint_col: str,
         abundance_cutoff: float = 0.0,
         absolute_value: bool = False,
         group: str = 'all',
@@ -1937,7 +1942,7 @@ def plot_bias_change_cutoff(
             lineage_bias_df,
             thresholds=thresholds
         )
-        bias_change_df = get_bias_change(filt_lineage_bias_df)
+        bias_change_df = get_bias_change(filt_lineage_bias_df, timepoint_col)
         bias_change_df.to_csv(cache_dir + os.sep + 'bias_change_df_a'+str(round(abundance_cutoff, 2)) + '.csv', index=False)
         
 
@@ -2589,10 +2594,9 @@ def plot_bias_change_mean_scatter(
         y_col,
         timepoint_col
     )
-    
     if by_group:
         for gname, g_df in bias_dist_df.groupby('group'):
-            plt.figure()
+            fig, ax = plt.subplots()
             sns.scatterplot(
                 x='average_'+y_col,
                 y='bias_change',
@@ -2600,6 +2604,7 @@ def plot_bias_change_mean_scatter(
                 hue='mouse_id',
                 palette=COLOR_PALETTES['mouse_id'],
                 legend=None,
+                ax=ax,
             )
             plt.hlines(0, 0, g_df['average_'+y_col].max(), linestyles='dashed', color='lightgrey')
 
@@ -2612,7 +2617,7 @@ def plot_bias_change_mean_scatter(
                 + '.' + save_format
             save_plot(fname, save, save_format)
     else:
-        plt.figure()
+        fig, ax = plt.subplots()
         sns.scatterplot(
             x='average_'+y_col,
             y='bias_change',
@@ -2620,6 +2625,7 @@ def plot_bias_change_mean_scatter(
             hue='group',
             palette=COLOR_PALETTES['group'],
             legend=None,
+            ax=ax,
         )
         plt.hlines(0, 0, bias_dist_df['average_'+y_col].max(), linestyles='dashed', color='lightgrey')
 
@@ -2631,7 +2637,7 @@ def plot_bias_change_mean_scatter(
         fname = save_path + os.sep + y_col + '_vs_bias_change' \
             + '.' + save_format
         save_plot(fname, save, save_format)
-def plot_kde_bias_over_time(
+def plot_hist_bias_over_time(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         by_group: bool = False,
@@ -2639,30 +2645,24 @@ def plot_kde_bias_over_time(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
-    plt.figure()
-    i: int = 0
-    plt.suptitle(
-        'Distribution of Lineage Bias at Each ' + timepoint_col.title()
-    )
-    plt.ylabel('')
     if timepoint_col == 'gen':
         lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
     if by_group:
-        plt.title('By Group')
         for group, g_df in lineage_bias_df.groupby('group'):
+            plt.figure()
+            plt.suptitle(
+                'Distribution of Lineage Bias at Each ' + timepoint_col.title()
+            )
+            plt.ylabel('')
+            plt.title('Group: ' + group.replace('_', ' ').title())
             max_color = Color(COLOR_PALETTES['group'][group])
-            min_luminance = .9
+            min_luminance = .85
             luminances = np.linspace(
                 min_luminance,
                 max_color.luminance,
                 num=lineage_bias_df[timepoint_col].nunique()
             )
             j: int = 0
-            if not i:
-                legend: Any = 'brief'
-            else:
-                legend = None
-
             for t, t_df in g_df.groupby(timepoint_col):
                 color = max_color
                 color.set_luminance(luminances[j])
@@ -2670,16 +2670,30 @@ def plot_kde_bias_over_time(
                     t_df.lineage_bias,
                     color=color.hex_l,
                     label=t,
-                    hist=False
+                    bins=15,
+                    kde=False,
+                    hist=True,
+                    hist_kws={
+                        "histtype": "step",
+                        "linewidth": 2,
+                        "alpha": 1,
+                        "color": color.hex_l
+                    }
                 )
                 j += 1
-
-            i += 1
-        plt.xlabel('Lineage Bias')
-        file_name = save_path + os.sep \
-            + 'bias_dist_time_group.' + save_format
-        save_plot(file_name, save, save_format)
+            plt.xlabel('Lineage Bias')
+            plt.legend(title=timepoint_col.title())
+            file_name = save_path + os.sep \
+                + 'bias_dist_time_' \
+                + group \
+                + '.' + save_format
+            save_plot(file_name, save, save_format)
     else:
+        plt.figure()
+        plt.suptitle(
+            'Distribution of Lineage Bias at Each ' + timepoint_col.title()
+        )
+        plt.ylabel('')
         pal = sns.color_palette(
             palette=COLOR_PALETTES['time_point'],
             n_colors=lineage_bias_df[timepoint_col].nunique()
@@ -2690,16 +2704,24 @@ def plot_kde_bias_over_time(
                 t_df.lineage_bias,
                 color=pal[k],
                 label=t,
-                rug=True,
-                hist=False,
+                kde=False,
+                bins=15,
+                hist=True,
+                hist_kws={
+                    "histtype": "step",
+                    "linewidth": 2,
+                    "alpha": 1,
+                    "color": pal[k]
+                }
             )
             k += 1
         plt.xlabel('Lineage Bias')
+        plt.legend(title=timepoint_col.title())
         file_name = save_path + os.sep \
             + 'bias_dist_time.' + save_format
         save_plot(file_name, save, save_format)
 
-def plot_kde_bias_at_time(
+def plot_hist_bias_at_time(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         timepoint: int,
@@ -2708,45 +2730,231 @@ def plot_kde_bias_at_time(
         save_format: str = 'png',
         by_mouse: bool = False,
     ) -> None:
-    plt.figure()
     i: int = 0
-    plt.title(
-        'Distribution of Lineage Bias at ' \
-            + timepoint_col.title() \
-            + ' ' + str(timepoint)
-    )
-    plt.ylabel('')
     t_df = lineage_bias_df[lineage_bias_df[timepoint_col] == timepoint]
     if by_mouse:
         for group, g_df in t_df.groupby('group'):
+            plt.figure()
+            plt.title(
+                'Distribution of Lineage Bias at ' \
+                    + timepoint_col.title() \
+                    + ' ' + str(timepoint)
+            )
+            plt.ylabel('')
             for mouse_id, m_df in g_df.groupby('mouse_id'):
-                sns.kdeplot(
+                sns.distplot(
                     m_df.lineage_bias,
-                    color=COLOR_PALETTES['mouse_id'][mouse_id],
+                    bins=15,
                     label=mouse_id,
-                    linestyle=LINE_STYLES['group'][group]
+                    kde=False,
+                    hist=True,
+                    hist_kws={
+                        "histtype": "step",
+                        "linewidth": 2,
+                        "alpha": 1,
+                        "color": COLOR_PALETTES['mouse_id'][mouse_id]
+                    }
                 )
-        b, t = plt.ylim()
-        if t > 2:
-            plt.ylim(0, 2)
-        plt.xlabel('Lineage Bias')
-        file_name = save_path + os.sep \
-            + 'bias_dist_at_' + timepoint_col[0] \
-            + str(timepoint) + '_by-mouse' \
-            + '.' + save_format
-        save_plot(file_name, save, save_format)
+            plt.xlabel('Lineage Bias')
+            plt.suptitle('Group: ' + group.replace('_', ' ').title())
+            file_name = save_path + os.sep \
+                + 'bias_dist_at_' + timepoint_col[0] \
+                + str(timepoint) + '_by-mouse' \
+                + group \
+                + '.' + save_format
+            save_plot(file_name, save, save_format)
     else:
+        plt.figure()
+        plt.title(
+            'Distribution of Lineage Bias at ' \
+                + timepoint_col.title() \
+                + ' ' + str(timepoint)
+        )
+        plt.ylabel('')
         for group, g_df in t_df.groupby('group'):
-            sns.kdeplot(
+            sns.distplot(
                 g_df.lineage_bias,
-                color=COLOR_PALETTES['group'][group],
                 label=group,
-                linestyle=LINE_STYLES['group'][group],
-                linewidth=2.5
+                bins=15,
+                kde=False,
+                hist=True,
+                hist_kws={
+                    "histtype": "step",
+                    "linewidth": 2,
+                    "alpha": 1,
+                    "color": COLOR_PALETTES['group'][group]
+                }
             )
         plt.xlabel('Lineage Bias')
         file_name = save_path + os.sep \
             + 'bias_dist_at_' + timepoint_col[0] \
             + str(timepoint) \
             + '.' + save_format
+        save_plot(file_name, save, save_format)
+
+def plot_bias_first_last(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        cutoff: float,
+        filter_col: str = 'sum_abundance',
+        by_group: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ) -> None:
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+    with_avg_abund = add_average_abundance_to_lineage_bias(
+        lineage_bias_df,
+    )
+
+    with_time_desc = add_first_last_to_lineage_bias(
+        with_avg_abund,
+        timepoint_col
+    )    
+    with_time_desc_filt = with_time_desc[with_time_desc.time_description.isin(['First', 'Last'])]
+    filt_df = with_time_desc_filt[with_time_desc_filt['average_'+filter_col] >= cutoff]
+    if by_group:
+        for group, g_df in filt_df.groupby('group'):
+            plt.figure()
+            ax = sns.violinplot(
+                x='time_description',
+                y='lineage_bias',
+                color='white',
+                data=g_df,
+                dodge=False,
+                cut=0,
+            )
+            sns.swarmplot(
+                x='time_description',
+                y='lineage_bias',
+                hue='mouse_id',
+                palette=COLOR_PALETTES['mouse_id'],
+                data=g_df,
+                ax=ax,
+            )
+            plt.legend().remove()
+            plt.ylabel('Lineage Bias')
+            plt.xlabel('Time Point')
+            plt.suptitle('Lineage Bias of Clones: ' + group.replace('_', ' ').title())
+            plt.title(
+                'Filtered by Clones With ' \
+                + y_col_to_title('average_'+filter_col) \
+                + ' > ' + str(cutoff)
+                )
+
+            file_name = save_path + os.sep \
+                + 'first-last-lineage-bias' \
+                + '_' + filter_col \
+                + '_t' + str(cutoff).replace('.', '-') \
+                + '_' + group \
+                + '.' + save_format
+            save_plot(file_name, save, save_format)
+    else:
+        plt.figure()
+        ax = sns.violinplot(
+            x='time_description',
+            y='lineage_bias',
+            color='white',
+            data=filt_df,
+            dodge=False,
+            cut=0,
+        )
+        sns.swarmplot(
+            x='time_description',
+            y='lineage_bias',
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            data=filt_df,
+            ax=ax,
+        )
+        plt.legend().remove()
+        plt.ylabel('Lineage Bias')
+        plt.xlabel('Time Point')
+        plt.suptitle('Lineage Bias of Clones First And Last Time Point')
+        plt.title(
+            'Filtered by Clones With ' \
+            + y_col_to_title('average_'+filter_col) \
+            + ' > ' + str(cutoff)
+            )
+
+        file_name = save_path + os.sep \
+            + 'first-last-lineage-bias' \
+            + '_' + filter_col \
+            + '_t' + str(cutoff).replace('.', '-') \
+            + '.' + save_format
+        save_plot(file_name, save, save_format)
+
+def plot_abundant_clone_survival(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[str, float],
+        cell_type: str,
+        cumulative: bool,
+        by_mouse: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    if timepoint_col == 'gen':
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df[timepoint_col] != 8.5]
+    transplant_survival_df = abundant_clone_transplant_survival(
+        clonal_abundance_df,
+        timepoint_col,
+        thresholds,
+        [cell_type],
+        cumulative
+    )
+    time_change = 'between'
+    if cumulative:
+        time_change = 'across'
+    
+    fname_prefix = save_path + os.sep \
+        + 'survival_' + time_change \
+        + '_' + timepoint_col + '_' \
+        + cell_type + '_a' \
+        + str(round(thresholds[cell_type],2)).replace('.','-')
+    fname_suffix = '.' + save_format
+
+
+    if by_mouse:
+        for group, g_df in transplant_survival_df.groupby('group'):
+            plt.figure()
+            plt.suptitle(
+                'Survival of Clones with ' + cell_type.title()
+                + ' Abundance > ' + str(round(thresholds[cell_type], 2))
+                + ' Before Change'
+            )
+            plt.title('Group: ' + group.replace('_', ' ').title())
+            sns.barplot(
+                x='time_change',
+                y='percent_survival',
+                data=g_df,
+                hue='mouse_id',
+                palette=COLOR_PALETTES['mouse_id']
+            )
+            plt.xlabel(timepoint_col.title() + ' Change')
+            plt.ylabel('Percent Survival')
+            plt.legend().remove()
+            file_name = fname_prefix \
+                + '_' + group + fname_suffix
+            save_plot(file_name, save, save_format)
+    else:
+        plt.figure()
+        plt.title(
+            'Survival of Clones with ' + cell_type.title()
+            + ' Abundance > ' + str(round(thresholds[cell_type], 2))
+            + ' Before Change'
+        )
+        sns.barplot(
+            x='time_change',
+            y='percent_survival',
+            data=transplant_survival_df,
+            hue='group',
+            palette=COLOR_PALETTES['group']
+        )
+        plt.xlabel(timepoint_col.title() + ' Change')
+        plt.ylabel('Percent Survival')
+        file_name = fname_prefix + fname_suffix
         save_plot(file_name, save, save_format)
