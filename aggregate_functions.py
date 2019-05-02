@@ -1015,3 +1015,122 @@ def calculate_first_last_bias_change_with_avg_data(
         bias_change_row['bias_change'] = [bias_change]
         bias_dist_df = bias_dist_df.append(bias_change_row, ignore_index=True)
     return bias_dist_df
+
+def add_average_abundance_to_lineage_bias(
+    lineage_bias_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+
+    g_df = pd.DataFrame(
+        lineage_bias_df.groupby(['mouse_id', 'code'])\
+            .gr_percent_engraftment.mean()
+        ).reset_index()\
+            .rename(
+                columns={'gr_percent_engraftment': 'average_gr_percent_engraftment'}
+            )
+
+    b_df = pd.DataFrame(
+        lineage_bias_df.groupby(['mouse_id', 'code'])\
+            .b_percent_engraftment.mean()
+        ).reset_index()\
+            .rename(
+                columns={'b_percent_engraftment': 'average_b_percent_engraftment'}
+            )
+    
+    g_b_df = g_df.merge(
+        b_df,
+        on=['mouse_id', 'code'],
+        validate='1:1',
+        how='inner'
+    )
+    both_df = g_b_df.assign(
+        average_sum_abundance=lambda x: x.average_b_percent_engraftment + x.average_gr_percent_engraftment
+    )
+    new_lineage_bias_df = lineage_bias_df.merge(
+        both_df,
+        on=['mouse_id', 'code'],
+        how='inner',
+        validate='m:1'
+    )
+    return new_lineage_bias_df
+
+def add_first_last_to_lineage_bias(
+    lineage_bias_df: pd.DataFrame,
+    timepoint_col: str,
+    ) -> pd.DataFrame:
+
+    filt_df = pd.DataFrame()
+
+    for _, group_df in lineage_bias_df.groupby(['mouse_id', 'code']):
+        if len(group_df) < 2:
+            continue
+        sort_df = group_df.sort_values(by=timepoint_col).reset_index()
+        sort_df['time_description'] = 'Middle'
+        sort_df.loc[0, 'time_description'] = 'First'
+        sort_df.loc[len(sort_df) -1, 'time_description'] = 'Last'
+        filt_df = filt_df.append(sort_df, ignore_index=True)
+    return filt_df
+
+def abundant_clone_transplant_survival(
+    clonal_abundance_df: pd.DataFrame,
+    timepoint_col: str,
+    thresholds: Dict[str, float],
+    cell_types: List[str],
+    cumulative: bool,
+) -> pd.DataFrame:
+    """ Calculate percent surivival of clones abundant before transplant to after
+    
+    Arguments:
+        clonal_abundance_df {pd.DataFrame}
+        timepoint_col {str} -- column to serach for time in
+        thresholds {Dict[str, float]} -- {cell_type:threshold}
+        cumulative {bool} -- True means Across (1-3,1-4,etc.), false = between (1-2,2-3,etc.)
+    
+    Returns:
+        pd.DataFrame -- DataFrame showing if a clone survived a transplantation
+    """
+
+    sorted_df = clonal_abundance_df.sort_values(by=timepoint_col)
+    timepoints = sorted_df[timepoint_col].unique()
+    if cumulative:
+        t1s = [timepoints[0]] * (len(timepoints) - 1)
+    else:
+        t1s = timepoints[:-1]
+    t2s = timepoints[1:]
+    clonal_survival_df = pd.DataFrame()
+    for t1, t2 in zip(t1s, t2s):
+        t1_df = filter_cell_type_threshold(
+            sorted_df[sorted_df[timepoint_col] == t1],
+            analyzed_cell_types=cell_types,
+            thresholds=thresholds
+        )
+        t2_df = sorted_df[sorted_df[timepoint_col] == t2]
+        survived = t2_df.merge(
+            t1_df[['mouse_id', 'code']],
+            on=['mouse_id', 'code'],
+            how='inner',
+        )
+        t1_unique_clones = pd.DataFrame(t1_df.groupby(['mouse_id', 'group'])\
+            .code.nunique()
+        ).reset_index().rename(columns={'code':'t1_num_codes'})
+
+        survived_unique_clones = pd.DataFrame(survived.groupby(['mouse_id', 'group'])\
+            .code.nunique()
+        ).reset_index().rename(columns={'code':'survived_num_codes'})
+
+        t_change_df = t1_unique_clones.merge(
+            survived_unique_clones,
+            on=['mouse_id', 'group'],
+            how='outer',
+            validate='1:1'
+        )
+        str_t_change = str(int(round(t1))) + ' to ' + str(int(round(t2)))
+        t_change_df['time_change'] = str_t_change
+        t_change_df['t1'] = t1
+        t_change_df['t2'] = t2
+        t_change_df['time_units'] = timepoint_col
+        t_change_df.loc[t_change_df.survived_num_codes.isna(), 'survived_num_codes'] = 0
+        t_change_df = t_change_df.assign(
+            percent_survival=lambda x: 100*x.survived_num_codes/x.t1_num_codes
+        )
+        clonal_survival_df = clonal_survival_df.append(t_change_df)
+    return clonal_survival_df
