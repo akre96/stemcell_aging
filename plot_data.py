@@ -542,7 +542,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col,
             )
 
         cached_change = None
@@ -626,7 +626,6 @@ def main():
                 save_path=args.output_dir + os.sep + 'bias_change_rest',
                 cached_change=cached_change,
                 cache_dir=args.cache_dir,
-                plot_rest=args.plot_rest
             )
         else:
             plot_bias_change_time_kdes(
@@ -672,7 +671,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col,
             )
 
         cached_change = None
@@ -710,7 +709,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col,
             )
 
         bias_change_df = between_gen_bias_change(
@@ -720,6 +719,7 @@ def main():
         
         plot_bias_change_time_kdes(
             bias_change_df,
+            first_timepoint=first_timepoint,
             absolute_value=args.magnitude,
             group=args.group,
             save=args.save,
@@ -739,7 +739,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col,
             )
 
         bias_change_df = across_gen_bias_change(
@@ -749,6 +749,7 @@ def main():
         
         plot_bias_change_time_kdes(
             bias_change_df,
+            first_timepoint=first_timepoint,
             absolute_value=args.magnitude,
             group=args.group,
             save=args.save,
@@ -769,7 +770,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col,
             )
         if args.magnitude:
             plot_bias_change_across_gens(
@@ -1013,7 +1014,8 @@ def main():
 
         percent_of_total = True
         cell_type = 'gr'
-        plot_change_contributions_by_group(change_marked_df,
+        plot_change_contributions_by_group(
+            change_marked_df,
             cell_type=cell_type,
             percent_of_total=percent_of_total,
             line=args.line,
@@ -1022,7 +1024,8 @@ def main():
             save_format='png',
         )
         cell_type = 'b'
-        plot_change_contributions_by_group(change_marked_df,
+        plot_change_contributions_by_group(
+            change_marked_df,
             cell_type=cell_type,
             percent_of_total=percent_of_total,
             line=args.line,
@@ -1495,20 +1498,24 @@ def main():
                              percentile=percentile
                             )
 
-    if graph_type == 'top_abund_bias':
+    if graph_type == 'abundant_at_last':
         abundance_cutoff = 0
+        thresholds = {
+            'gr': 0,
+            'b': 0
+        }
+        analyzed_cell_types = ['gr', 'b']
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
+            print('Thresholds calculated based on cumulative abundance')
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=analyzed_cell_types,
+            )
 
-        analysed_cell_types = ['gr', 'b']
-        print('Thresholds calculated based on cumulative abundance')
-        _, thresholds = calculate_thresholds_sum_abundance(
-            present_clones_df,
-            abundance_cutoff=abundance_cutoff,
-            timepoint_col=timepoint_col
-        )
-
-        for cell_type in analysed_cell_types:
+        for cell_type in analyzed_cell_types:
             filt_lineage_bias_df = clones_enriched_at_last_timepoint(
                 input_df=input_df,
                 lineage_bias_df=lineage_bias_df,
@@ -1519,9 +1526,11 @@ def main():
             )
             plot_lineage_bias_line(
                 filt_lineage_bias_df,
+                clonal_abundance_df=present_clones_df,
                 title_addon='Filtered by clones with > ' + str(round(thresholds[cell_type], 2)) + '% WBC abundance in ' + cell_type.title() + ' at last timepoint',
+                y_col=args.y_col,
                 save=args.save,
-                save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/' + cell_type,
+                save_path=args.output_dir + os.sep + 'abundance_at_last_' + args.y_col + os.sep + cell_type,
                 save_format='png',
                 timepoint_col=timepoint_col,
                 abundance=abundance_cutoff

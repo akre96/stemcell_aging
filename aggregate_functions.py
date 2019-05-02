@@ -14,7 +14,6 @@ def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
                      analyzed_cell_types: List[str],
                      threshold_column: str = "percent_engraftment",
-                     lineage_bias: bool = False,
                      ) -> pd.DataFrame:
     """Filter dataframe based on numerical thresholds, adds month column
 
@@ -283,9 +282,9 @@ def long_to_wide_data(input_df: pd.DataFrame, data_col: str) -> pd.DataFrame:
 def clones_enriched_at_last_timepoint(
         input_df: pd.DataFrame,
         lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
         thresholds: Dict[str, float] = {'any' : 0.0},
         cell_type: str = 'any',
-        by_day: bool = False,
         lineage_bias: bool = False
     ) -> pd.DataFrame:
     """ Finds clones enriched at last timepoint for clone
@@ -304,11 +303,6 @@ def clones_enriched_at_last_timepoint(
         pd.DataFrame -- [description]
     """
 
-    if by_day:
-        time_point_col = 'day'
-    else:
-        time_point_col = 'month'
-
     groupby_cols = ['mouse_id', 'code']
     if lineage_bias:
         if cell_type == 'any':
@@ -320,7 +314,7 @@ def clones_enriched_at_last_timepoint(
         groupby_cols.append('cell_type')
 
     # get max month for clones
-    grouped_df = pd.DataFrame(filtered_df.groupby(by=groupby_cols)[time_point_col].max()).reset_index()
+    grouped_df = pd.DataFrame(filtered_df.groupby(by=groupby_cols)[timepoint_col].max()).reset_index()
     if lineage_bias:
         filtered_for_enrichment = lineage_bias_df.merge(grouped_df['code'], how='inner', on=['code'])
     else:

@@ -508,6 +508,13 @@ def plot_lineage_bias_line(
     if timepoint_col is not None:
         x_var = timepoint_col
 
+    if y_col != 'lineage_bias':
+        lineage_bias_df = bias_clones_to_abundance(
+            lineage_bias_df,
+            clonal_abundance_df,
+            y_col
+        )
+        
     plt.figure()
     sns.lineplot(
         x=x_var,

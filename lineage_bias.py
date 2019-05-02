@@ -390,6 +390,7 @@ def main():
             input_df,
             abundance_cutoff=abundance_cutoff,
             analyzed_cell_types=['gr','b'],
+            timepoint_col=time_column
         )
         print('Calculating Lineage Bias and Change for cumulative abundance cutoff: ' + str(abundance_cutoff) + '\n')
 
@@ -430,7 +431,7 @@ def main():
 
     if not args.bias_only:
         print('Calculating change in lineage bias...')
-        bias_change_df = get_bias_change(lineage_bias_df)
+        bias_change_df = get_bias_change(lineage_bias_df, time_column)
         bias_change_file_name = args.output_dir + os.sep + 'bias_change' + fname_suffix
         print('Done.\n')
         print('\nSaving Bias Change Data To: ' + bias_change_file_name)
