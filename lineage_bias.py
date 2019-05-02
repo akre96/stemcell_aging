@@ -315,7 +315,7 @@ def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.Da
 
 def get_bias_change(
         lineage_bias_df: pd.DataFrame,
-        timepoint_col: str = 'day',
+        timepoint_col: str,
         save_err: bool = False
     ) -> pd.DataFrame:
     """ Calculate bias change between a clones first and last timepoint
