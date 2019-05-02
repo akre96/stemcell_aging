@@ -46,8 +46,9 @@ from plotting_functions import plot_max_engraftment, \
     plot_extreme_bias_time, plot_bias_dist_at_time, \
     plot_stable_clones, plot_bias_dist_mean_abund, \
     plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs, \
-    plot_bias_change_mean_scatter, plot_kde_bias_over_time, \
-    plot_kde_bias_at_time
+    plot_bias_change_mean_scatter, plot_hist_bias_over_time, \
+    plot_hist_bias_at_time, plot_bias_first_last, \
+    plot_abundant_clone_survival
      
 
 
@@ -204,12 +205,57 @@ def main():
         print('\n*** Saving Plots Enabled ***\n')
     
 
+    if graph_type in ['survival_time_change']:
+        save_path = args.output_dir + os.sep + 'survival_time_change'
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+        if args.time_change == 'across':
+            cumulative = True
+        elif args.time_change == 'between':
+            cumulative = False
+        for cell_type in ['gr', 'b']:
+            plot_abundant_clone_survival(
+                present_clones_df,
+                timepoint_col,
+                thresholds,
+                cell_type,
+                cumulative,
+                by_mouse=args.by_mouse,
+                save=args.save,
+                save_path=save_path
+            )
+
+    if graph_type in ['bias_first_last']:
+        save_path = args.output_dir + os.sep + 'bias_first-last'
+        if args.threshold:
+            threshold = args.threshold
+        else:
+            threshold = 0.01
+        if args.y_col == 'lineage_bias':
+            raise ValueError("Y-Col must be 'sum_abundance', 'gr_percent_engraftment', or 'b_percent_engraftment")
+        plot_bias_first_last(
+            lineage_bias_df,
+            timepoint_col,
+            filter_col=args.y_col,
+            cutoff=threshold,
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path
+        )
+
     if graph_type in ['bias_dist_at_time']:
         save_path = args.output_dir + os.sep + 'bias_distribution_at_time'
         timepoint = first_timepoint
         if args.timepoint:
             timepoint = args.timepoint
-        plot_kde_bias_at_time(
+        plot_hist_bias_at_time(
             lineage_bias_df,
             timepoint_col,
             timepoint,
@@ -220,7 +266,7 @@ def main():
 
     if graph_type in ['bias_dist_over_time']:
         save_path = args.output_dir + os.sep + 'bias_distribution_over_time'
-        plot_kde_bias_over_time(
+        plot_hist_bias_over_time(
             lineage_bias_df,
             timepoint_col,
             by_group=args.by_group,
@@ -956,6 +1002,7 @@ def main():
         else:
             bias_change_df = get_bias_change(
                 lineage_bias_df,
+                timepoint_col,
             )
             change_marked_df = mark_changed(
                 present_clones_df,
@@ -1177,6 +1224,7 @@ def main():
         plot_bias_change_cutoff(
             lineage_bias_df=lineage_bias_df,
             thresholds=thresholds,
+            timepoint_col=timepoint_col,
             abundance_cutoff=abundance_cutoff,
             absolute_value=True,
             group=args.group,
@@ -1460,40 +1508,24 @@ def main():
             timepoint_col=timepoint_col
         )
 
-        filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(
-            input_df=input_df,
-            lineage_bias_df=lineage_bias_df,
-            thresholds=thresholds,
-            lineage_bias=True,
-            cell_type='gr',
-            by_day=args.by_day,
-        )
-        filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(
-            input_df=input_df,
-            lineage_bias_df=lineage_bias_df,
-            thresholds=thresholds,
-            lineage_bias=True,
-            cell_type='b',
-            by_day=args.by_day,
-        )
-        plot_lineage_bias_line(
-            filt_lineage_bias_gr_df,
-            title_addon='Filtered by clones with > ' + str(round(thresholds['gr'], 2)) + '% WBC abundance in GR at last timepoint',
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/gr',
-            save_format='png',
-            by_day=args.by_day,
-            abundance=abundance_cutoff
-        )
-        plot_lineage_bias_line(
-            filt_lineage_bias_b_df,
-            title_addon='Filtered by clones with > ' + str(round(thresholds['b'], 2)) + '% WBC abundance in B at last timepoint',
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
-            save_format='png',
-            by_day=args.by_day,
-            abundance=abundance_cutoff
-        )
+        for cell_type in analysed_cell_types:
+            filt_lineage_bias_df = clones_enriched_at_last_timepoint(
+                input_df=input_df,
+                lineage_bias_df=lineage_bias_df,
+                thresholds=thresholds,
+                lineage_bias=True,
+                cell_type=cell_type,
+                timepoint_col=timepoint_col
+            )
+            plot_lineage_bias_line(
+                filt_lineage_bias_df,
+                title_addon='Filtered by clones with > ' + str(round(thresholds[cell_type], 2)) + '% WBC abundance in ' + cell_type.title() + ' at last timepoint',
+                save=args.save,
+                save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/' + cell_type,
+                save_format='png',
+                timepoint_col=timepoint_col,
+                abundance=abundance_cutoff
+            )
 
         
     if graph_type == 'top_perc_bias':
