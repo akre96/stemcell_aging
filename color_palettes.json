@@ -20,12 +20,12 @@
         "#ff6547"
     ],
     "change_status": {
-        "Unchanged": "#cccccc",
-        "Total": "#cccccc"
+        "Unchanged": "#f1f1f1",
+        "Total": "#f1f1f1"
     },
     "change_type": {
-        "Myeloid": "#8c7ae6",
-        "Lymphoid": "#00a8ff"
+        "Myeloid": "#d72424",
+        "Lymphoid": "#32bec3"
     },
     "time_point": "coolwarm",
     "mouse_id": {
