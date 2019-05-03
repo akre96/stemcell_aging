@@ -1399,16 +1399,13 @@ def swamplot_abundance_cutoff(
         cell_type: str,
         abundance_cutoff: float,
         thresholds: Dict[str, float],
-        n_timepoints: int,
-        by_day: bool = False,
-        timepoint_col: str = None,
-        color_col: str = 'mouse_id',
-        group: str = 'all',
+        timepoint_col: str,
+        by_group: bool = False,
         save: bool = False,
         save_path: str = '',
         save_format: str = 'png'
     ) -> None:
-    """ Swarm plot of abundance of mice with all 4 month timepoints
+    """ Swarm plot of abundance of mouse_clones
 
     Arguments:
         input_df {pd.DataFrame} -- abundance dataframe
@@ -1418,9 +1415,7 @@ def swamplot_abundance_cutoff(
         n_timepoints {int} -- number of timepoints required for a clone to have
 
     Keyword Arguments:
-        color_col {str} -- column to set hue to (default: {'mouse_id'})
-        group {str} -- filter by group (default: {'all'})
-        by_day {bool} -- use day as timepoint column
+        by_group -- plot by group or not
         save {bool} -- save plot or not (default: {False})
         save_path {str} -- path to save file (default: {''})
         save_format {str} -- plot save format (default: {'png'})
@@ -1430,52 +1425,65 @@ def swamplot_abundance_cutoff(
     """
 
 
-    if group != 'all':
-        input_df = input_df[input_df.group == group]
-    
-    time_col = 'month'
-    if by_day:
-        time_col = 'day'
-    if timepoint_col is not None:
-        time_col = timepoint_col
+    time_col = timepoint_col
 
-    print('Minimum number of timepoints: ' + str(n_timepoints))
-    all_timepoint_df = filter_mice_with_n_timepoints(
-        input_df,
-        n_timepoints=n_timepoints,
-        time_col=time_col,
-    )
     filtered_df = filter_cell_type_threshold(
-        all_timepoint_df,
+        input_df,
         thresholds,
         analyzed_cell_types=[cell_type]
     )
+    if abundance_cutoff == 0:
+        print('\n ~~ Cutoff set to 0, due to number of clones plotting will take some time ~~ \n')
 
-    plt.figure()
-    pal = sns.color_palette('hls', filtered_df.mouse_id.nunique())
-    if color_col == 'mouse_id':
-        pal = COLOR_PALETTES['mouse_id']
-    sns.swarmplot(
-        x=time_col,
-        y='percent_engraftment',
-        hue=color_col,
-        data=filtered_df,
-        palette=pal
-        )
+    print('Plotting for ' + cell_type.title() + ' Cells')
+    if by_group:
+        for group, g_df in filtered_df.groupby('group'):
+            print('Group: ' + group)
+            plt.figure()
+            pal = COLOR_PALETTES['mouse_id']
+            sns.swarmplot(
+                x=time_col,
+                y='percent_engraftment',
+                hue='mouse_id',
+                data=g_df,
+                palette=pal
+                )
 
-    title = 'Abundance of ' + cell_type.capitalize() \
-          + ' with Abundance > ' \
-          + str(round(thresholds[cell_type],2)) + '% WBC'
-    plt.suptitle(title)
-    plt.title('Group: ' + group.replace('_', ' ').title())
-    plt.xlabel(time_col.title())
-    plt.ylabel('Clone Abundance (% WBC)')
-    fname = save_path + os.sep + 'swamplot_abundance' \
-            + '_' + cell_type + '_a' \
-            + str(round(abundance_cutoff, 2)).replace('.','-') \
-            + '_' + group \
-            + '.' + save_format
-    save_plot(fname, save, save_format)
+            title = 'Abundance of ' + cell_type.capitalize() \
+                + ' with Abundance > ' \
+                + str(round(thresholds[cell_type],2)) + '% WBC'
+            plt.suptitle(title)
+            plt.title('Group: ' + group.replace('_', ' ').title())
+            plt.xlabel(time_col.title())
+            plt.ylabel('Clone Abundance (% WBC)')
+            fname = save_path + os.sep + 'swamplot_abundance' \
+                    + '_' + cell_type + '_a' \
+                    + str(round(abundance_cutoff, 2)).replace('.','-') \
+                    + '_' + group \
+                    + '.' + save_format
+            save_plot(fname, save, save_format)
+    else:
+        plt.figure()
+        pal = COLOR_PALETTES['group']
+        sns.swarmplot(
+            x=time_col,
+            y='percent_engraftment',
+            hue='group',
+            data=filtered_df,
+            palette=pal
+            )
+
+        title = 'Abundance of ' + cell_type.capitalize() \
+            + ' with Abundance > ' \
+            + str(round(thresholds[cell_type],2)) + '% WBC'
+        plt.suptitle(title)
+        plt.xlabel(time_col.title())
+        plt.ylabel('Clone Abundance (% WBC)')
+        fname = save_path + os.sep + 'swamplot_abundance' \
+                + '_' + cell_type + '_a' \
+                + str(round(abundance_cutoff, 2)).replace('.','-') \
+                + '.' + save_format
+        save_plot(fname, save, save_format)
 
 
 def plot_bias_change_between_gen(

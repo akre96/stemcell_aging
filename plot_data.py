@@ -148,8 +148,8 @@ def main():
 
     if args.group != 'all':
         print(' - Group Filtering Set to: ' + args.group)
-    else:
-        print(' - No Group Filtering')
+    if args.by_group:
+        print(' - Plotting Each Phenotypic Group Individually')
     
     if args.y_col:
         print(' - Plotting y_axis as: ' + args.y_col)
@@ -865,10 +865,6 @@ def main():
             'gr': 0,
             'b': 0
         }
-        if args.by_day or args.by_gen:
-            n_timepoints = 1
-        else:
-            n_timepoints = 4
 
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
@@ -883,34 +879,17 @@ def main():
             group = args.group
 
         cell_type = 'gr'
-        swamplot_abundance_cutoff(
-            present_clones_df,
-            abundance_cutoff=abundance_cutoff,
-            thresholds=thresholds,
-            group=group,
-            n_timepoints=n_timepoints,
-            by_day=args.by_day,
-            timepoint_col=timepoint_col,
-            color_col='mouse_id',
-            cell_type=cell_type,
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'swarmplot_abundance',
-        )
-
-        cell_type = 'b'
-        swamplot_abundance_cutoff(
-            present_clones_df,
-            abundance_cutoff=abundance_cutoff,
-            thresholds=thresholds,
-            n_timepoints=n_timepoints,
-            group=group,
-            timepoint_col=timepoint_col,
-            by_day=args.by_day,
-            color_col='mouse_id',
-            cell_type=cell_type,
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'swarmplot_abundance',
-        )
+        for cell_type in ['gr', 'b']:
+            swamplot_abundance_cutoff(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                thresholds=thresholds,
+                by_group=args.by_group,
+                timepoint_col=timepoint_col,
+                cell_type=cell_type,
+                save=args.save,
+                save_path=args.output_dir + os.sep + 'swarmplot_abundance',
+            )
 
     if graph_type in ['avg_abund_by_sum']:
         save_path = args.output_dir + os.sep + 'Average_Abundance'
