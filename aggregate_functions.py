@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from intersection.intersection import intersection
 
+UNIQUE_CODE_COLS = ['code', 'mouse_id']
+
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
                      analyzed_cell_types: List[str],
@@ -1064,7 +1066,7 @@ def add_first_last_to_lineage_bias(
         filt_df = filt_df.append(sort_df, ignore_index=True)
     return filt_df
 
-def abundant_clone_transplant_survival(
+def abundant_clone_survival(
     clonal_abundance_df: pd.DataFrame,
     timepoint_col: str,
     thresholds: Dict[str, float],
@@ -1128,3 +1130,145 @@ def abundant_clone_transplant_survival(
         )
         clonal_survival_df = clonal_survival_df.append(t_change_df)
     return clonal_survival_df
+
+def add_time_difference(
+    lineage_bias_or_clonal_abundance_df: pd.DataFrame,
+    timepoint_col: str,
+) -> pd.DataFrame:
+
+    # Find First Time Point
+
+    # Find Last Time Point
+    last_timepoint_df = pd.DataFrame(
+        lineage_bias_or_clonal_abundance_df.groupby(UNIQUE_CODE_COLS)[timepoint_col].max()
+    ).reset_index().rename(columns={
+        timepoint_col: 't2'
+    })
+    last_timepoint_df['t1'] = lineage_bias_or_clonal_abundance_df[timepoint_col].min()
+
+    # Find Total Change in Time Clone Survives
+    time_diff_df = last_timepoint_df.assign(
+        total_time_change=lambda x: x.t2 - x.t1
+    )
+
+    # Assign Time Change to all timepoints relative to first time point
+    with_t_diff_df = lineage_bias_or_clonal_abundance_df.merge(
+        time_diff_df,
+        on=UNIQUE_CODE_COLS,
+        how='outer',
+        validate='m:1'
+    ).assign(
+        time_change=lambda x: x.t2 - x[timepoint_col]
+    )
+
+    return with_t_diff_df
+
+def define_bias_category(lineage_bias: float) -> str:
+    """ Defines categorical classification for lineage bias dataframes
+        Intended for use in assigning an additional row to LB dataframes
+    Arguments:
+        row {pd.Series} -- row of a lineage_bias dataframe
+
+    Returns:
+        str -- categorical classification of lineage bias
+    """
+    
+    if lineage_bias == 1:
+        return 'LC'
+    if lineage_bias == -1:
+        return 'MC'
+    if lineage_bias >= 0.4:
+        return 'LB'
+    if lineage_bias <= -0.4:
+        return 'MB'
+    if lineage_bias >= 0.1:
+         return 'BL'
+    if lineage_bias <= -0.1:
+        return 'BM'
+    return 'B'
+
+def add_bias_category(
+        lineage_bias_df: pd.DataFrame
+    ) -> pd.DataFrame:
+
+    lineage_bias_df['bias_category'] = lineage_bias_df.lineage_bias.apply(
+        define_bias_category,
+    )
+    return lineage_bias_df
+
+def add_lineage_bias_labels_for_survival(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    with_time_diff_df = add_time_difference(
+        lineage_bias_df,
+        timepoint_col
+    )
+    with_bias_cat = add_bias_category(
+        with_time_diff_df,
+    )
+    return with_bias_cat
+
+def not_survived_bias_by_time_change(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        ignore_bias_cat: bool = False,
+    ) -> pd.DataFrame:
+
+    with_labels_df = add_lineage_bias_labels_for_survival(
+        lineage_bias_df,
+        timepoint_col
+    )
+    time_changes = with_labels_df['time_change'].unique()
+    not_survived_count_df = pd.DataFrame()
+    groupby_cols = ['mouse_id', 'group', 'bias_category']
+    if ignore_bias_cat:
+        groupby_cols = ['mouse_id', 'group']
+    for t_diff in time_changes:
+        not_survived_df = with_labels_df[with_labels_df.total_time_change == t_diff]
+        not_survived_counts = pd.DataFrame(
+            not_survived_df.groupby(groupby_cols).code.nunique()
+        ).reset_index().rename(columns={'code': 'count'})
+        not_survived_counts['time_survived'] = t_diff + 1
+        not_survived_count_df = not_survived_count_df.append(not_survived_counts)
+    return not_survived_count_df
+
+
+def add_avg_abundance_until_timepoint(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    output_df = pd.DataFrame()
+    for _, g_df in lineage_bias_df.groupby(UNIQUE_CODE_COLS):
+        sort_df = g_df.sort_values(by=timepoint_col).reset_index()
+        for i in range(len(sort_df)):
+            sort_df.loc[i, 'accum_abundance'] = sort_df.loc[:i, ['gr_percent_engraftment', 'b_percent_engraftment']].sum(axis=1).mean()
+        output_df = output_df.append(sort_df)
+    return output_df
+
+def not_survived_acc_abundance(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+
+    with_abund_df = add_avg_abundance_until_timepoint(
+        lineage_bias_df,
+        timepoint_col
+    )
+    with_labels_df = add_lineage_bias_labels_for_survival(
+        with_abund_df,
+        timepoint_col
+    )
+    time_changes = with_labels_df['time_change'].unique()
+    out_cols = [
+        'time_survived',
+        'bias_category',
+        'count',
+        'mouse_id',
+    ]
+
+    with_labels_df = with_labels_df.assign(
+        isLast=lambda x: x.total_time_change == x.time_change
+    )
+    not_survived_df = with_labels_df[with_labels_df.isLast]
+    return not_survived_df

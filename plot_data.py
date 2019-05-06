@@ -16,6 +16,7 @@ import json
 import glob
 import os
 import sys
+from colorama import init, Fore, Back, Style
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -48,7 +49,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs, \
     plot_bias_change_mean_scatter, plot_hist_bias_over_time, \
     plot_hist_bias_at_time, plot_bias_first_last, \
-    plot_abundant_clone_survival
+    plot_abundant_clone_survival, plot_not_survived_by_bias, \
+    plot_not_survived_count_mouse, plot_not_survived_abundance
      
 
 
@@ -125,6 +127,9 @@ def main():
     parser.add_argument('--cache-dir', dest='cache_dir', help='Where cache data is stored', default='/home/sakre/Data/cache')
     parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False, default='lineage_bias')
 
+    # Init colorama
+    init()
+
     args = parser.parse_args()
     options = args.options
     input_df = pd.read_csv(args.input)
@@ -132,12 +137,19 @@ def main():
     bias_change_df = pd.read_csv(args.bias_change)
 
     analysed_cell_types = ['gr', 'b']
+    phenotypic_groups = ['aging_phenotype', 'no_change']
     cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'b', 'wbc'])
+
+    if not input_df[~input_df.group.isin(phenotypic_groups)].empty:
+        print(Style.BRIGHT + Fore.RED + '\n !! Warning: Following Mice not in a phenotypic group !!')
+        print('  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
+        print(Style.RESET_ALL)
 
     presence_threshold = 0.0
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
-    all_clones_df = filter_threshold(input_df, 0.0, analysed_cell_types)
+
     graph_type = args.graph_type
+    print(Style.BRIGHT)
     if graph_type == 'default':
         print('\n -- Plotting Default Plot(s) -- \n')
     else:
@@ -145,6 +157,8 @@ def main():
     
     if options != 'default':
         print(' -- Extra Options Set: ' + options + ' -- \n')
+
+    print(Style.RESET_ALL)
 
     if args.group != 'all':
         print(' - Group Filtering Set to: ' + args.group)
@@ -202,8 +216,42 @@ def main():
 
 
     if args.save:
-        print('\n*** Saving Plots Enabled ***\n')
+        print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
+        print(Style.RESET_ALL)
     
+
+    if graph_type in ['not_survived_abund']:
+        save_path = args.output_dir + os.sep + 'not_survived_abundance' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+        plot_not_survived_abundance(
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path
+        )
+
+    if graph_type in ['not_survived_bias']:
+        save_path = args.output_dir + os.sep + 'not_survived_bias'
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+        if args.by_mouse:
+            plot_not_survived_count_mouse(
+                lineage_bias_df,
+                timepoint_col,
+                save=args.save,
+                save_path=save_path
+            )
+        else:
+            for group in phenotypic_groups + ['all']:
+                plot_not_survived_by_bias(
+                    lineage_bias_df,
+                    timepoint_col,
+                    group=group,
+                    save=args.save,
+                    save_path=save_path
+                )
 
     if graph_type in ['survival_time_change']:
         save_path = args.output_dir + os.sep + 'survival_time_change'
@@ -1609,7 +1657,8 @@ def main():
     if not args.save:
         plt.show()
     else:
-        print('\n*** All Plots Saved ***\n')
+        print(Style.BRIGHT + Fore.GREEN + '\n*** All Plots Saved ***\n')
+        print(Style.RESET_ALL)
 
 
 if __name__ == "__main__":

@@ -20,8 +20,8 @@
         "#ff6547"
     ],
     "change_status": {
-        "Unchanged": "#f1f1f1",
-        "Total": "#f1f1f1"
+        "Unchanged": "#e6e6e6",
+        "Total": "#e6e6e6"
     },
     "change_type": {
         "Myeloid": "#d72424",

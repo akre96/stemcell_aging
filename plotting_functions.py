@@ -24,12 +24,23 @@ from aggregate_functions import filter_threshold, count_clones, \
     day_to_gen, calculate_bias_change, filter_biased_clones_at_timepoint, \
     bias_clones_to_abundance, filter_stable_initially, \
     calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
-    add_average_abundance_to_lineage_bias, abundant_clone_transplant_survival
+    add_average_abundance_to_lineage_bias, abundant_clone_survival,\
+    not_survived_bias_by_time_change, not_survived_acc_abundance
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 LINE_STYLES = json.load(open('line_styles.json', 'r'))
+
+MAP_LINEAGE_BIAS_CATEGORY = {
+    'LC': 'Lymphoid Committed',
+    'LB': 'Lymphoid Biased',
+    'BL': 'Balanced - Lymphoid Leaning',
+    'B': 'Balanced',
+    'BM': 'Balanced - Myeloid Leaning',
+    'MB': 'Myeloid Biased',
+    'MC': 'Myeloid Committed',
+}
 
 def y_col_to_title(y_col: str) -> str:
     y_title = y_col.replace('_', ' ').replace(
@@ -2612,15 +2623,14 @@ def plot_bias_change_mean_scatter(
     if by_group:
         for gname, g_df in bias_dist_df.groupby('group'):
             fig, ax = plt.subplots()
-            sns.scatterplot(
-                x='average_'+y_col,
-                y='bias_change',
-                data=g_df,
-                hue='mouse_id',
-                palette=COLOR_PALETTES['mouse_id'],
-                legend=None,
-                ax=ax,
-            )
+            ax.set(xscale='log')
+            for mouse, m_df in g_df.groupby('mouse_id'):
+                ax.scatter(
+                    m_df['average_'+y_col],
+                    m_df['bias_change'],
+                    c=COLOR_PALETTES['mouse_id'][mouse],
+                    s=16
+                )
             plt.hlines(0, 0, g_df['average_'+y_col].max(), linestyles='dashed', color='lightgrey')
 
             plt.title('Group: ' + gname.replace('_', ' ').title())
@@ -2629,19 +2639,21 @@ def plot_bias_change_mean_scatter(
             plt.ylabel('Overall Change in Bias Per Clone')
             fname = save_path + os.sep + y_col + '_vs_bias_change' \
                 + '_' + gname \
+                + '_logX' \
                 + '.' + save_format
             save_plot(fname, save, save_format)
     else:
         fig, ax = plt.subplots()
-        sns.scatterplot(
-            x='average_'+y_col,
-            y='bias_change',
-            data=bias_dist_df,
-            hue='group',
-            palette=COLOR_PALETTES['group'],
-            legend=None,
-            ax=ax,
-        )
+
+        plt.xlim(bias_dist_df['average_'+y_col].min(), bias_dist_df['average_'+y_col].max())
+        ax.set(xscale='log')
+        for group, g_df in bias_dist_df.groupby('group'):
+            ax.scatter(
+                g_df['average_'+y_col],
+                g_df['bias_change'],
+                c=COLOR_PALETTES['group'][group],
+                s=16
+            )
         plt.hlines(0, 0, bias_dist_df['average_'+y_col].max(), linestyles='dashed', color='lightgrey')
 
         plt.title(
@@ -2650,6 +2662,7 @@ def plot_bias_change_mean_scatter(
         plt.xlabel(y_col_to_title('average_'+y_col) + ' (% WBC)')
         plt.ylabel('Overall Change in Bias Per Clone')
         fname = save_path + os.sep + y_col + '_vs_bias_change' \
+            + '_logX' \
             + '.' + save_format
         save_plot(fname, save, save_format)
 def plot_hist_bias_over_time(
@@ -2914,7 +2927,7 @@ def plot_abundant_clone_survival(
     ):
     if timepoint_col == 'gen':
         clonal_abundance_df = clonal_abundance_df[clonal_abundance_df[timepoint_col] != 8.5]
-    transplant_survival_df = abundant_clone_transplant_survival(
+    transplant_survival_df = abundant_clone_survival(
         clonal_abundance_df,
         timepoint_col,
         thresholds,
@@ -2973,3 +2986,187 @@ def plot_abundant_clone_survival(
         plt.ylabel('Percent Survival')
         file_name = fname_prefix + fname_suffix
         save_plot(file_name, save, save_format)
+
+def plot_not_survived_count_mouse(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    not_survived_df = not_survived_bias_by_time_change(
+        lineage_bias_df,
+        timepoint_col,
+        ignore_bias_cat=True
+    )
+    sns.set(style='whitegrid')
+    for group, g_df in not_survived_df.groupby('group'):
+        plt.subplots(figsize=(6,5))
+        sns.lineplot(
+            x='time_survived',
+            y='count',
+            hue='mouse_id',
+            markers=True,
+            dashes=False,
+            palette=COLOR_PALETTES['mouse_id'],
+            data=g_df
+        )
+        plt.suptitle(
+            'Survival Of Clones Over Time'
+        )
+        plt.title('Group: ' + group.replace('_', ' ').title())
+        plt.xlabel(
+            timepoint_col.title()
+            + '(s) Survived'
+        )
+        plt.ylabel('Unique Clones Per Mouse')
+        plt.legend().remove()
+        fname = save_path + os.sep \
+            + 'clone_count_survival' \
+            + '_' + group \
+            + '_' + 'by_mouse' \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
+
+def plot_not_survived_by_bias(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        group: str = 'all',
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    if group != 'all':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df['group'] == group]
+
+    fig, ax = plt.subplots(figsize=(8,7))
+    not_survived_df = not_survived_bias_by_time_change(
+        lineage_bias_df,
+        timepoint_col
+    )
+    width = 0.35
+    not_survived_df['bias_category'] = not_survived_df.bias_category.apply(
+        lambda x: MAP_LINEAGE_BIAS_CATEGORY[x]
+    )
+    cats = [
+        'LC',
+        'LB',
+        'BL',
+        'B',
+        'BM',
+        'MB',
+        'MC'
+    ]
+    cats = [MAP_LINEAGE_BIAS_CATEGORY[x] for x in cats]
+    means = pd.DataFrame(not_survived_df.groupby(['bias_category', 'time_survived'])['count'].mean()).reset_index()
+    means = means.pivot(
+        index='time_survived',
+        columns='bias_category',
+        values='count'
+    )
+    sem = pd.DataFrame(not_survived_df.groupby(['bias_category', 'time_survived'])['count'].sem()).reset_index()
+    sem = sem.pivot(
+        index='time_survived',
+        columns='bias_category',
+        values='count'
+    )
+
+    myeloid_color = Color(COLOR_PALETTES['change_type']['Myeloid'])
+    myeloid_colors = list(Color('white').range_to(
+        myeloid_color,
+        int(round(len(cats)/2)) + 2
+    ))
+    lymphoid_color = Color(COLOR_PALETTES['change_type']['Lymphoid'])
+    lymphoid_colors = list(lymphoid_color.range_to(
+        Color('white'),
+        int(round(len(cats)/2)) + 1
+    ))
+    colors = lymphoid_colors[:-2] \
+        + [Color(COLOR_PALETTES['change_status']['Unchanged'])] \
+        + myeloid_colors[2:]
+    colors = [x.hex_l for x in colors]
+
+    x = means.index.values
+    for i in range(len(cats)):
+        bias_cat = cats[i]
+        m_df = means[bias_cat]
+        e_df = sem[bias_cat]
+        if i != 0:
+            last_df = means[cats[:i]].sum(axis=1)
+            plt.bar(
+                x,
+                m_df,
+                width,
+                yerr=e_df,
+                color=colors[i],
+                label=bias_cat,
+                bottom=last_df
+            )
+        else:
+            plt.bar(
+                x,
+                m_df,
+                width,
+                yerr=e_df,
+                color=colors[i],
+                label=bias_cat
+            )
+    plt.xlabel(
+        timepoint_col.title()
+        + '(s) Survived'
+    )
+    plt.ylabel('Unique Clones Per Mouse')
+    if group == 'all':
+        plt.legend()
+    plt.suptitle(
+        'Survival Of Clones Over Time'
+    )
+    plt.title('Group: ' + group.replace('_', ' ').title())
+    fname = save_path + os.sep \
+        + 'clone_count_survival' \
+        + '_' + group \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def plot_not_survived_abundance(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    labeled_df = not_survived_acc_abundance(
+        lineage_bias_df,
+        timepoint_col
+    )
+    for group, g_df in labeled_df.groupby('group'):
+        fig, ax = plt.subplots(figsize=(10,8))
+        ax = sns.boxplot(
+            x='total_time_change',
+            y='accum_abundance',
+            color='white',
+            data=g_df,
+            dodge=False,
+        )
+        sns.swarmplot(
+            x='total_time_change',
+            y='accum_abundance',
+            hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id'],
+            data=g_df,
+            ax=ax
+        )
+        plt.xlabel(
+            timepoint_col.title()
+            + '(s) Survived'
+        )
+        plt.ylabel('Average Abundance Until Last Time Point')
+        plt.suptitle(
+            'Abundance Of Not Surviving Clones Over Time'
+        )
+        plt.title('Group: ' + group.replace('_', ' ').title())
+        fname = save_path + os.sep \
+            + 'abundance_not_survived' \
+            + '_' + group \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
