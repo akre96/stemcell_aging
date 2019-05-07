@@ -35,6 +35,7 @@ Example:
 
 Exact usage on transplant data:  
 `python step7_to_long_format.py -i /home/sakre/Data/serial_transplant_data/step\ 7/ -o /home/sakre/Data/serial_transplant_data/step7_long/ -p M`
+
 ### Consolidating reformatted data to one file
   1. In the root directory of this repository run:  
   `python consolidate_data.py -i \[LONG_FORMAT_INPUT_DIRECTORY_PATH\] -o \[OUTPUT_DIRECTORY_PATH\]`  
@@ -54,22 +55,92 @@ Exact usage on transplant data:
 
 Example from serial transplantation data:  
 `python lineage_bias.py -i ~/Data/serial_transplant_data/M_allAniaAnia\ serial\ transpl_percent-engraftment_121018_long.csv -c ~/Data/serial_transplant_data/WBC\ serial\ transpl\ 111618.txt -o ~/Data/serial_transplant_data/lineage_bias`
+
+### Calculate 'Rest of Clones' Data
+1. In the root directory run:
+```
+python rest_of_clones_calc.py \
+    --gfp [GFP Percentage FACS File] \
+    --wbcs [Cell Count FACS File] \
+    --donor [Donor Chimerism File] \
+    --group [CSV with columns mouse_id and group, labels mice with phenotypic group] \
+    --timepoint-col ['day', 'month', or 'gen'] \
+    --baseline-timepoint [Timepoint to use as reference for lineage bias] \
+    -o [Directory to store 'rest of clones' data]
+```
+
+#### Example
+```
+
+GFP_FILE=~/Data/stemcell_aging/OT_2.0_GFP_051818.txt
+DONOR_FILE=~/Data/stemcell_aging/OT_2.0_donor_051818.txt
+WBC_FILE=~/Data/stemcell_aging/OT_2.0_WBCs_051818-modified.txt
+GROUP_FILE=~/Data/stemcell_aging/mouse_id_group.csv
+OUTPUT_DIR=~/Data/stemcell_aging/rest_of_clones
+TIMEPOINT_COL='month'
+BASELINE_TIMEPOINT='4'
+
+
+python rest_of_clones_calc.py \
+    --gfp $GFP_FILE \
+    --wbcs $WBC_FILE \
+    --donor $DONOR_FILE \
+    --group $GROUP_FILE \
+    --timepoint-col $TIMEPOINT_COL \
+    --baseline-timepoint $BASELINE_TIMEPOINT \
+    -o $OUTPUT_DIR
+```
+
 ### Plotting Data
   1. In the root directory of the repository run:  
-  `python plot_data.py`  
-    - By default this will plot whatever the most recently created/worked on graph was 
-  2. add a `-s` flag to save plot outputs
-  3. add a `-g GRAPH_TYPE` to change graph type, the following GRAPH_TYPEs available  
-    -  cluster:            Clustered heatmap of present clone engraftment  
-    -  venn:               Venn Diagram of clone existance at timepoint  
-    -  clone_count:        Bar charts of clone counts by cell type at different thresholds  
-    -  lineage_bias_line:  lineplots of lineage bias over time at different abundance from last timepoint  
-    -  engraftment_time:   lineplot/swarmplot of abundance of clones with high values at 4, 12, and 14 months  
-    -  counts_at_perc:     line or barplot of clone counts where cell-types are filtered at 90th percentile of abundance  
-  4. add a `-i` flag to specify location of long format step7 output
-  5. add `-o` flag to specify where to output graphs
-  7. add `-l` flag to specify location of lineage_bias file
+```
+  python plot_data.py \
+      -i [Long Formatted & Consolidated Step 7 Output] \
+      -o [Desired Output Folder for Saved Graphs] \
+      -l [Lineage Bias Data File] \
+      -c [FACS Cell Count Data] \
+      -r [Path to Folder Containing Rest of Clones Calculations] \
+      -g [Desired Graph Type] \
+      -t [Threshold to filter certain graphs by] \
+      -a [Cumulative Abundance To Calculate Abundance Threshold] \
+      -b [Lineage Bias Cutoff for Filtering] \
+      -y [Column to Plot on Y-Axis for certain Graphs] \
+      -f [Minimum abundance either Gr or B must pass to be used in Lineage Bias] \
+      --time-change [Type of Time Change, 'across' or 'between'] \
+      -p [Wildcard type option, different for different graphs] \
+      --by-gen [Set if plotting serial transplant data] \
+      -s [Set to save graphs] \
+      --limit-gen [Set to only plot gen 1-3 of serial transplant data] \
+      --by-mouse [Set to plot each mouse seperately for certain graphs] \
+      --by-clone [Set to plot individual clones, colored by mouse_id]
+```
 
+#### Example:
+  ```
+  Y_COL="NA"
+  ABUNDANCE_CUTOFF=0
+  BIAS_CUTOFF=0.5
+  THRESHOLD=0
+  GRAPH_TYPE="contrib_change_cell"
+  LIN_BIAS_MIN=0.05
+  TIME_CHANGE="NA"
+  OPTION="1"
+  python plot_data.py -i ~/Data/serial_transplant_data/M_allAniaAnia\ serial\ transpl_percent-engraftment_121018_long.csv \
+      -o ~/Data/serial_transplant_data/Graphs \
+      -l ~/Data/serial_transplant_data/lineage_bias/lineage_bias_t0-0_from-counts.csv \
+      -c ~/Data/serial_transplant_data/'WBC serial transpl 121018.txt' \
+      --bias-change ~/Data/serial_transplant_data/lineage_bias/bias_change_t0-0_from-counts.csv \
+      -r ~/Data/serial_transplant_data/rest_of_clones \
+      -g $GRAPH_TYPE \
+      -t $THRESHOLD \
+      -a $ABUNDANCE_CUTOFF \
+      -b $BIAS_CUTOFF \
+      -y $Y_COL \
+      -f $LIN_BIAS_MIN \
+      --time-change $TIME_CHANGE \
+      -p $OPTION \
+      --by-gen -s --limit-gen
+  ```
 
 
 ### Testing
