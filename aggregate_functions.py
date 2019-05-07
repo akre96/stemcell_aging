@@ -672,7 +672,6 @@ def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum
         x_val = data.iloc[idx[-1]][x_col]
         y_val = data.iloc[idx[-1]][y_col]
 
-    print(x_val, y_val)
     return (x_val, y_val)
 
 def calculate_thresholds_sum_abundance(

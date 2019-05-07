@@ -1,4 +1,5 @@
 """ Create plots from step 7 output data
+
 Example:
 python plot_data.py \
     -i ~/Data/serial_transplant_data/M_allAniaAnia\ serial\ transpl_percent-engraftment_121018_long.csv \
@@ -28,7 +29,7 @@ from aggregate_functions import filter_threshold, \
     filter_cell_type_threshold, combine_enriched_clones_at_time, \
     mark_changed, sum_abundance_by_change, between_gen_bias_change, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_threshold, \
-    across_gen_bias_change, between_gen_bias_change, \
+    across_gen_bias_change, \
     day_to_gen, calculate_bias_change
 from plotting_functions import plot_max_engraftment, \
     plot_clone_count_by_thresholds, venn_barcode_in_time, \
