@@ -1873,6 +1873,7 @@ def plot_abundance_change(
             order=ordered_labels,
             hue='group',
             palette=palette,
+            estimator=np.median,
             )
         plt.xlabel('')
         if magnitude:
