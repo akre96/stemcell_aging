@@ -100,7 +100,10 @@ python rest_of_clones_calc.py \
       -l [Lineage Bias Data File] \
       -c [FACS Cell Count Data] \
       -r [Path to Folder Containing Rest of Clones Calculations] \
-      -g [Desired Graph Type] \
+      -g [Desired Graph Type] 
+```
+#### Additional Optional Arguments
+```
       -t [Threshold to filter certain graphs by] \
       -a [Cumulative Abundance To Calculate Abundance Threshold] \
       -b [Lineage Bias Cutoff for Filtering] \
