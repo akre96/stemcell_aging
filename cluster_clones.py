@@ -4,21 +4,28 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, RobustScaler
+from sklearn.preprocessing import LabelEncoder
 from tslearn.clustering import TimeSeriesKMeans
 from tslearn.datasets import CachedDatasets
-from tslearn.preprocessing import TimeSeriesScalerMeanVariance, TimeSeriesResampler
 from plotting_functions import save_plot
 
 save=True
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 categorical_cols = ['mouse_id', 'group']
-categorical_cols = []
+categorical_cols = ['mouse_id']
 numerical_cols = ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']
-numerical_cols = [numerical_cols[1]]
+n_clusters=5
 
-initials = [x[:3] for x in numerical_cols]
-save_folder = '_'.join(initials)
+encoder = LabelEncoder()
+#scaler = StandardScaler()
+#scaler_type = 'standard'
+
+scaler = RobustScaler()
+scaler_type = 'robust'
+
+initials = [x[:3] for x in numerical_cols+categorical_cols]
+save_folder = '_'.join(initials) + '_' + str(n_clusters) + '-clusters' + '_s-' + scaler_type
 
 # Uncomment for Aging Data
 #train = pd.read_csv('~/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
@@ -30,12 +37,13 @@ train = pd.read_csv('~/Data/serial_transplant_data/lineage_bias/lineage_bias_t0-
 timepoint_col='day'
 save_path = '/home/sakre/Data/serial_transplant_data/Graphs/Cluster_Exploration/'+save_folder
 
-data = train[train.group.isin(['aging_phenotype','no_change'])]
-train = train[train.group.isin(['aging_phenotype','no_change'])]
+data = train[train.group.isin(['aging_phenotype', 'no_change'])]
+train = train[train.group.isin(['aging_phenotype', 'no_change'])]
 
-#scaler = StandardScaler()
-#train[numerical_cols] = scaler.fit_transform(train[numerical_cols])
-#encoded = pd.get_dummies(train[categorical_cols+numerical_cols])
+for cat in categorical_cols:
+    train[cat] = encoder.fit_transform(train[cat])
+
+train[numerical_cols] = scaler.fit_transform(train[numerical_cols])
 
 # Transform to shape [code, time, nfeatures]
 X_train = np.zeros(
@@ -47,13 +55,12 @@ i = 0
 for _, clone_group in train.groupby(['code', 'mouse_id']):
     j = 0
     for _, time_group in clone_group.groupby(timepoint_col):
-        X_train[i][j] = time_group[numerical_cols].to_numpy()
+        X_train[i][j] = time_group.loc[:, numerical_cols + categorical_cols].to_numpy()
         j = j + 1
     i = i+1
 sz = X_train.shape[1]
 
 seed=100
-n_clusters=5
 
 # Euclidean k-means
 print("Euclidean k-means")
@@ -61,6 +68,7 @@ km = TimeSeriesKMeans(n_clusters=n_clusters, verbose=True, random_state=seed)
 y_pred = km.fit_predict(X_train)
 
 with_label_df = pd.DataFrame()
+pd.options.mode.chained_assignment = None
 for _, clone_group in data.groupby(['code', 'mouse_id']):
     j = 0
     clone_test = np.zeros((
@@ -69,7 +77,10 @@ for _, clone_group in data.groupby(['code', 'mouse_id']):
         len(numerical_cols) + len(categorical_cols)
     ))
     for _, time_group in clone_group.groupby(timepoint_col):
-        clone_test[0][j] = time_group[numerical_cols].to_numpy()
+        for cat in categorical_cols:
+            time_group[cat] = encoder.transform(time_group[cat])
+        time_group[numerical_cols] = scaler.transform(time_group[numerical_cols])
+        clone_test[0][j] = time_group.loc[:, numerical_cols + categorical_cols].to_numpy()
         j = j + 1
     
     label = km.predict(clone_test)
@@ -78,6 +89,7 @@ for _, clone_group in data.groupby(['code', 'mouse_id']):
     clone_group = clone_group.assign(label=str(label[0]))
     with_label_df = with_label_df.append(clone_group)
 
+pd.options.mode.chained_assignment = 'warn'
 lb_mean_data_df = pd.DataFrame(
     with_label_df.groupby(['mouse_id',timepoint_col,'label', 'group']).lineage_bias.mean()
 ).reset_index().rename(columns={'lineage_bias': 'Average Lineage Bias'})
