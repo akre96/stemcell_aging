@@ -51,7 +51,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_bias_change_mean_scatter, plot_dist_bias_over_time, \
     plot_dist_bias_at_time, plot_bias_first_last, \
     plot_abundant_clone_survival, plot_not_survived_by_bias, \
-    plot_not_survived_count_mouse, plot_not_survived_abundance
+    plot_not_survived_count_mouse, plot_not_survived_abundance, \
+    plot_not_survived_count_box 
      
 
 
@@ -229,6 +230,17 @@ def main():
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
 
+    if graph_type in ['not_survived_count_box']:
+        save_path = args.output_dir + os.sep + 'not_survived_count_box' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+        plot_not_survived_count_box(
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['not_survived_abund']:
         save_path = args.output_dir + os.sep + 'not_survived_abundance' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
