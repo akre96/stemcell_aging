@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 from colour import Color
+from colorama import init, Fore, Back, Style
 from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
     combine_enriched_clones_at_time, count_clones_at_percentile, \
@@ -29,6 +30,7 @@ from aggregate_functions import filter_threshold, count_clones, \
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
+init(autoreset=True)
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 LINE_STYLES = json.load(open('line_styles.json', 'r'))
 
@@ -52,7 +54,7 @@ def y_col_to_title(y_col: str) -> str:
 def save_plot(file_name: str, save: bool, save_format: str) -> None:
     if save:
         if os.path.isdir(os.path.dirname(file_name)) or os.path.dirname(file_name) == '':
-            print('Saving to: ' + file_name)
+            print(Fore.GREEN + 'Saving to: ' + file_name)
             plt.savefig(file_name, format=save_format)
         else:
             print('Directory does not exist for: ' + file_name)
@@ -1037,7 +1039,7 @@ def plot_change_contributions(
             )
             plt.xlabel('Contribution of Changed Cells')
             plt.ylabel('')
-            plt.suptitle(cell_type.title() + 'Cumulative Abundance of Clones by Bias Change')
+            plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
             plt.title('Group: ' + group.replace('_', ' ').title() + ' - Last Time Point')
             plt.gca().legend(title='Change Direction', loc='lower right')
             sns.despine(left=True, bottom=True)
@@ -1075,7 +1077,7 @@ def plot_change_contributions(
             )
             plt.xlabel('Contribution of Changed Cells')
             plt.ylabel('')
-            plt.suptitle(cell_type.title() + 'Cumulative Abundance of Clones by Bias Change')
+            plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
             plt.title('Group: ' + group.replace('_', ' ').title() + ' - First Time Point')
             plt.gca().legend(title='Change Direction', loc='lower right')
             sns.despine(left=True, bottom=True)
@@ -1543,7 +1545,7 @@ def plot_bias_change_between_gen(
         absolute=magnitude
         )
     if style is None:
-       style = 'group' 
+       style = 'group'
     if by_clone:
         sns.lineplot(
             x='gen_change',
@@ -2601,11 +2603,12 @@ def plot_bias_dist_mean_abund_group_vs(
             + ' > ' + str(cutoff)
         )
         plt.xlabel('Overall Change in Bias Per Clone')
-        fname = save_path + os.sep +'bias_change_dist_vs_group_' \
-            + y_col \
-            + '_' + str(cutoff).replace('.','-') \
-            + '.' + save_format
-        save_plot(fname, save, save_format)
+        plt.xlim((-2,2))
+    fname = save_path + os.sep +'bias_change_dist_vs_group_' \
+        + y_col \
+        + '_' + str(cutoff).replace('.','-') \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
 
 def plot_bias_change_mean_scatter(
         lineage_bias_df: pd.DataFrame,
@@ -2666,7 +2669,7 @@ def plot_bias_change_mean_scatter(
             + '_logX' \
             + '.' + save_format
         save_plot(fname, save, save_format)
-def plot_hist_bias_over_time(
+def plot_dist_bias_over_time(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         by_group: bool = False,
@@ -2684,32 +2687,19 @@ def plot_hist_bias_over_time(
             )
             plt.ylabel('')
             plt.title('Group: ' + group.replace('_', ' ').title())
-            max_color = Color(COLOR_PALETTES['group'][group])
-            min_luminance = .85
-            luminances = np.linspace(
-                min_luminance,
-                max_color.luminance,
-                num=lineage_bias_df[timepoint_col].nunique()
-            )
-            j: int = 0
+            palette = COLOR_PALETTES[timepoint_col]
             for t, t_df in g_df.groupby(timepoint_col):
-                color = max_color
-                color.set_luminance(luminances[j])
                 sns.distplot(
                     t_df.lineage_bias,
-                    color=color.hex_l,
-                    label=t,
+                    label=str(int(t)),
                     bins=15,
-                    kde=False,
-                    hist=True,
-                    hist_kws={
-                        "histtype": "step",
+                    hist=False,
+                    color=palette[str(int(t))],
+                    kde_kws={
                         "linewidth": 2,
-                        "alpha": 1,
-                        "color": color.hex_l
                     }
                 )
-                j += 1
+
             plt.xlabel('Lineage Bias')
             plt.legend(title=timepoint_col.title())
             file_name = save_path + os.sep \
@@ -2727,30 +2717,25 @@ def plot_hist_bias_over_time(
             palette=COLOR_PALETTES['time_point'],
             n_colors=lineage_bias_df[timepoint_col].nunique()
         )
-        k: int = 0
+        palette = COLOR_PALETTES[timepoint_col]
         for t, t_df in lineage_bias_df.groupby(timepoint_col):
             sns.distplot(
                 t_df.lineage_bias,
-                color=pal[k],
-                label=t,
-                kde=False,
+                label=str(int(t)),
                 bins=15,
-                hist=True,
-                hist_kws={
-                    "histtype": "step",
+                hist=False,
+                kde_kws={
                     "linewidth": 2,
-                    "alpha": 1,
-                    "color": pal[k]
+                    "color": palette[str(int(t))],
                 }
             )
-            k += 1
         plt.xlabel('Lineage Bias')
         plt.legend(title=timepoint_col.title())
         file_name = save_path + os.sep \
             + 'bias_dist_time.' + save_format
         save_plot(file_name, save, save_format)
 
-def plot_hist_bias_at_time(
+def plot_dist_bias_at_time(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         timepoint: int,
@@ -2773,17 +2758,17 @@ def plot_hist_bias_at_time(
             for mouse_id, m_df in g_df.groupby('mouse_id'):
                 sns.distplot(
                     m_df.lineage_bias,
-                    bins=15,
                     label=mouse_id,
-                    kde=False,
-                    hist=True,
-                    hist_kws={
-                        "histtype": "step",
+                    color=COLOR_PALETTES['mouse_id'][mouse_id],
+                    hist=False,
+                    kde_kws={
                         "linewidth": 2,
                         "alpha": 1,
-                        "color": COLOR_PALETTES['mouse_id'][mouse_id]
                     }
                 )
+            _, y_max = plt.ylim()
+            if y_max > 2:
+                plt.ylim(0, 2)
             plt.xlabel('Lineage Bias')
             plt.suptitle('Group: ' + group.replace('_', ' ').title())
             file_name = save_path + os.sep \
@@ -2803,15 +2788,12 @@ def plot_hist_bias_at_time(
         for group, g_df in t_df.groupby('group'):
             sns.distplot(
                 g_df.lineage_bias,
-                label=group,
-                bins=15,
-                kde=False,
-                hist=True,
-                hist_kws={
-                    "histtype": "step",
+                label=group.replace('_', ' ').title(),
+                hist=False,
+                color=COLOR_PALETTES['group'][group],
+                kde_kws={
                     "linewidth": 2,
                     "alpha": 1,
-                    "color": COLOR_PALETTES['group'][group]
                 }
             )
         plt.xlabel('Lineage Bias')
@@ -3142,21 +3124,38 @@ def plot_not_survived_abundance(
     )
     for group, g_df in labeled_df.groupby('group'):
         fig, ax = plt.subplots(figsize=(10,8))
+        survived = pd.DataFrame()
+        not_survived = pd.DataFrame()
+        for LTC in g_df.total_time_change.unique():
+            survived = survived.append(g_df[
+                (g_df['total_time_change'] > LTC) &\
+                (g_df['time_change'] == LTC)
+            ].assign(
+                survived='Survived'
+            ))
+            not_survived = not_survived.append(g_df[
+                (g_df['total_time_change'] == LTC) &\
+                (g_df['time_change'] == LTC)
+            ].assign(
+                survived='Exhausted'
+            ))
+        survival_df = survived.append(not_survived)
+
         ax = sns.boxplot(
-            x='total_time_change',
+            x='time_change',
             y='accum_abundance',
-            color='white',
-            data=g_df,
-            dodge=False,
+            hue='survived',
+            data=survival_df,
+            hue_order=['Exhausted', 'Survived']
         )
-        sns.swarmplot(
-            x='total_time_change',
-            y='accum_abundance',
-            hue='mouse_id',
-            palette=COLOR_PALETTES['mouse_id'],
-            data=g_df,
-            ax=ax
-        )
+        #sns.swarmplot(
+            #x='total_time_change',
+            #y='accum_abundance',
+            #hue='mouse_id',
+            #palette=COLOR_PALETTES['mouse_id'],
+            #data=g_df,
+            #ax=ax
+        #)
         plt.xlabel(
             timepoint_col.title()
             + '(s) Survived'

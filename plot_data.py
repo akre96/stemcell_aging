@@ -48,8 +48,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_extreme_bias_time, plot_bias_dist_at_time, \
     plot_stable_clones, plot_bias_dist_mean_abund, \
     plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs, \
-    plot_bias_change_mean_scatter, plot_hist_bias_over_time, \
-    plot_hist_bias_at_time, plot_bias_first_last, \
+    plot_bias_change_mean_scatter, plot_dist_bias_over_time, \
+    plot_dist_bias_at_time, plot_bias_first_last, \
     plot_abundant_clone_survival, plot_not_survived_by_bias, \
     plot_not_survived_count_mouse, plot_not_survived_abundance
      
@@ -123,13 +123,14 @@ def main():
     parser.add_argument('--by-mouse', dest='by_mouse', help='Whether to plot mouse color instead of group for certain graphs', action="store_true")
     parser.add_argument('--plot-rest', dest='plot_rest', help='Whether to plot rest of clones instead of tracked clones', action="store_true")
     parser.add_argument('--by-gen', dest='by_gen', help='Plotting done on a generation by generation basis', action="store_true")
+    parser.add_argument('--limit-gen', dest='limit_gen', help='Limit Serial Transplant data to first 3 generations', action="store_true")
     parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
     parser.add_argument('--cache', dest='cache', help='Use Cached Data', action="store_true")
     parser.add_argument('--cache-dir', dest='cache_dir', help='Where cache data is stored', default='/home/sakre/Data/cache')
     parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False, default='lineage_bias')
 
     # Init colorama
-    init()
+    init(autoreset=True)
 
     args = parser.parse_args()
     options = args.options
@@ -142,24 +143,21 @@ def main():
     cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'b', 'wbc'])
 
     if not input_df[~input_df.group.isin(phenotypic_groups)].empty:
-        print(Style.BRIGHT + Fore.RED + '\n !! Warning: Following Mice not in a phenotypic group !!')
-        print('  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
-        print(Style.RESET_ALL)
+        print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
+        print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
 
     presence_threshold = 0.0
     present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
 
     graph_type = args.graph_type
-    print(Style.BRIGHT)
     if graph_type == 'default':
-        print('\n -- Plotting Default Plot(s) -- \n')
+        print(Style.BRIGHT + '\n -- Plotting Default Plot(s) -- \n')
     else:
-        print('\n -- Graph Type: ' + graph_type + ' -- \n')
+        print(Style.BRIGHT + '\n -- Graph Type: ' + graph_type + ' -- \n')
     
     if options != 'default':
-        print(' -- Extra Options Set: ' + options + ' -- \n')
+        print(Style.BRIGHT + ' -- Extra Options Set: ' + options + ' -- \n')
 
-    print(Style.RESET_ALL)
 
     if args.group != 'all':
         print(' - Group Filtering Set to: ' + args.group)
@@ -202,6 +200,8 @@ def main():
     # Adds generation calculation for serial transplant data
     elif args.by_gen:
         print(' - Time By Generation Set \n')
+
+
         first_timepoint = 1
         timepoint_col = 'gen'
         lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
@@ -210,6 +210,15 @@ def main():
         cell_count_df = cell_count_df.assign(gen=lambda x: day_to_gen(x.day))
         rest_of_clones_abundance_df = rest_of_clones_abundance_df.assign(gen=lambda x: day_to_gen(x.day))
         rest_of_clones_bias_df = rest_of_clones_bias_df.assign(gen=lambda x: day_to_gen(x.day))
+        if args.limit_gen:
+            print(' - ONLY CONSIDERING GENERATIONS 1-3 \n')
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen <= 3]
+            input_df = input_df[input_df.gen <= 3]
+            present_clones_df = present_clones_df[present_clones_df.gen <= 3]
+            cell_count_df = cell_count_df[cell_count_df.gen <= 3]
+            input_df = input_df[input_df.gen <= 3]
+            rest_of_clones_abundance_df = rest_of_clones_abundance_df[rest_of_clones_abundance_df.gen <= 3]
+            rest_of_clones_bias_df = rest_of_clones_bias_df[rest_of_clones_bias_df.gen <= 3]
     else:
         print(' - Time By Month Set \n')
         first_timepoint = 4
@@ -218,7 +227,6 @@ def main():
 
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
-        print(Style.RESET_ALL)
     
 
     if graph_type in ['not_survived_abund']:
@@ -304,7 +312,7 @@ def main():
         timepoint = first_timepoint
         if args.timepoint:
             timepoint = args.timepoint
-        plot_hist_bias_at_time(
+        plot_dist_bias_at_time(
             lineage_bias_df,
             timepoint_col,
             timepoint,
@@ -315,7 +323,7 @@ def main():
 
     if graph_type in ['bias_dist_over_time']:
         save_path = args.output_dir + os.sep + 'bias_distribution_over_time'
-        plot_hist_bias_over_time(
+        plot_dist_bias_over_time(
             lineage_bias_df,
             timepoint_col,
             by_group=args.by_group,
@@ -1655,11 +1663,13 @@ def main():
                                     by_clone=args.by_clone,
                                    )
     
-    if not args.save:
-        plt.show()
+    if plt.get_fignums():
+        if not args.save:
+            plt.show()
+        else:
+            print(Style.BRIGHT + Fore.GREEN + '\n*** All Plots Saved ***\n')
     else:
-        print(Style.BRIGHT + Fore.GREEN + '\n*** All Plots Saved ***\n')
-        print(Style.RESET_ALL)
+        print(Style.BRIGHT + Fore.RED + '\n !! ERROR: No Figures Drawn !! \n')
 
 
 if __name__ == "__main__":
