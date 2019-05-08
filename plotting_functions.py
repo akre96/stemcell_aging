@@ -3248,3 +3248,61 @@ def plot_not_survived_count_box(
             + '.' + save_format
         save_plot(fname, save, save_format)
 
+
+def plot_hsc_abund_bias_at_last(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        bias_cutoff: float,
+        invert: bool,
+        save: bool,
+        save_path: str,
+        save_format: str='png',
+    ) -> None:
+
+    if clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].empty:
+        raise ValueError('No HSC Cells in Clonal Abundance Data')
+
+    biased_at_time_df = filter_biased_clones_at_timepoint(
+        lineage_bias_df,
+        bias_cutoff,
+        'last',
+        timepoint_col,
+        within_cutoff=invert,
+    )
+    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']
+    myeloid_hsc_abundance_df = hsc_data.merge(
+        biased_at_time_df[['code','mouse_id']],
+        on=['code','mouse_id'],
+        how='inner',
+        validate='m:m'
+    )
+    plt.figure()
+    sns.barplot(
+        y='percent_engraftment',
+        x='group',
+        hue='mouse_id',
+        data=group_names_pretty(myeloid_hsc_abundance_df),
+        palette=COLOR_PALETTES['mouse_id']
+    )
+    plt.legend().remove()
+    plt.xlabel('')
+    plt.ylabel('HSC Abundance (% WBC)')
+    desc_word = 'more'
+    if invert:
+        desc_word = 'less'
+    plt.title(
+        'Abundance of HSCs with Bias '
+        + desc_word.title() 
+        + ' Extreme Than ' + str(bias_cutoff) 
+        + ' at Last Timepoint'
+        )
+
+    fname = save_path + os.sep \
+        + 'abund_hsc_biased_at_last' \
+        + '_b' + str(bias_cutoff).replace('.', '-') \
+        + '_' + desc_word \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+

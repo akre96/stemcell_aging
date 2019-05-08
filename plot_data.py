@@ -52,7 +52,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_dist_bias_at_time, plot_bias_first_last, \
     plot_abundant_clone_survival, plot_not_survived_by_bias, \
     plot_not_survived_count_mouse, plot_not_survived_abundance, \
-    plot_not_survived_count_box 
+    plot_not_survived_count_box, plot_hsc_abund_bias_at_last
      
 
 
@@ -168,6 +168,9 @@ def main():
     if args.y_col:
         print(' - Plotting y_axis as: ' + args.y_col)
 
+    if args.invert:
+        print(' - Invert Bias Filtering set')
+
     if args.by_clone:
         print(' - Plotting by clone set')
 
@@ -230,6 +233,25 @@ def main():
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
 
+    if graph_type in ['hsc_abund_bias_last']:
+        save_path = args.output_dir + os.sep + 'hsc_abund_bias_last' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        bias_cutoff = .9
+        if args.bias_cutoff:
+            bias_cutoff = args.bias_cutoff
+
+        plot_hsc_abund_bias_at_last(
+            lineage_bias_df,
+            input_df,
+            timepoint_col,
+            bias_cutoff,
+            invert=args.invert,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['not_survived_count_box']:
         save_path = args.output_dir + os.sep + 'not_survived_count_box' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
