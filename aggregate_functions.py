@@ -1,7 +1,7 @@
 """ Commonly used data transform functions for analysis of step7 output data
 
 """
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 import os
 import numpy as np
 import scipy.stats as stats
@@ -131,7 +131,7 @@ def filter_lineage_bias_anytime(
 def filter_biased_clones_at_timepoint(
         lineage_bias_df: pd.DataFrame,
         bias_cutoff: float,
-        timepoint: int,
+        timepoint: Any,
         timepoint_col: str,
         within_cutoff: bool,
     ) -> pd.DataFrame:
@@ -162,7 +162,16 @@ def filter_biased_clones_at_timepoint(
         else:
             raise ValueError('bias_cutoff cannot be 0')
 
-    filt_df = filt_df[filt_df[timepoint_col] == timepoint]
+    if timepoint == 'last':
+        temp_df = pd.DataFrame()
+        for _, m_df in filt_df.groupby('mouse_id'):
+            tp = m_df[timepoint_col].max()
+            temp_df = temp_df.append(
+                m_df[m_df[timepoint_col] == tp]
+            )
+        filt_df = temp_df
+    else:
+        filt_df = filt_df[filt_df[timepoint_col] == timepoint]
     passing_clones = filt_df[['mouse_id', 'code']]
     biased_at_timepoint_df = lineage_bias_df.merge(
         passing_clones,
