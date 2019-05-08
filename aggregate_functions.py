@@ -1259,15 +1259,8 @@ def not_survived_acc_abundance(
         timepoint_col
     )
     time_changes = with_labels_df['time_change'].unique()
-    out_cols = [
-        'time_survived',
-        'bias_category',
-        'count',
-        'mouse_id',
-    ]
 
     with_labels_df = with_labels_df.assign(
         isLast=lambda x: x.total_time_change == x.time_change
     )
-    not_survived_df = with_labels_df[with_labels_df.isLast]
-    return not_survived_df
+    return with_labels_df
