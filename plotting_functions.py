@@ -3170,3 +3170,81 @@ def plot_not_survived_abundance(
             + '_' + group \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_not_survived_count_box(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    labeled_df = not_survived_acc_abundance(
+        lineage_bias_df,
+        timepoint_col
+    )
+    not_survived_df = labeled_df[labeled_df.time_change == labeled_df.total_time_change]
+    min_timepoint = lineage_bias_df[timepoint_col].min()
+    not_survived_df = not_survived_df.assign(
+        last_timepoint= lambda x: (x.time_change + min_timepoint).astype('int32').astype(str)
+    )
+    all_clone_num = lineage_bias_df.groupby(['mouse_id']).code.nunique().mean()
+
+    # Plot All Clones
+    count_df = pd.DataFrame(not_survived_df.groupby(
+        ['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
+        ).reset_index().sort_values(by='time_change')
+    fig, ax = plt.subplots()
+    ax = sns.boxplot(
+        x='last_timepoint',
+        y='code',
+        order=count_df.last_timepoint.unique(),
+        data=count_df,
+        palette=COLOR_PALETTES[timepoint_col]
+    )
+    _, max_codes = plt.ylim()
+    ax2 = ax.twinx()
+    ax.set_ylim(0, max_codes)
+    ax.set_ylabel('Clones Not Survived (Count Per Mouse)')
+    ax2.set_ylim(0, 100 * max_codes/all_clone_num)
+    ax2.set_ylabel('% Of Average Total Unique Clones Per Mouse')
+
+    ax.set_xlabel('Last ' + timepoint_col.title() + ' Survived')
+    plt.title(
+        'Count of Not Surviving Clones Over Time'
+    )
+    fname = save_path + os.sep \
+        + 'not_survived_count' \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+    # Plot Clones By Group
+    for group, g_df in not_survived_df.groupby('group'):
+        count_df = pd.DataFrame(
+            g_df.groupby(['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
+            ).reset_index().sort_values(by='time_change')
+        fig, ax = plt.subplots()
+        ax = sns.boxplot(
+            x='last_timepoint',
+            y='code',
+            order=count_df.last_timepoint.unique(),
+            data=count_df.sort_values(by='time_change'),
+            palette=COLOR_PALETTES[timepoint_col]
+        )
+        _, max_codes = plt.ylim()
+        ax2 = ax.twinx()
+        ax.set_ylim(0, max_codes)
+        ax.set_ylabel('Clones Not Survived (Count Per Mouse)')
+        ax2.set_ylim(0, 100 * max_codes/all_clone_num)
+        ax2.set_ylabel('% Of Average Total Unique Clones Per Mouse')
+
+        ax.set_xlabel('Last ' + timepoint_col.title() + ' Survived')
+        plt.suptitle(
+            'Count of Not Surviving Clones Over Time'
+        )
+        plt.title('Group: ' + group.replace('_', ' ').title())
+        fname = save_path + os.sep \
+            + 'not_survived_count' \
+            + '_' + group \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
+
