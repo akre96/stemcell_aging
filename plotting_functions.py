@@ -26,7 +26,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     bias_clones_to_abundance, filter_stable_initially, \
     calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
-    not_survived_bias_by_time_change, not_survived_acc_abundance
+    not_survived_bias_by_time_change, not_survived_acc_abundance, mark_changed
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -178,7 +178,7 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
                          save_path=save_path)
 
 def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
-                                enrichement_months: List[int],
+                                enrichement_months: List[Any],
                                 enrichment_thresholds: Dict[str, float],
                                 timepoint_col: str,
                                 analyzed_cell_types: List[str] = ['gr', 'b'],
@@ -253,7 +253,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                     x=timepoint_col,
                     y='percent_engraftment',
                     hue='group',
-                    data=cell_df,
+                    data=group_names_pretty(cell_df),
                     legend=None,
                     sort=True,
                     palette=COLOR_PALETTES['group']
@@ -269,11 +269,12 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                 x=timepoint_col,
                 y='percent_engraftment',
                 hue='group',
-                data=cell_df,
+                data=group_names_pretty(cell_df),
                 dodge=True,
                 palette=COLOR_PALETTES['group']
             )
             plt.ylabel('Abundance (%WBC)')
+            plt.xlabel(timepoint_col.title())
             fname = save_path \
                     + os.sep \
                     + 'dominant_clones_' + cell_type + '_' + title_addon \
@@ -3306,3 +3307,88 @@ def plot_hsc_abund_bias_at_last(
     save_plot(fname, save, save_format)
 
 
+def plot_change_marked(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        mtd: int,
+        y_col: str,
+        by_clone: bool,
+        save: bool,
+        save_path: str,
+        save_format: str='png',
+    ) -> None:
+    bias_change_df = get_bias_change(
+        lineage_bias_df,
+        timepoint_col
+    )
+    plot_clones_df = lineage_bias_df
+    if y_col != 'lineage_bias':
+        plot_clones_df = bias_clones_to_abundance(
+            lineage_bias_df,
+            clonal_abundance_df,
+            y_col
+        )
+    changed_marked_df = mark_changed(
+        plot_clones_df,
+        bias_change_df,
+        min_time_difference=mtd
+    )
+    fname_prefix = save_path + os.sep + 'change-status_mtd' + str(mtd) + '_' + y_col + '_'
+    fname_suffix = '.' + save_format
+    if by_clone:
+        for (group, change_status), g_df in changed_marked_df.groupby(['group', 'change_status']):
+            plt.figure()
+            ax = sns.lineplot(
+                x=timepoint_col,
+                y=y_col,
+                data=g_df.sort_values(by='change_type'),
+                hue='mouse_id',
+                style='change_type',
+                units='code',
+                estimator=None,
+                palette=COLOR_PALETTES['mouse_id']
+            )
+            plt.title(
+                'Group: ' + group.replace('_', ' ').title()
+                + ', ' + change_status
+                )
+            plt.ylabel(y_col_to_title(y_col))
+            plt.xlabel(timepoint_col.title())
+
+            # Remove legend items for mouse_id
+            handles, labels = ax.get_legend_handles_labels()
+            short_handles = handles[labels.index('change_type')+1:]
+            short_labels= labels[labels.index('change_type')+1:]
+            plt.legend(handles=short_handles, labels=short_labels)
+            fname = fname_prefix + group \
+                + '_' + change_status + '_by-clone' + fname_suffix
+            save_plot(fname, save, save_format)
+    else:
+        group = 'all'
+        for change_status, c_df in changed_marked_df.groupby(['change_status']):
+            plt.figure()
+            ax = sns.lineplot(
+                x=timepoint_col,
+                y=y_col,
+                data=c_df.sort_values(by='change_type'),
+                hue='group',
+                style='change_type',
+                estimator=np.median,
+                palette=COLOR_PALETTES['group']
+            )
+            plt.title(
+                    change_status.title()
+                )
+            plt.ylabel(y_col_to_title('median_'+y_col))
+            plt.xlabel(timepoint_col.title())
+            # Remove legend items for phenotype
+            handles, labels = ax.get_legend_handles_labels()
+            short_handles = handles[labels.index('change_type')+1:]
+            short_labels= labels[labels.index('change_type')+1:]
+            plt.legend(handles=short_handles, labels=short_labels)
+
+            # Save
+            fname = fname_prefix + group \
+                + '_' + change_status + fname_suffix
+            save_plot(fname, save, save_format)

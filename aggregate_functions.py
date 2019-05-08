@@ -203,7 +203,7 @@ def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def find_enriched_clones_at_time(input_df: pd.DataFrame,
-                                 enrichment_time: int,
+                                 enrichment_time: Any,
                                  enrichment_threshold: float,
                                  cell_type: str,
                                  timepoint_col: str,
@@ -225,8 +225,13 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
     Returns:
         pd.DataFrame -- DataFrame with only clones enriched at specified timepoint
     """
-    print(input_df)
-    time_df = input_df[input_df[timepoint_col] == enrichment_time]
+    if enrichment_time == 'last':
+        time_df = pd.DataFrame()
+        for _, m_df in input_df.groupby('mouse_id'):
+            last_time = m_df[timepoint_col].max()
+            time_df = time_df.append(m_df[m_df[timepoint_col] == last_time])
+    else:
+        time_df = input_df[input_df[timepoint_col] == enrichment_time]
     enriched_at_time_df = time_df[time_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id'])
 
     if lineage_bias:
@@ -239,7 +244,7 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
 
 def combine_enriched_clones_at_time(
         input_df: pd.DataFrame,
-        enrichment_time: int,
+        enrichment_time: Any,
         timepoint_col: str,
         thresholds: Dict[str, float],
         analyzed_cell_types: List[str],
@@ -605,6 +610,12 @@ def mark_changed(
 
     with_change_df = with_bias_df.assign(
         changed=lambda row: row.bias_change.abs() >= cutoff,
+    )
+    with_change_df = with_change_df.assign(
+        change_status=with_change_df.changed.map({
+            False: 'Unchanged',
+            True: 'Changed',
+        })
     )
     with_change_df['change_type'] = np.sign(with_change_df.bias_change)
     with_change_df = with_change_df.assign(

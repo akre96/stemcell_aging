@@ -52,7 +52,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_dist_bias_at_time, plot_bias_first_last, \
     plot_abundant_clone_survival, plot_not_survived_by_bias, \
     plot_not_survived_count_mouse, plot_not_survived_abundance, \
-    plot_not_survived_count_box, plot_hsc_abund_bias_at_last
+    plot_not_survived_count_box, plot_hsc_abund_bias_at_last, \
+    plot_change_marked
      
 
 
@@ -98,6 +99,14 @@ def main():
         
 
     """
+    def timepoint_type(string: str):
+        try:
+            int(string)
+            return string
+        except ValueError:
+            if string in ['last', 'first']:
+                return string
+            raise ValueError('Time point wrong type')
 
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
@@ -117,7 +126,7 @@ def main():
     parser.add_argument('-f', '--filter-bias-abund', dest='filter_bias_abund', help='Abundance threshold to filter lineage bias data', type=float, required=False, default=0.05)
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
-    parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=int, required=False)
+    parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=timepoint_type, required=False)
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
@@ -232,6 +241,30 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+
+    if graph_type in ['changed_status_overtime']:
+        save_path = args.output_dir + os.sep + 'change_status' \
+            + os.sep + args.y_col + '_lbf' + str(args.filter_bias_abund).replace('.', '-')
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+
+        plot_change_marked(
+            lineage_bias_df,
+            input_df,
+            timepoint_col,
+            mtd,
+            args.y_col,
+            args.by_clone,
+            save=args.save,
+            save_path=save_path
+        )
+        
+
 
     if graph_type in ['hsc_abund_bias_last']:
         save_path = args.output_dir + os.sep + 'hsc_abund_bias_last' \
@@ -1687,8 +1720,11 @@ def main():
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 
+        timepoint = first_timepoint
+        if args.timepoint:
+            timepoint = args.timepoint
         plot_clone_enriched_at_time(present_clones_df,
-                                    [first_timepoint],
+                                    [timepoint],
                                     dominant_thresholds,
                                     timepoint_col=timepoint_col,
                                     save=args.save,
