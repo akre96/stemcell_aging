@@ -27,8 +27,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     bias_clones_to_abundance, filter_stable_initially, \
     calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
-    not_survived_bias_by_time_change, not_survived_acc_abundance, mark_changed, \
-    find_enriched_clones_at_time
+    not_survived_bias_by_time_change, mark_changed, filter_bias_change_timepoint, \
+    find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -91,6 +91,22 @@ def print_p_value(context: str, p_value: float):
             + ' P-Value: ' + str(p_value)
         )
 
+def get_myeloid_to_lymphoid_colors(cats: List[str]) -> List[str]:
+    myeloid_color = Color(COLOR_PALETTES['change_type']['Myeloid'])
+    myeloid_colors = list(Color('white').range_to(
+        myeloid_color,
+        int(round(len(cats)/2)) + 2
+    ))
+    lymphoid_color = Color(COLOR_PALETTES['change_type']['Lymphoid'])
+    lymphoid_colors = list(lymphoid_color.range_to(
+        Color('white'),
+        int(round(len(cats)/2)) + 1
+    ))
+    colors = lymphoid_colors[:-2] \
+        + [Color(COLOR_PALETTES['change_status']['Unchanged'])] \
+        + myeloid_colors[2:]
+    colors = [x.hex_l for x in colors]
+    return colors
 
 def plot_clone_count(clone_counts: pd.DataFrame,
                      threshold: float,
@@ -1964,6 +1980,7 @@ def plot_bias_change_cutoff(
         lineage_bias_df: pd.DataFrame,
         thresholds: Dict[str, float],
         timepoint_col: str,
+        timepoint: float = None,
         abundance_cutoff: float = 0.0,
         absolute_value: bool = False,
         group: str = 'all',
@@ -1991,6 +2008,7 @@ def plot_bias_change_cutoff(
     """
 
 
+
     if cached_change is not None:
         bias_change_df = cached_change
     else:
@@ -2001,8 +2019,13 @@ def plot_bias_change_cutoff(
         bias_change_df = get_bias_change(filt_lineage_bias_df, timepoint_col)
         bias_change_df.to_csv(cache_dir + os.sep + 'bias_change_df_a'+str(round(abundance_cutoff, 2)) + '.csv', index=False)
         
-
-    plt.figure()
+    timepoint_text = ''
+    if timepoint is not None:
+        bias_change_df = filter_bias_change_timepoint(
+            bias_change_df,
+            timepoint
+        )
+        timepoint_text = ' - Clones Must have First or Last Time at: ' +str(timepoint)
     bias_change_df = bias_change_df[bias_change_df.time_change >= min_time_difference]
     if group != 'all':
         bias_change_df = bias_change_df.loc[bias_change_df.group == group]
@@ -2023,33 +2046,30 @@ def plot_bias_change_cutoff(
             color='silver',
             alpha=.3
         )
-
-    # C0 KDE of all clones
-    x, y = kde.get_lines()[0].get_data()
-    y_peak = y.argmax() + 1
-
-    # C1 KDE of "unchanged" clones
-    y1 = np.zeros(x.shape)
-    y_vals = np.append(y[:y_peak], y[:y_peak][::-1])
-    y1[:y_vals.shape[0]] = y_vals
-
-    # C2 KDE of "changed" clones
-    y2 = y - y1
-
-    x_c, y_c = intersection(x, y1, x, y2)
+    x, y, y1, y2, x_c, y_c = calculate_bias_change_cutoff(
+        bias_change_df,
+        min_time_difference=min_time_difference,
+        kde=kde,
+        timepoint=timepoint,
+    )
     plt.plot(x, y1, c='deepskyblue')
-    plt.plot(x , y2, c='firebrick')
+    plt.plot(x, y2, c='firebrick')
     plt.scatter(x_c, y_c, c='k')
     plt.vlines(x_c[0], 0, max(y))
     kde.text(x_c[0] + .1, max(y)/1.1, 'Change at: ' + str(round(x_c[0], 3)))
 
-    plt.title('Kernel Density Estimate of lineage bias change')
-    plt.suptitle('Abundance Cutoff: ' + str(round(abundance_cutoff, 2)) + ' Group: ' + group)
+    plt.suptitle('Lineage Bias Change')
+    plt.title(' Group: ' + y_col_to_title(group) + timepoint_text)
     plt.xlabel('Magnitude of Lineage Bias Change')
     plt.ylabel('Clone Density at Change')
     kde.legend_.remove()
 
-    fname = save_path + os.sep + 'bias_change_cutoff_a' + str(abundance_cutoff).replace('.', '-') + '_' + group + '_mtd' + str(min_time_difference) + '.' + save_format
+    fname = save_path + os.sep \
+        + 'bias_change_cutoff_a' + str(abundance_cutoff).replace('.', '-') \
+        + '_' + group \
+        + '_mtd' + str(min_time_difference) \
+        + '_' + timepoint_col[0] + str(timepoint) \
+        + '.' + save_format
     save_plot(fname, save, save_format)
 
 def plot_bias_change_rest(
@@ -3145,7 +3165,7 @@ def plot_not_survived_abundance(
         save_path: str = './output',
         save_format: str = 'png',
     ):
-    labeled_df = not_survived_acc_abundance(
+    survival_df = create_clonal_survival_df(
         lineage_bias_df,
         timepoint_col
     )
@@ -3153,32 +3173,15 @@ def plot_not_survived_abundance(
         Fore.CYAN + Style.BRIGHT 
         + '\nPerforming Independent T-Test of Exhausted vs. Survived'
     )
-    for group, g_df in labeled_df.groupby('group'):
+    for group, g_df in survival_df.groupby('group'):
         print(
             Fore.CYAN + Style.BRIGHT 
             + '\n  - Group: ' + group.replace('_', ' ').title()
         )
         fig, ax = plt.subplots(figsize=(10,8))
-        survived = pd.DataFrame()
-        not_survived = pd.DataFrame()
-        for LTC in g_df.total_time_change.unique():
-            survived = survived.append(g_df[
-                (g_df['total_time_change'] > LTC) &\
-                (g_df['time_change'] == LTC)
-            ].assign(
-                survived='Survived'
-            ))
-            not_survived = not_survived.append(g_df[
-                (g_df['total_time_change'] == LTC) &\
-                (g_df['time_change'] == LTC)
-            ].assign(
-                survived='Exhausted'
-            ))
-        survival_df = survived.append(not_survived)
-
         # T-Test on interesting result
 
-        for time_change, t_df in survival_df.groupby('time_change'):
+        for time_change, t_df in g_df.groupby('time_change'):
             t_s = t_df[t_df['survived'] == 'Survived']
             t_e = t_df[t_df['survived'] == 'Exhausted']
             stat, p_value = stats.ttest_ind(
@@ -3193,7 +3196,7 @@ def plot_not_survived_abundance(
             x='time_change',
             y='accum_abundance',
             hue='survived',
-            data=survival_df,
+            data=g_df,
             hue_order=['Exhausted', 'Survived']
         )
         plt.xlabel(
@@ -3218,7 +3221,7 @@ def plot_not_survived_count_box(
         save_path: str = './output',
         save_format: str = 'png',
     ):
-    labeled_df = not_survived_acc_abundance(
+    labeled_df = create_clonal_survival_df(
         lineage_bias_df,
         timepoint_col
     )
@@ -3521,3 +3524,96 @@ def plot_stable_abund_time_clones(
             + '_' + gname + '_' + 'by-clone_' \
             + '.' + save_format
         save_plot(fname, save, save_format)
+def plot_perc_survival_bias(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    fname_prefix = save_path + os.sep + 'perc_survive_bias_'
+
+    survival_df = create_clonal_survival_df(
+        lineage_bias_df,
+        timepoint_col
+    )
+
+
+    survival_df['bias_category'] = survival_df.bias_category.apply(
+        lambda x: MAP_LINEAGE_BIAS_CATEGORY[x]
+    )
+    cats = [
+        'LC',
+        'LB',
+        'BL',
+        'B',
+        'BM',
+        'MB',
+        'MC'
+    ]
+    cats = [MAP_LINEAGE_BIAS_CATEGORY[x] for x in cats]
+    colors = get_myeloid_to_lymphoid_colors(cats)
+    palette = dict(zip(cats, colors))
+    survival_counts = pd.DataFrame(
+        survival_df.groupby(
+            ['survived', 'time_change', 'bias_category', 'mouse_id', 'group']
+        ).code.nunique()
+    ).reset_index()
+    survived = survival_counts[survival_counts['survived'] == 'Survived'].rename(
+        columns={'code': 'survived_count'}
+    )
+    exhausted = survival_counts[survival_counts['survived'] == 'Exhausted'].rename(
+        columns={'code': 'exhausted_count'}
+    )
+    survival_perc = survived.merge(
+        exhausted,
+        on=['mouse_id', 'bias_category', 'time_change', 'group'],
+        how='inner',
+        validate='1:1'
+    ).assign(
+        exhausted_perc=lambda x: 100 * x.exhausted_count / (x.exhausted_count + x.survived_count),
+        survived_perc=lambda x: 100 * x.survived_count / (x.exhausted_count + x.survived_count)
+    )
+    first_time = lineage_bias_df[timepoint_col].min()
+    survival_perc = survival_perc.assign(
+        last_time=lambda x: x.time_change + first_time
+    )
+    for group, g_df in survival_perc.groupby('group'):
+        plt.figure(figsize=(7,5))
+        sns.barplot(
+            y='survived_perc',
+            x='last_time',
+            hue='bias_category',
+            hue_order=cats,
+            palette=palette,
+            data=g_df,
+            capsize=.05,
+            errwidth=.9,
+            saturation=1
+        )
+        plt.legend(title='').remove()
+        plt.ylabel('Percent of Surviving Clones Within Category')
+        plt.xlabel('Last Time Point of Exhausted Clones')
+        plt.title('Group: ' + y_col_to_title(group))
+        fname = fname_prefix + group + '.' + save_format
+        save_plot(fname, save, save_format)
+
+    group = 'all'
+    plt.figure(figsize=(10,9))
+    sns.barplot(
+        y='survived_perc',
+        x='last_time',
+        hue='bias_category',
+        hue_order=cats,
+        palette=palette,
+        data=survival_perc,
+        capsize=.05,
+        saturation=1,
+        errwidth=.9,
+    )
+    plt.legend(title='')
+    plt.title('Group: ' + y_col_to_title(group))
+    plt.ylabel('Percent of Surviving Clones Within Category')
+    plt.xlabel('Last Time Point of Exhausted Clones')
+    fname = fname_prefix + group + '.' + save_format
+    save_plot(fname, save, save_format)

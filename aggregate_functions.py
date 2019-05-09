@@ -542,7 +542,9 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_point
 def calculate_bias_change_cutoff(
         bias_change_df: pd.DataFrame,
         min_time_difference: int,
-    ) -> float:
+        kde=None,
+        timepoint=None,
+    ) -> Tuple:
     """ Calculates change amount that qualifies as "change"
 
     Arguments:
@@ -556,8 +558,17 @@ def calculate_bias_change_cutoff(
         if more than 1 cutoff found, throws error
     """
     bias_change_df = bias_change_df[bias_change_df.time_change >= min_time_difference] 
-    fig = plt.figure()
-    kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
+    if timepoint is not None:
+        bias_change_df = filter_bias_change_timepoint(
+            bias_change_df,
+            timepoint
+        )
+        print(bias_change_df)
+    close_figure = False
+    if kde is None:
+        close_figure = True
+        fig = plt.figure()
+        kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
 
     # C0 KDE of all clones
     x, y = kde.get_lines()[0].get_data()
@@ -571,20 +582,22 @@ def calculate_bias_change_cutoff(
     # C2 KDE of "changed" clones
     y2 = y - y1
 
-    cutoff_candidates, _ = intersection(x, y1, x, y2)
+    x_c, y_c = intersection(x, y1, x, y2)
 
-    plt.close(fig=fig)
+    if close_figure:
+        plt.close(fig=fig)
 
-    if len(cutoff_candidates) > 1:
-        print(cutoff_candidates)
+    if len(x_c) > 1:
+        print(x_c)
         raise ValueError('Too many candidates found')
 
-    return cutoff_candidates[0]
+    return x, y, y1, y2, x_c, y_c
 
 def mark_changed(
         input_df: pd.DataFrame,
         bias_change_df: pd.DataFrame,
-        min_time_difference: int
+        min_time_difference: int,
+        timepoint: Any = None,
     ) -> pd.DataFrame:
     """ Adds column to input df based on if clone has 'changed' or not
     
@@ -595,10 +608,12 @@ def mark_changed(
     Returns:
         pd.DataFrame -- input_df with changed column
     """
-    cutoff = calculate_bias_change_cutoff(
+    _, _, _, _, cutoffs, _ = calculate_bias_change_cutoff(
         bias_change_df,
         min_time_difference,
+        timepoint=timepoint
     )
+    cutoff = cutoffs[0]
     with_bias_df = input_df.merge(
         bias_change_df[['code', 'group', 'mouse_id', 'bias_change']],
         how='left',
@@ -1265,7 +1280,7 @@ def add_avg_abundance_until_timepoint(
         output_df = output_df.append(sort_df)
     return output_df
 
-def not_survived_acc_abundance(
+def create_clonal_survival_df(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
     ) -> pd.DataFrame:
@@ -1283,4 +1298,46 @@ def not_survived_acc_abundance(
     with_labels_df = with_labels_df.assign(
         isLast=lambda x: x.total_time_change == x.time_change
     )
-    return with_labels_df
+    survived = pd.DataFrame()
+    not_survived = pd.DataFrame()
+    for LTC in with_labels_df.total_time_change.unique():
+        survived = survived.append(with_labels_df[
+            (with_labels_df['total_time_change'] > LTC) &\
+            (with_labels_df['time_change'] == LTC)
+        ].assign(
+            survived='Survived'
+        ))
+        not_survived = not_survived.append(with_labels_df[
+            (with_labels_df['total_time_change'] == LTC) &\
+            (with_labels_df['time_change'] == LTC)
+        ].assign(
+            survived='Exhausted'
+        ))
+    survival_df = survived.append(not_survived)
+    return survival_df
+
+def filter_bias_change_timepoint(
+        bias_change_df: pd.DataFrame,
+        timepoint: Any,
+    ) -> pd.DataFrame:
+
+    if timepoint == 'last':
+        filt_df = pd.DataFrame()
+        for mouse_id, m_df in bias_change_df.groupby('mouse_id'):
+            last_tp = m_df['last_timepoint'].max()
+            filt_df = filt_df.append(m_df[
+                m_df.last_timepoint.isin([last_tp])
+            ])
+    elif timepoint == 'first':
+        filt_df = pd.DataFrame()
+        for mouse_id, m_df in bias_change_df.groupby('mouse_id'):
+            first_tp = m_df['first_timepoint'].min()
+            filt_df = filt_df.append(m_df[
+                m_df.first_timepoint.isin([first_tp])
+            ])
+    else:
+        filt_df = bias_change_df[
+            (bias_change_df.first_timepoint.isin([float(timepoint)])) | \
+            (bias_change_df.last_timepoint.isin([float(timepoint)]))
+        ]
+    return filt_df

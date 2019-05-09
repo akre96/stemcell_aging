@@ -53,7 +53,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_abundant_clone_survival, plot_not_survived_by_bias, \
     plot_not_survived_count_mouse, plot_not_survived_abundance, \
     plot_not_survived_count_box, plot_hsc_abund_bias_at_last, \
-    plot_change_marked, plot_stable_abund_time_clones
+    plot_change_marked, plot_stable_abund_time_clones, \
+    plot_perc_survival_bias
      
 
 
@@ -106,6 +107,8 @@ def main():
         except ValueError:
             if string in ['last', 'first']:
                 return string
+            if string == 'None':
+                return None
             raise ValueError('Time point wrong type')
 
     parser = argparse.ArgumentParser(description="Plot input data")
@@ -238,6 +241,26 @@ def main():
         timepoint_col = 'month'
 
 
+
+
+    if args.save:
+        print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
+    
+
+    if graph_type in ['perc_survival_bias_type']:
+        save_path = args.output_dir + os.sep + 'perc_survival_bias_type' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        plot_perc_survival_bias(
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path
+        )
+
     if graph_type in ['bias_stable_abundant_at_time']:
         save_path = args.output_dir + os.sep + 'stable_abund_time' \
             + os.sep + args.y_col + '_lbf' + str(args.filter_bias_abund).replace('.', '-')
@@ -274,11 +297,6 @@ def main():
                 save_path=save_path,
                 save_format='png'
             )
-
-
-    if args.save:
-        print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
-    
 
     if graph_type in ['changed_status_overtime']:
         save_path = args.output_dir + os.sep + 'change_status' \
@@ -1189,7 +1207,8 @@ def main():
             change_marked_df = mark_changed(
                 present_clones_df,
                 bias_change_df,
-                min_time_difference=mtd
+                min_time_difference=mtd,
+                timepoint=args.timepoint,
             )
             change_marked_df.to_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv', index=False)
         group = args.group
@@ -1369,6 +1388,7 @@ def main():
             lineage_bias_df=lineage_bias_df,
             thresholds=thresholds,
             timepoint_col=timepoint_col,
+            timepoint=args.timepoint,
             abundance_cutoff=abundance_cutoff,
             absolute_value=True,
             group=args.group,
