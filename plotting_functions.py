@@ -8,6 +8,7 @@ import os
 import json
 import pandas as pd
 import numpy as np
+import scipy.stats as stats
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -26,7 +27,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     bias_clones_to_abundance, filter_stable_initially, \
     calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
-    not_survived_bias_by_time_change, not_survived_acc_abundance, mark_changed
+    not_survived_bias_by_time_change, not_survived_acc_abundance, mark_changed, \
+    find_enriched_clones_at_time
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -63,7 +65,31 @@ def save_plot(file_name: str, save: bool, save_format: str) -> None:
                 os.makedirs(os.path.dirname(file_name))
                 plt.savefig(file_name, format=save_format)
 
-
+def print_p_value(context: str, p_value: float):
+    """ Print P-Value, styke by significance
+    
+    Arguments:
+        context {str} -- What to print just before P-Value
+        p_value {float}
+    """
+    if p_value < 0.001:
+        print(
+            Fore.WHITE + Back.CYAN + Style.BRIGHT
+            + context
+            + ' P-Value: ' + str(p_value)
+        )
+    elif p_value < 0.01:
+        print(
+            Fore.CYAN + Style.BRIGHT
+            + context
+            + ' P-Value: ' + str(p_value)
+        )
+    elif p_value < 0.05:
+        print(
+            Fore.CYAN 
+            + context
+            + ' P-Value: ' + str(p_value)
+        )
 
 
 def plot_clone_count(clone_counts: pd.DataFrame,
@@ -3123,7 +3149,15 @@ def plot_not_survived_abundance(
         lineage_bias_df,
         timepoint_col
     )
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Independent T-Test of Exhausted vs. Survived'
+    )
     for group, g_df in labeled_df.groupby('group'):
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\n  - Group: ' + group.replace('_', ' ').title()
+        )
         fig, ax = plt.subplots(figsize=(10,8))
         survived = pd.DataFrame()
         not_survived = pd.DataFrame()
@@ -3142,6 +3176,19 @@ def plot_not_survived_abundance(
             ))
         survival_df = survived.append(not_survived)
 
+        # T-Test on interesting result
+
+        for time_change, t_df in survival_df.groupby('time_change'):
+            t_s = t_df[t_df['survived'] == 'Survived']
+            t_e = t_df[t_df['survived'] == 'Exhausted']
+            stat, p_value = stats.ttest_ind(
+                t_e.accum_abundance,
+                t_s.accum_abundance,
+            )
+            context: str = timepoint_col.title() + ' ' + str(int(time_change))
+            print_p_value(context, p_value)
+            
+
         ax = sns.boxplot(
             x='time_change',
             y='accum_abundance',
@@ -3149,14 +3196,6 @@ def plot_not_survived_abundance(
             data=survival_df,
             hue_order=['Exhausted', 'Survived']
         )
-        #sns.swarmplot(
-            #x='total_time_change',
-            #y='accum_abundance',
-            #hue='mouse_id',
-            #palette=COLOR_PALETTES['mouse_id'],
-            #data=g_df,
-            #ax=ax
-        #)
         plt.xlabel(
             timepoint_col.title()
             + '(s) Survived'
@@ -3392,3 +3431,93 @@ def plot_change_marked(
             fname = fname_prefix + group \
                 + '_' + change_status + fname_suffix
             save_plot(fname, save, save_format)
+
+def plot_stable_abund_time_clones(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        bias_change_cutoff: float,
+        abund_timepoint: Any,
+        t1: int,
+        timepoint_col: str,
+        thresholds: Dict[str,float],
+        cell_type: str,
+        y_col: str,
+        save: bool,
+        save_path: str ,
+        save_format: str
+    ) -> None:
+
+    stable_clone_df = filter_stable_initially(
+        lineage_bias_df,
+        t1=t1,
+        timepoint_col=timepoint_col,
+        bias_change_cutoff=bias_change_cutoff,
+    )
+    abundant_at_timepoint = find_enriched_clones_at_time(
+        input_df=clonal_abundance_df,
+        enrichment_time=abund_timepoint,
+        enrichment_threshold=thresholds[cell_type],
+        cell_type=cell_type,
+        timepoint_col=timepoint_col,
+        lineage_bias=False,
+    )
+    fname_prefix = save_path + os.sep + 'stable_clones_' \
+        + cell_type + '_abund_' + timepoint_col[0] + str(abund_timepoint)
+    y_title = y_col_to_title(y_col)
+    x_title = timepoint_col.title()
+
+    if y_col != 'lineage_bias':
+        stable_clone_df = bias_clones_to_abundance(
+            stable_clone_df,
+            abundant_at_timepoint,
+            y_col
+        )
+    else:
+        stable_clone_df = stable_clone_df.merge(
+            abundant_at_timepoint[['mouse_id', 'code']],
+            how='inner',
+            on=['mouse_id', 'code'],
+            validate="m:m"
+        )
+
+    plt.figure()
+    sns.lineplot(
+        x=timepoint_col,
+        y=y_col,
+        data=group_names_pretty(stable_clone_df),
+        hue='group',
+        palette=COLOR_PALETTES['group']
+    )
+    plt.ylabel(y_title)
+    plt.xlabel(x_title)
+    title = 'Initial Bias Change < ' +str(bias_change_cutoff) \
+        + ' ' + cell_type.title() + ' Abundance at ' + timepoint_col.title() + ' ' \
+        + str(abund_timepoint).title() + ' > ' + str(round(thresholds[cell_type], 2))
+    plt.title(title)
+    
+
+    fname = fname_prefix + '_' + y_col + '_' \
+        + timepoint_col[0] + str(t1) \
+        + '_average.' + save_format
+    save_plot(fname, save, save_format)
+    for gname, group_df in stable_clone_df.groupby('group'):
+        plt.figure()
+        sns.lineplot(
+            x=timepoint_col,
+            y=y_col,
+            data=group_df,
+            hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id'],
+            units='code',
+            estimator=None,
+            legend=False,
+        )
+        plt.suptitle('Group: ' + gname.replace('_', ' ').title())
+        plt.title(title)
+        plt.ylabel(y_title)
+        plt.xlabel(x_title)
+        fname = fname_prefix + '_' + y_col + '_' \
+            + timepoint_col[0] + str(t1) \
+            + '_' + gname + '_' + 'by-clone_' \
+            + '.' + save_format
+        save_plot(fname, save, save_format)

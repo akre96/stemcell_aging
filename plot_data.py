@@ -53,7 +53,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_abundant_clone_survival, plot_not_survived_by_bias, \
     plot_not_survived_count_mouse, plot_not_survived_abundance, \
     plot_not_survived_count_box, plot_hsc_abund_bias_at_last, \
-    plot_change_marked
+    plot_change_marked, plot_stable_abund_time_clones
      
 
 
@@ -236,6 +236,44 @@ def main():
         print(' - Time By Month Set \n')
         first_timepoint = 4
         timepoint_col = 'month'
+
+
+    if graph_type in ['bias_stable_abundant_at_time']:
+        save_path = args.output_dir + os.sep + 'stable_abund_time' \
+            + os.sep + args.y_col + '_lbf' + str(args.filter_bias_abund).replace('.', '-')
+
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        timepoint = 'last'
+        if args.timepoint:
+            timepoint = args.timepoint
+    
+        for cell_type in ['gr', 'b']:
+            plot_stable_abund_time_clones(
+                lineage_bias_df,
+                present_clones_df,
+                args.bias_cutoff,
+                abund_timepoint=timepoint,
+                t1=first_timepoint,
+                timepoint_col=timepoint_col,
+                thresholds=thresholds,
+                cell_type=cell_type,
+                y_col=args.y_col,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
 
 
     if args.save:
