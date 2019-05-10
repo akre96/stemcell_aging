@@ -54,7 +54,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_not_survived_count_mouse, plot_not_survived_abundance, \
     plot_not_survived_count_box, plot_hsc_abund_bias_at_last, \
     plot_change_marked, plot_stable_abund_time_clones, \
-    plot_perc_survival_bias
+    plot_perc_survival_bias, plot_bias_dist_by_change
      
 
 
@@ -246,6 +246,26 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+
+    if graph_type in ['bias_dist_by_change']:
+        save_path = args.output_dir + os.sep + 'bias_dist_by_change' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+
+        plot_bias_dist_by_change(
+            lineage_bias_df,
+            timepoint_col,
+            mtd,
+            args.timepoint,
+            save=args.save,
+            save_path=save_path
+        )
 
     if graph_type in ['perc_survival_bias_type']:
         save_path = args.output_dir + os.sep + 'perc_survival_bias_type' \

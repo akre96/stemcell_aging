@@ -103,7 +103,7 @@ def get_myeloid_to_lymphoid_colors(cats: List[str]) -> List[str]:
         int(round(len(cats)/2)) + 1
     ))
     colors = lymphoid_colors[:-2] \
-        + [Color(COLOR_PALETTES['change_status']['Unchanged'])] \
+        + [Color(COLOR_PALETTES['change_type']['Unchanged'])] \
         + myeloid_colors[2:]
     colors = [x.hex_l for x in colors]
     return colors
@@ -1063,7 +1063,7 @@ def plot_change_contributions(
                 x='total',
                 y='mouse_id',
                 data=g_df,
-                color=COLOR_PALETTES['change_status']['Unchanged'],
+                color=COLOR_PALETTES['change_type']['Unchanged'],
                 label="Unchanged"
             )
             sns.barplot(
@@ -1101,7 +1101,7 @@ def plot_change_contributions(
                 x='total',
                 y='mouse_id',
                 data=g_df,
-                color=COLOR_PALETTES['change_status']['Unchanged'],
+                color=COLOR_PALETTES['change_type']['Unchanged'],
                 label='Unchanged'
             )
             sns.barplot(
@@ -2052,8 +2052,8 @@ def plot_bias_change_cutoff(
         kde=kde,
         timepoint=timepoint,
     )
-    plt.plot(x, y1, c='deepskyblue')
-    plt.plot(x, y2, c='firebrick')
+    plt.plot(x, y1, c=COLOR_PALETTES['change_status']['Unchanged'])
+    plt.plot(x, y2, c=COLOR_PALETTES['change_status']['Changed'])
     plt.scatter(x_c, y_c, c='k')
     plt.vlines(x_c[0], 0, max(y))
     kde.text(x_c[0] + .1, max(y)/1.1, 'Change at: ' + str(round(x_c[0], 3)))
@@ -3112,7 +3112,7 @@ def plot_not_survived_by_bias(
         int(round(len(cats)/2)) + 1
     ))
     colors = lymphoid_colors[:-2] \
-        + [Color(COLOR_PALETTES['change_status']['Unchanged'])] \
+        + [Color(COLOR_PALETTES['change_type']['Unchanged'])] \
         + myeloid_colors[2:]
     colors = [x.hex_l for x in colors]
 
@@ -3617,3 +3617,47 @@ def plot_perc_survival_bias(
     plt.xlabel('Last Time Point of Exhausted Clones')
     fname = fname_prefix + group + '.' + save_format
     save_plot(fname, save, save_format)
+
+def plot_bias_dist_by_change(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        mtd: int,
+        timepoint: Any = None,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    bias_change_df = get_bias_change(
+        lineage_bias_df,
+        timepoint_col
+    )
+    change_marked_df = mark_changed(
+        lineage_bias_df,
+        bias_change_df,
+        min_time_difference=mtd,
+        timepoint=timepoint
+    )
+    fname_prefix = save_path + os.sep \
+        + 'lineage_bias_by_change_' \
+        + 't' + str(timepoint) \
+        + '_mtd' + str(mtd)
+    for time, t_df in change_marked_df.groupby(timepoint_col):
+        plt.figure()
+        plt.title(
+            'Distrubution of Lineage Bias of Clones at '
+            + timepoint_col.title() + ' ' + str(time))
+        for status, c_df in t_df.groupby('change_status'):
+            sns.distplot(
+                c_df['lineage_bias'],
+                color=COLOR_PALETTES['change_status'][status],
+                label=status,
+                hist=False,
+                rug=True,
+                rug_kws={'alpha': 0.2}
+            )
+        plt.xlabel('Lineage Bias Distribution')
+        plt.ylabel('')
+        plt.legend(title='Lineage Bias Change Type')
+        fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
+            + '.' + save_format
+        save_plot(fname, save, save_format)

@@ -15,17 +15,18 @@
         "#3ae5ff",
         "#ff6547"
     ],
+    "change_status": {
+        "Unchanged": "deepskyblue",
+        "Changed": "firebrick"
+    },
     "change_status_2": [
         "#8cc35c",
         "#ff6547"
     ],
-    "change_status": {
-        "Unchanged": "#e6e6e6",
-        "Total": "#e6e6e6"
-    },
     "change_type": {
         "Myeloid": "#d72424",
-        "Lymphoid": "#32bec3"
+        "Lymphoid": "#32bec3",
+        "Unchanged": "#e6e6e6"
     },
     "time_point": "coolwarm",
     "mouse_id": {
