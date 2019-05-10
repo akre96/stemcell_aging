@@ -1207,18 +1207,18 @@ def define_bias_category(lineage_bias: float) -> str:
         str -- categorical classification of lineage bias
     """
     
-    if lineage_bias == 1:
-        return 'LC'
     if lineage_bias == -1:
+        return 'LC'
+    if lineage_bias == 1:
         return 'MC'
     if lineage_bias >= 0.4:
-        return 'LB'
-    if lineage_bias <= -0.4:
         return 'MB'
+    if lineage_bias <= -0.4:
+        return 'LB'
     if lineage_bias >= 0.1:
-         return 'BL'
+         return 'BM'
     if lineage_bias <= -0.1:
-        return 'BM'
+        return 'BL'
     return 'B'
 
 def add_bias_category(
