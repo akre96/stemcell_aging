@@ -11,7 +11,16 @@ import seaborn as sns
 from intersection.intersection import intersection
 
 UNIQUE_CODE_COLS = ['code', 'mouse_id']
-
+  
+MAP_LINEAGE_BIAS_CATEGORY = {
+    'LC': 'Lymphoid Committed',
+    'LB': 'Lymphoid Biased',
+    'BL': 'Balanced - Lymphoid Leaning',
+    'B': 'Balanced',
+    'BM': 'Balanced - Myeloid Leaning',
+    'MB': 'Myeloid Biased',
+    'MC': 'Myeloid Committed',
+}
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
                      analyzed_cell_types: List[str],
@@ -67,6 +76,21 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
                                   )
         filtered_df = filtered_df.append(cell_df)
     return filtered_df
+
+def find_last_clones(
+        input_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    last_clones = pd.DataFrame(
+        input_df.groupby(['code', 'mouse_id'])[timepoint_col].max()
+        ).reset_index()
+    last_clones_with_data = last_clones.merge(
+        input_df,
+        how='inner',
+        on=['code', 'mouse_id', timepoint_col],
+        validate='1:1'
+    )
+    return last_clones_with_data
 
 def filter_clones_threshold_anytime(
         input_df: pd.DataFrame,
@@ -181,11 +205,12 @@ def filter_biased_clones_at_timepoint(
     )
     return biased_at_timepoint_df
 
-def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
+def count_clones(input_df: pd.DataFrame, timepoint_col: str) -> pd.DataFrame:
     """ Count unique clones per cell type
 
     Arguments:
         input_df {pd.DataFrame} -- long formatted step7 output
+        timepoint_col {str} -- column to look for time values in
 
     Returns:
         pd.DataFrame -- DataFrame with columns 'mouse_id','day', 'cell_type', 'code' where
@@ -193,9 +218,9 @@ def count_clones(input_df: pd.DataFrame) -> pd.DataFrame:
     """
 
     clone_counts = pd.DataFrame(
-        input_df.groupby(['mouse_id', 'day', 'month', 'cell_type'])['code'].nunique()
+        input_df.groupby(['mouse_id', timepoint_col, 'cell_type'])['code'].nunique()
         ).reset_index()
-    total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', 'day', 'month'])['code'].nunique()).reset_index()
+    total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', timepoint_col])['code'].nunique()).reset_index()
     total_clone_counts['cell_type'] = 'Total'
     clone_counts = clone_counts.append(total_clone_counts, sort=True)
 
@@ -1227,6 +1252,9 @@ def add_bias_category(
 
     lineage_bias_df['bias_category'] = lineage_bias_df.lineage_bias.apply(
         define_bias_category,
+    )
+    lineage_bias_df['bias_category_long'] = lineage_bias_df.bias_category.map(
+       MAP_LINEAGE_BIAS_CATEGORY
     )
     return lineage_bias_df
 

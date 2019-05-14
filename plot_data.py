@@ -55,7 +55,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_not_survived_count_box, plot_hsc_abund_bias_at_last, \
     plot_change_marked, plot_stable_abund_time_clones, \
     plot_perc_survival_bias, plot_bias_dist_by_change, \
-    plot_abundance_by_change
+    plot_abundance_by_change, plot_bias_dist_contribution_over_time
      
 
 
@@ -247,6 +247,17 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+    if graph_type in ['bias_dist_contrib_over_time']:
+        save_path = args.output_dir + os.sep + 'bias_distribution_contribution_over_time'
+        for cell_type in ['gr', 'b']:
+            plot_bias_dist_contribution_over_time(
+                lineage_bias_df,
+                timepoint_col,
+                cell_type,
+                by_group=args.by_group,
+                save=args.save,
+                save_path=save_path,
+            )
 
     if graph_type in ['abundance_by_change']:
         save_path = args.output_dir + os.sep + 'abundance_by_change' \
@@ -370,19 +381,14 @@ def main():
         if timepoint_col == 'gen':
             lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
 
-        bias_cutoff = .9
-        if args.bias_cutoff:
-            bias_cutoff = args.bias_cutoff
-
         plot_hsc_abund_bias_at_last(
             lineage_bias_df,
             input_df,
             timepoint_col,
-            bias_cutoff,
-            invert=args.invert,
             save=args.save,
             save_path=save_path
         )
+
     if graph_type in ['not_survived_count_box']:
         save_path = args.output_dir + os.sep + 'not_survived_count_box' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
@@ -1565,20 +1571,34 @@ def main():
 
     # Count clones by threshold
     if graph_type == 'clone_count_bar':
-        clone_count_thresholds = [0.01]
-        group = 'all'
-        if 'default' not in options:
-            group = options
+
+        abundance_cutoff = 0.01
+        thresholds = {
+            'gr': 0.01,
+            'b': 0.01
+        }
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col
+            )
 
         line = args.line
-        plot_clone_count_by_thresholds(present_clones_df,
-                                       clone_count_thresholds,
-                                       analysed_cell_types,
-                                       by_day=args.by_day,
-                                       line=line,
-                                       save=args.save,
-                                       save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                       group=group)
+        plot_clone_count_by_thresholds(
+            present_clones_df,
+            thresholds,
+            analysed_cell_types,
+            timepoint_col,
+            abundance_cutoff=abundance_cutoff,
+            line=line,
+            save=args.save,
+            save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
+            group=args.group
+        )
 
     if graph_type == 'abund_bias_time':
         abundance_cutoff = 0

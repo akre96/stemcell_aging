@@ -28,7 +28,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
     not_survived_bias_by_time_change, mark_changed, filter_bias_change_timepoint, \
-    find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff
+    find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff, \
+    find_last_clones, add_bias_category
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -57,13 +58,21 @@ def save_plot(file_name: str, save: bool, save_format: str) -> None:
     if save:
         if os.path.isdir(os.path.dirname(file_name)) or os.path.dirname(file_name) == '':
             print(Fore.GREEN + 'Saving to: ' + file_name)
-            plt.savefig(file_name, format=save_format)
+            plt.savefig(
+                file_name,
+                format=save_format,
+                bbox_inches='tight',
+            )
         else:
             print('Directory does not exist for: ' + file_name)
             create_dir = input("Create Directory? (y/n) \n")
             if create_dir.lower() == 'y':
                 os.makedirs(os.path.dirname(file_name))
-                plt.savefig(file_name, format=save_format)
+                plt.savefig(
+                    file_name,
+                    format=save_format,
+                    bbox_inches='tight',
+                )
 
 def print_p_value(context: str, p_value: float):
     """ Print P-Value, styke by significance
@@ -109,15 +118,16 @@ def get_myeloid_to_lymphoid_colors(cats: List[str]) -> List[str]:
     return colors
 
 def plot_clone_count(clone_counts: pd.DataFrame,
-                     threshold: float,
+                     thresholds: Dict[str, float],
                      analyzed_cell_types: List[str],
+                     abundance_cutoff: float,
+                     timepoint_col: str,
                      group: str = 'all',
                      line: bool = False,
-                     by_day: bool = False,
                      save: bool = False,
                      save_path: str = './output',
                      save_format: str = 'png',
-                    ) -> Tuple:
+                    ) -> None:
     """ Plots clone counts, based on stats from count_clones function
 
     Arguments:
@@ -125,64 +135,65 @@ def plot_clone_count(clone_counts: pd.DataFrame,
         time_points {List[int]} -- list of time points to plot
         threshold {float} -- threshold value, used in title of plot
     plt.show()
+        timepoint_col {str} -- column to look for time values in
         analysed_cell_types {List[str]} -- list of cell types analyzed
 
-    Returns:
-        Tuple -- fig,ax for further modification if required
     """
 
-    x_var = 'day'
-    if not by_day:
-        clone_counts['month'] = pd.to_numeric(round(clone_counts['day']/30), downcast='integer')
-        x_var = 'month'
+    x_var = timepoint_col
+    n_timepoints = clone_counts[timepoint_col].nunique()
 
     if line:
-        for cell_type in clone_counts.cell_type.unique():
-            fig, axis = plt.subplots()
-            clone_counts_cell = clone_counts[clone_counts.cell_type == cell_type]
+        for cell_type, c_df in clone_counts.groupby('cell_type'):
+            if cell_type == 'Total':
+                thresh = abundance_cutoff
+            else:
+                thresh = round(thresholds[cell_type], 2)
+            plt.figure()
             sns.lineplot(x=x_var,
                          y='code',
                          hue='mouse_id',
                          palette=COLOR_PALETTES['mouse_id'],
-                         data=clone_counts_cell,
-                         ax=axis,
+                         data=c_df,
                          legend=False
                         )
-            plt.suptitle('Clone Counts in '+ cell_type +' Cells with Abundance > ' + str(threshold) + ' % WBC')
+            plt.suptitle('Clone Counts in '+ cell_type +' Cells with Abundance > ' + str(thresh) + ' % WBC')
             label = 'Group: ' + group
             plt.title(label)
             plt.xlabel(x_var.title())
             plt.ylabel('Number of Clones')
             if save:
-                fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
+                fname = save_path + os.sep + 'clone_count_t' + str(thresh).replace('.', '-') + '_' + cell_type + '_' + group + '.' + save_format
                 print('Saving to: ' + fname)
                 plt.savefig(fname, format=save_format)
     else:
-        fig, axis = plt.subplots()
+        plt.figure(figsize=(n_timepoints*1.5, 5))
         sns.barplot(x=x_var,
                     y='code',
                     hue='cell_type',
                     hue_order=analyzed_cell_types + ['Total'],
                     data=clone_counts,
-                    ax=axis,
                     capsize=.08,
                     errwidth=0.5,
-                    palette=sns.color_palette(COLOR_PALETTES['cell_type'])
+                    palette=COLOR_PALETTES['cell_type']
                    )
-        plt.suptitle('Clone Counts By Cell Type with Abundance > ' + str(threshold) + ' % WBC')
+        plt.suptitle('Clone Counts By Cell Type with Abundance Cutoff ' + str(100 - abundance_cutoff))
         label = 'Group: ' + group
         plt.title(label)
         plt.xlabel(x_var.title())
         plt.ylabel('Number of Clones')
-        fname = save_path + os.sep + 'clone_count_t' + str(threshold).replace('.', '-') + '_' + group + '.' + save_format
+        fname = save_path + os.sep \
+            + 'clone_count_a' \
+            + str(abundance_cutoff).replace('.', '-') + '_' + group + '.' + save_format
         save_plot(fname, save, save_format)
 
-    return (fig, axis)
 
 
 def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
-                                   thresholds: List[float],
+                                   thresholds: Dict[str, float],
                                    analysed_cell_types: List[str],
+                                   timepoint_col: str,
+                                   abundance_cutoff: float = 0,
                                    by_day: bool = False,
                                    group: str = 'all',
                                    line: bool = False,
@@ -193,8 +204,9 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
 
     Arguments:
         input_df {pd.DataFrame} -- long formatted data from step7 output
-        thresholds {List[float]} -- list of thresholds to plot
+        thresholds {Dict[str, float]} -- list of thresholds to plot
         analysed_cell_types {List[str]} -- cell types to consider in analysis
+        timepoint_col {str} -- column to look for time values in
 
     Returns:
         None -- plots created, run plt.show() to observe
@@ -205,19 +217,21 @@ def plot_clone_count_by_thresholds(input_df: pd.DataFrame,
         input_df = input_df.loc[input_df.group == group]
 
     # Plot at thresholds
-    for thresh in thresholds:
-        print('Plotting at threshold: ' + str(thresh))
-        threshold_df = filter_threshold(input_df, thresh, analysed_cell_types)
-        clone_counts = count_clones(threshold_df)
+    threshold_df = filter_cell_type_threshold(
+        input_df,
+        thresholds, 
+        analysed_cell_types)
+    clone_counts = count_clones(threshold_df, timepoint_col)
 
-        plot_clone_count(clone_counts,
-                         thresh,
-                         analysed_cell_types,
-                         group=group,
-                         save=save,
-                         line=line,
-                         by_day=by_day,
-                         save_path=save_path)
+    plot_clone_count(clone_counts,
+                        thresholds,
+                        analysed_cell_types,
+                        abundance_cutoff=abundance_cutoff,
+                        group=group,
+                        save=save,
+                        line=line,
+                        timepoint_col=timepoint_col,
+                        save_path=save_path)
 
 def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_months: List[Any],
@@ -3297,8 +3311,6 @@ def plot_hsc_abund_bias_at_last(
         lineage_bias_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
-        bias_cutoff: float,
-        invert: bool,
         save: bool,
         save_path: str,
         save_format: str='png',
@@ -3306,46 +3318,52 @@ def plot_hsc_abund_bias_at_last(
 
     if clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].empty:
         raise ValueError('No HSC Cells in Clonal Abundance Data')
+    cats_order = [
+        'LC',
+        'LB',
+        'BL',
+        'B',
+        'BM',
+        'MB',
+        'MC'
+    ]
+    cats_order = [MAP_LINEAGE_BIAS_CATEGORY[x] for x in cats_order]
+    colors = get_myeloid_to_lymphoid_colors(cats_order)
+    palette = dict(zip(cats_order, colors))
 
-    biased_at_time_df = filter_biased_clones_at_timepoint(
+    last_clones = find_last_clones(
         lineage_bias_df,
-        bias_cutoff,
-        'last',
-        timepoint_col,
-        within_cutoff=invert,
+        timepoint_col
+    )
+    labeled_last_clones = add_bias_category(
+        last_clones
     )
     hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']
     myeloid_hsc_abundance_df = hsc_data.merge(
-        biased_at_time_df[['code','mouse_id']],
+        labeled_last_clones[['code','mouse_id','bias_category_long']],
         on=['code','mouse_id'],
         how='inner',
         validate='m:m'
     )
-    plt.figure()
-    sns.barplot(
+    plt.figure(figsize=(12,8))
+    ax = sns.boxplot(
         y='percent_engraftment',
         x='group',
-        hue='mouse_id',
+        hue='bias_category_long',
+        hue_order=cats_order,
         data=group_names_pretty(myeloid_hsc_abundance_df),
-        palette=COLOR_PALETTES['mouse_id']
+        palette=palette,
     )
-    plt.legend().remove()
+    ax.set(yscale='log')
+    plt.legend(title='')
     plt.xlabel('')
     plt.ylabel('HSC Abundance (% WBC)')
-    desc_word = 'more'
-    if invert:
-        desc_word = 'less'
     plt.title(
-        'Abundance of HSCs with Bias '
-        + desc_word.title() 
-        + ' Extreme Than ' + str(bias_cutoff) 
-        + ' at Last Timepoint'
+        'HSC Abundance by Bias at Last Time Point'
         )
 
     fname = save_path + os.sep \
         + 'abund_hsc_biased_at_last' \
-        + '_b' + str(bias_cutoff).replace('.', '-') \
-        + '_' + desc_word \
         + '.' + save_format
     save_plot(fname, save, save_format)
 
@@ -3732,7 +3750,7 @@ def plot_abundance_by_change(
             y='percent_engraftment',
             data=c_df,
             hue='change_status',
-            hue_order=['Changed', 'Unchanged'],
+            hue_order=['Unchanged', 'Changed'],
             palette=COLOR_PALETTES['change_status'],
         )
         ax.set(yscale='log')
@@ -3742,3 +3760,86 @@ def plot_abundance_by_change(
         fname = fname_prefix + '_' + cell_type \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_bias_dist_contribution_over_time(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        cell_type: str,
+        by_group: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+    n_timepoints = lineage_bias_df[timepoint_col].nunique()
+    if by_group:
+        for group, g_df in lineage_bias_df.groupby('group'):
+            plt.figure(figsize=(7,5))
+            plt.suptitle(
+                'Blood Contribution by Lineage Bias at Each ' + timepoint_col.title()
+            )
+            plt.ylabel(cell_type.title() + ' Contribution (% WBC)')
+            plt.title('Group: ' + group.replace('_', ' ').title())
+            palette = COLOR_PALETTES[timepoint_col]
+            for t, t_df in g_df.groupby(timepoint_col):
+                sns.distplot(
+                    t_df.lineage_bias,
+                    label=str(int(t)),
+                    bins=15,
+                    hist=True,
+                    kde=False,
+                    hist_kws={
+                        "histtype": "step",
+                        "linewidth": 2,
+                        "alpha": 1,
+                        "color": palette[str(int(t))],
+                        "weights": t_df[cell_type + '_percent_engraftment']
+                    }
+                )
+
+            plt.xlabel('Lineage Bias')
+            plt.legend().remove()
+            file_name = save_path + os.sep \
+                + 'bias_dist_time_' \
+                + cell_type + '_' \
+                + group \
+                + '.' + save_format
+            save_plot(file_name, save, save_format)
+    else:
+        plt.figure(figsize=(10,9))
+        ax = plt.subplot(111)
+        plt.title(
+            'Blood Contribution by Lineage Bias at Each ' + timepoint_col.title()
+        )
+        palette = COLOR_PALETTES[timepoint_col]
+        plt.ylabel(cell_type.title() + ' Contribution (% WBC)')
+        for t, t_df in lineage_bias_df.groupby(timepoint_col):
+            sns.distplot(
+                t_df.lineage_bias,
+                label=str(int(t)),
+                bins=15,
+                hist=True,
+                kde=False,
+                hist_kws={
+                    "histtype": "step",
+                    "linewidth": 2,
+                    "alpha": 1,
+                    "color": palette[str(int(t))],
+                    "weights": t_df[cell_type + '_percent_engraftment']
+                }
+            )
+        plt.xlabel('Lineage Bias')
+        plt.legend(title=timepoint_col.title())
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                        box.width, box.height * 0.9])
+
+        # Put a legend below current axis
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07),
+                fancybox=True, shadow=False, ncol=n_timepoints)
+        file_name = save_path + os.sep \
+            + cell_type + '_' \
+            + 'bias_dist_time.' + save_format
+        save_plot(file_name, save, save_format)

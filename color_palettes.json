@@ -1,9 +1,10 @@
 {
-    "cell_type": [
-        "#ff5151",
-        "#ff701e",
-        "#838383"
-    ],
+    "cell_type": {
+        "gr" : "#ff5151",
+        "b" : "#ff701e",
+        "total" : "#838383",
+        "Total" : "#838383"
+    },
     "group": {
         "no_change" : "#0085ca",
         "aging_phenotype" : "#b653e1",
