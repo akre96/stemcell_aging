@@ -3199,6 +3199,7 @@ def plot_not_survived_abundance(
             data=g_df,
             hue_order=['Exhausted', 'Survived']
         )
+        ax.set(yscale='log')
         plt.xlabel(
             timepoint_col.title()
             + '(s) Survived'
@@ -3527,11 +3528,20 @@ def plot_stable_abund_time_clones(
 def plot_perc_survival_bias(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
+        by_clone: bool,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
     ):
-    fname_prefix = save_path + os.sep + 'perc_survive_bias_'
+    fname_prefix = save_path + os.sep
+    if by_clone:
+        y_col = 'exhausted_count'
+        y_label = 'Number Per Mouse of Exhausted Clones'
+        fname_prefix += 'count_survive_bias_'
+    else:
+        y_col = 'exhausted_perc'
+        y_label = 'Percent of Exhausted Clones Within Category'
+        fname_prefix += 'perc_survive_bias_'
 
     survival_df = create_clonal_survival_df(
         lineage_bias_df,
@@ -3581,7 +3591,7 @@ def plot_perc_survival_bias(
     for group, g_df in survival_perc.groupby('group'):
         plt.figure(figsize=(7,5))
         sns.barplot(
-            y='survived_perc',
+            y=y_col,
             x='last_time',
             hue='bias_category',
             hue_order=cats,
@@ -3592,7 +3602,7 @@ def plot_perc_survival_bias(
             saturation=1
         )
         plt.legend(title='').remove()
-        plt.ylabel('Percent of Surviving Clones Within Category')
+        plt.ylabel(y_label)
         plt.xlabel('Last Time Point of Exhausted Clones')
         plt.title('Group: ' + y_col_to_title(group))
         fname = fname_prefix + group + '.' + save_format
@@ -3601,7 +3611,7 @@ def plot_perc_survival_bias(
     group = 'all'
     plt.figure(figsize=(10,9))
     sns.barplot(
-        y='survived_perc',
+        y=y_col,
         x='last_time',
         hue='bias_category',
         hue_order=cats,
@@ -3613,7 +3623,7 @@ def plot_perc_survival_bias(
     )
     plt.legend(title='')
     plt.title('Group: ' + y_col_to_title(group))
-    plt.ylabel('Percent of Surviving Clones Within Category')
+    plt.ylabel(y_label)
     plt.xlabel('Last Time Point of Exhausted Clones')
     fname = fname_prefix + group + '.' + save_format
     save_plot(fname, save, save_format)
@@ -3659,5 +3669,76 @@ def plot_bias_dist_by_change(
         plt.ylabel('')
         plt.legend(title='Lineage Bias Change Type')
         fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
+
+
+def plot_abundance_by_change(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        mtd: int,
+        timepoint: Any = None,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    bias_change_df = get_bias_change(
+        lineage_bias_df,
+        timepoint_col
+    )
+    change_marked_df = mark_changed(
+        clonal_abundance_df,
+        bias_change_df,
+        min_time_difference=mtd,
+        timepoint=timepoint
+    )
+    fname_prefix = save_path + os.sep \
+        + 'abundance_by_bias_change' \
+        + 't' + str(timepoint) \
+        + '_mtd' + str(mtd)
+    for (group, cell_type), c_df in change_marked_df.groupby(['group', 'cell_type']):
+        plt.figure(figsize=(7,5))
+        plt.title(
+            cell_type.title()
+            + ' Abundance by Lineage Bias Change'
+        )
+        plt.suptitle('Group: ' + y_col_to_title(group))
+        ax = sns.boxplot(
+            x=timepoint_col,
+            y='percent_engraftment',
+            data=c_df,
+            hue='change_status',
+            hue_order=['Unchanged', 'Changed'],
+            palette=COLOR_PALETTES['change_status'],
+        )
+        ax.set(yscale='log')
+        plt.xlabel(timepoint_col.title())
+        plt.ylabel(y_col_to_title(cell_type+'_percent_engraftment'))
+        plt.legend().remove()
+        fname = fname_prefix + '_' + cell_type \
+            + '_' + group \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
+
+    for cell_type, c_df in change_marked_df.groupby(['cell_type']):
+        plt.figure(figsize=(10,9))
+        plt.title(
+            cell_type.title()
+            + ' Abundance by Lineage Bias Change'
+        )
+        ax = sns.boxplot(
+            x=timepoint_col,
+            y='percent_engraftment',
+            data=c_df,
+            hue='change_status',
+            hue_order=['Changed', 'Unchanged'],
+            palette=COLOR_PALETTES['change_status'],
+        )
+        ax.set(yscale='log')
+        plt.xlabel(timepoint_col.title())
+        plt.ylabel(y_col_to_title(cell_type+'_percent_engraftment'))
+        plt.legend(title='Lineage Bias Change Type')
+        fname = fname_prefix + '_' + cell_type \
             + '.' + save_format
         save_plot(fname, save, save_format)
