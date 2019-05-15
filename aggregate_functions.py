@@ -1407,3 +1407,32 @@ def filter_bias_change_timepoint(
             (bias_change_df.last_timepoint.isin([float(timepoint)]))
         ]
     return filt_df
+
+def calculate_survival_perc(
+        clonal_survival_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+    survival_counts = pd.DataFrame(
+        survival_df.groupby(
+            ['survived', 'time_change', 'bias_category', 'mouse_id', 'group']
+        ).code.nunique()
+    ).reset_index()
+    survived = survival_counts[survival_counts['survived'] == 'Survived'].rename(
+        columns={'code': 'survived_count'}
+    )
+    exhausted = survival_counts[survival_counts['survived'] == 'Exhausted'].rename(
+        columns={'code': 'exhausted_count'}
+    )
+    survival_perc = survived.merge(
+        exhausted,
+        on=['mouse_id', 'bias_category', 'time_change', 'group'],
+        how='inner',
+        validate='1:1'
+    ).assign(
+        exhausted_perc=lambda x: 100 * x.exhausted_count / (x.exhausted_count + x.survived_count),
+        survived_perc=lambda x: 100 * x.survived_count / (x.exhausted_count + x.survived_count)
+    )
+    first_time = lineage_bias_df[timepoint_col].min()
+    survival_perc = survival_perc.assign(
+        last_time=lambda x: x.time_change + first_time
+    )
+    return survival_perc
