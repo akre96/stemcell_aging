@@ -57,7 +57,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_perc_survival_bias, plot_bias_dist_by_change, \
     plot_abundance_by_change, plot_bias_dist_contribution_over_time, \
     plot_n_most_abundant, plot_clone_count_swarm, \
-    plot_swarm_violin_first_last_bias
+    plot_swarm_violin_first_last_bias, plot_not_survived_abundance_at_time
      
 
 
@@ -250,6 +250,18 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+    if graph_type in ['exhausted_abund_at_time']:
+        save_path = args.output_dir + os.sep + 'exhausted_abundance_at_time' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+        plot_not_survived_abundance_at_time(
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path
+        )
+
     if graph_type in ['bias_first_last_abund']:
         save_path = args.output_dir + os.sep + 'bias_first_last_abund'
 

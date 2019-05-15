@@ -2392,7 +2392,7 @@ def plot_extreme_bias_time(
                     + '_' + y_col + '.' + save_format
             else:
                 fname = save_path + os.sep + 'extreme_bias_' \
-                    + str(round(bias_cutoff, 2)).replace('.','-') \
+                    + str(round(bias_cutoff, 2)).replace('.', '-') \
                     + '_' + timepoint_col[0] \
                     + str(timepoint) \
                     + '_' + group \
@@ -3643,9 +3643,6 @@ def plot_perc_survival_bias(
     )
 
 
-    survival_df['bias_category'] = survival_df.bias_category.apply(
-        lambda x: MAP_LINEAGE_BIAS_CATEGORY[x]
-    )
     cats = [
         'LC',
         'LB',
@@ -3658,30 +3655,13 @@ def plot_perc_survival_bias(
     cats = [MAP_LINEAGE_BIAS_CATEGORY[x] for x in cats]
     colors = get_myeloid_to_lymphoid_colors(cats)
     palette = dict(zip(cats, colors))
-    survival_counts = pd.DataFrame(
-        survival_df.groupby(
-            ['survived', 'time_change', 'bias_category', 'mouse_id', 'group']
-        ).code.nunique()
-    ).reset_index()
-    survived = survival_counts[survival_counts['survived'] == 'Survived'].rename(
-        columns={'code': 'survived_count'}
+    survival_perc = calculate_survival_perc(
+        survival_df
     )
-    exhausted = survival_counts[survival_counts['survived'] == 'Exhausted'].rename(
-        columns={'code': 'exhausted_count'}
+    survival_perc['bias_category'] = survival_perc.bias_category.apply(
+        lambda x: MAP_LINEAGE_BIAS_CATEGORY[x]
     )
-    survival_perc = survived.merge(
-        exhausted,
-        on=['mouse_id', 'bias_category', 'time_change', 'group'],
-        how='inner',
-        validate='1:1'
-    ).assign(
-        exhausted_perc=lambda x: 100 * x.exhausted_count / (x.exhausted_count + x.survived_count),
-        survived_perc=lambda x: 100 * x.survived_count / (x.exhausted_count + x.survived_count)
-    )
-    first_time = lineage_bias_df[timepoint_col].min()
-    survival_perc = survival_perc.assign(
-        last_time=lambda x: x.time_change + first_time
-    )
+
     for group, g_df in survival_perc.groupby('group'):
         plt.figure(figsize=(7,5))
         sns.barplot(
@@ -3794,7 +3774,6 @@ def plot_abundance_by_change(
         min_time_difference=mtd,
         timepoint=timepoint
     )
-    print(change_marked_df.change_type.unique())
     fname_prefix = save_path + os.sep \
         + 'abundance_by_bias_change' \
         + 't' + str(timepoint) \
@@ -4148,3 +4127,64 @@ def plot_swarm_violin_first_last_bias(
             + '_a' + str(abundance_cutoff).replace('.', '-') \
             + '.' + save_format
         save_plot(file_name, save, save_format)
+
+def plot_not_survived_abundance_at_time(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    survival_df = create_clonal_survival_df(
+        lineage_bias_df,
+        timepoint_col
+    )
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Independent T-Test of Exhausted vs. Survived'
+    )
+    for cell_type in ['gr', 'b']:
+        for group, g_df in survival_df.groupby('group'):
+            print(
+                Fore.CYAN + Style.BRIGHT 
+                + '\n  - Group: ' + group.replace('_', ' ').title()
+                + '  Cell Type: ' + cell_type.title()
+            )
+            y_col = cell_type + '_percent_engraftment'
+            fig, ax = plt.subplots(figsize=(7,5))
+            # T-Test on interesting result
+
+            for time_change, t_df in g_df.groupby('time_change'):
+                t_s = t_df[t_df['survived'] == 'Survived']
+                t_e = t_df[t_df['survived'] == 'Exhausted']
+                stat, p_value = stats.ttest_ind(
+                    t_e[y_col],
+                    t_s[y_col],
+                )
+                context: str = timepoint_col.title() + ' ' + str(int(time_change))
+                print_p_value(context, p_value)
+                
+
+            ax = sns.boxplot(
+                x='time_change',
+                y=y_col,
+                hue='survived',
+                data=g_df,
+                hue_order=['Exhausted', 'Survived']
+            )
+            ax.set(yscale='log')
+            plt.xlabel(
+                timepoint_col.title()
+                + '(s) Survived'
+            )
+            plt.ylabel(y_col_to_title(y_col))
+            plt.suptitle(
+                cell_type.title() + ' Abundance Of Not Surviving Clones'
+            )
+            plt.title('Group: ' + group.replace('_', ' ').title())
+            fname = save_path + os.sep \
+                + 'abundance_not_survived' \
+                + '_' + group \
+                + '_' + cell_type \
+                + '.' + save_format
+            save_plot(fname, save, save_format)

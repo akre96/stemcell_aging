@@ -229,7 +229,7 @@ def filter_biased_clones_at_timepoint(
             )
         filt_df = temp_df
     else:
-        filt_df = filt_df[filt_df[timepoint_col] == timepoint]
+        filt_df = filt_df[filt_df[timepoint_col] == int(timepoint)]
     passing_clones = filt_df[['mouse_id', 'code']]
     biased_at_timepoint_df = lineage_bias_df.merge(
         passing_clones,
