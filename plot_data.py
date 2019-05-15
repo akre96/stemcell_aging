@@ -56,7 +56,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_change_marked, plot_stable_abund_time_clones, \
     plot_perc_survival_bias, plot_bias_dist_by_change, \
     plot_abundance_by_change, plot_bias_dist_contribution_over_time, \
-    plot_n_most_abundant, plot_clone_count_swarm
+    plot_n_most_abundant, plot_clone_count_swarm, \
+    plot_swarm_violin_first_last_bias
      
 
 
@@ -134,6 +135,7 @@ def main():
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=timepoint_type, required=False)
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
+    parser.add_argument('--sum', dest='sum', help='Whether to plot sum abundance vs average abundance for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
     parser.add_argument('--by-mouse', dest='by_mouse', help='Whether to plot mouse color instead of group for certain graphs', action="store_true")
     parser.add_argument('--plot-rest', dest='plot_rest', help='Whether to plot rest of clones instead of tracked clones', action="store_true")
@@ -248,6 +250,32 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+    if graph_type in ['bias_first_last_abund']:
+        save_path = args.output_dir + os.sep + 'bias_first_last_abund'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        abundance_cutoff = 0.01
+        thresholds = {'gr': 0.01, 'b': 0.01}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+            
+        plot_swarm_violin_first_last_bias(
+            lineage_bias_df,
+            timepoint_col,
+            thresholds,
+            abundance_cutoff=abundance_cutoff,
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['clone_count_swarm']:
         save_path = args.output_dir + os.sep + 'clone_count_swarm'
 
@@ -323,6 +351,7 @@ def main():
             timepoint_col,
             mtd,
             args.timepoint,
+            sum=args.sum,
             save=args.save,
             save_path=save_path
         )
@@ -433,6 +462,7 @@ def main():
             lineage_bias_df,
             input_df,
             timepoint_col,
+            by_group=args.by_group,
             save=args.save,
             save_path=save_path
         )

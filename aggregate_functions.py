@@ -21,6 +21,16 @@ MAP_LINEAGE_BIAS_CATEGORY = {
     'MB': 'Myeloid Biased',
     'MC': 'Myeloid Committed',
 }
+
+MAP_LINEAGE_BIAS_CATEGORY_SHORT = {
+    'LC': 'Lymphoid Committed',
+    'LB': 'Lymphoid Biased',
+    'BL': 'Balanced',
+    'B': 'Balanced',
+    'BM': 'Balanced',
+    'MB': 'Myeloid Biased',
+    'MC': 'Myeloid Committed',
+}
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
                      analyzed_cell_types: List[str],
@@ -145,6 +155,16 @@ def filter_lineage_bias_threshold(
     ) -> pd.DataFrame:
     filter_col = cell_type + '_percent_engraftment'
     return lineage_bias_df.loc[lineage_bias_df[filter_col] >= threshold]
+    
+def filter_lineage_bias_thresholds(
+        lineage_bias_df: pd.DataFrame,
+        thresholds: Dict[str, float],
+    ) -> pd.DataFrame:
+    filt_df = pd.DataFrame()
+    for cell_type in thresholds.keys():
+        filter_col = cell_type + '_percent_engraftment'
+        filt_df = filt_df.append(lineage_bias_df.loc[lineage_bias_df[filter_col] >= thresholds[cell_type]])
+    return filt_df.drop_duplicates()
 
 def filter_lineage_bias_anytime(
         lineage_bias_df: pd.DataFrame,
@@ -678,6 +698,7 @@ def mark_changed(
             1: 'Myeloid'
         })
     )
+    with_change_df.loc[~with_change_df.changed, 'change_type'] = 'Unchanged'
 
     return with_change_df
 
@@ -1269,6 +1290,9 @@ def add_bias_category(
     )
     lineage_bias_df['bias_category_long'] = lineage_bias_df.bias_category.map(
        MAP_LINEAGE_BIAS_CATEGORY
+    )
+    lineage_bias_df['bias_category_short'] = lineage_bias_df.bias_category.map(
+       MAP_LINEAGE_BIAS_CATEGORY_SHORT
     )
     return lineage_bias_df
 

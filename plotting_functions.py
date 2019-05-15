@@ -4,6 +4,8 @@
 """
 
 from typing import List, Tuple, Dict, Any
+from collections import OrderedDict
+from itertools import combinations
 import os
 import json
 import pandas as pd
@@ -29,7 +31,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
     not_survived_bias_by_time_change, mark_changed, filter_bias_change_timepoint, \
     find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff, \
-    find_last_clones, add_bias_category, find_last_clones_in_mouse
+    find_last_clones, add_bias_category, find_last_clones_in_mouse, filter_lineage_bias_thresholds
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -37,6 +39,15 @@ init(autoreset=True)
 COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 LINE_STYLES = json.load(open('line_styles.json', 'r'))
 
+MAP_LINEAGE_BIAS_CATEGORY_SHORT = {
+    'LC': 'Lymphoid Committed',
+    'LB': 'Lymphoid Biased',
+    'BL': 'Balanced',
+    'B': 'Balanced',
+    'BM': 'Balanced',
+    'MB': 'Myeloid Biased',
+    'MC': 'Myeloid Committed',
+}
 MAP_LINEAGE_BIAS_CATEGORY = {
     'LC': 'Lymphoid Committed',
     'LB': 'Lymphoid Biased',
@@ -3325,6 +3336,7 @@ def plot_hsc_abund_bias_at_last(
         lineage_bias_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
+        by_group: bool,
         save: bool,
         save_path: str,
         save_format: str='png',
@@ -3341,7 +3353,7 @@ def plot_hsc_abund_bias_at_last(
         'MB',
         'MC'
     ]
-    cats_order = [MAP_LINEAGE_BIAS_CATEGORY[x] for x in cats_order]
+    cats_order = [MAP_LINEAGE_BIAS_CATEGORY_SHORT[x] for x in cats_order]
     colors = get_myeloid_to_lymphoid_colors(cats_order)
     palette = dict(zip(cats_order, colors))
 
@@ -3354,32 +3366,82 @@ def plot_hsc_abund_bias_at_last(
     )
     hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']
     myeloid_hsc_abundance_df = hsc_data.merge(
-        labeled_last_clones[['code','mouse_id','bias_category_long']],
+        labeled_last_clones[['code','mouse_id','bias_category_short']],
         on=['code','mouse_id'],
         how='inner',
         validate='m:m'
     )
-    plt.figure(figsize=(12,8))
-    ax = sns.boxplot(
-        y='percent_engraftment',
-        x='group',
-        hue='bias_category_long',
-        hue_order=cats_order,
-        data=group_names_pretty(myeloid_hsc_abundance_df),
-        palette=palette,
-    )
-    ax.set(yscale='log')
-    plt.legend(title='')
-    plt.xlabel('')
-    plt.ylabel('HSC Abundance (% WBC)')
-    plt.title(
-        'HSC Abundance by Bias at Last Time Point'
-        )
 
-    fname = save_path + os.sep \
-        + 'abund_hsc_biased_at_last' \
-        + '.' + save_format
-    save_plot(fname, save, save_format)
+    unique_cats = list(OrderedDict.fromkeys(cats_order))
+    if by_group:
+        plt.figure(figsize=(12,8))
+        ax = sns.barplot(
+            y='percent_engraftment',
+            x='bias_category_short',
+            hue='group',
+            order=unique_cats,
+            data=group_names_pretty(myeloid_hsc_abundance_df),
+            palette=COLOR_PALETTES['group'],
+        )
+        ax.set(yscale='log')
+        plt.xlabel('')
+        plt.ylabel('HSC Abundance (% WBC)')
+        plt.title(
+            'HSC Abundance by Bias at Last Time Point'
+            )
+
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\nPerforming Independent T-Test of HSC Abundance Between Phenotypic Groups At Bias Types\n'
+        )
+        for cat, c_df in myeloid_hsc_abundance_df.groupby('bias_category_short'):
+            aging_vals = c_df[c_df['group'] == 'aging_phenotype']
+            non_vals = c_df[c_df['group'] == 'no_change']
+            stat, p_value = stats.ttest_ind(
+                aging_vals.percent_engraftment,
+                non_vals.percent_engraftment,
+            )
+            context: str = cat
+            print_p_value(context, p_value)
+
+        fname = save_path + os.sep \
+            + 'abund_hsc_biased_at_last_by-group' \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
+    else:
+        plt.figure(figsize=(12,8))
+        ax = sns.barplot(
+            y='percent_engraftment',
+            x='bias_category_short',
+            order=unique_cats,
+            data=group_names_pretty(myeloid_hsc_abundance_df),
+            palette=palette,
+        )
+        ax.set(yscale='log')
+        plt.xlabel('')
+        plt.ylabel('HSC Abundance (% WBC)')
+        plt.title(
+            'HSC Abundance by Bias at Last Time Point'
+            )
+
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\nPerforming Independent T-Test of HSC Abundance Between Bias Types\n'
+        )
+        for (a, b) in combinations(unique_cats,2):
+            a_vals = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df['bias_category_short'] == a]
+            b_vals = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df['bias_category_short'] == b]
+            stat, p_value = stats.ttest_ind(
+                a_vals.percent_engraftment,
+                b_vals.percent_engraftment,
+            )
+            context: str = a + ' vs ' + b
+            print_p_value(context, p_value)
+
+        fname = save_path + os.sep \
+            + 'abund_hsc_biased_at_last' \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
 
 
 def plot_change_marked(
@@ -3717,6 +3779,7 @@ def plot_abundance_by_change(
         timepoint_col: str,
         mtd: int,
         timepoint: Any = None,
+        sum: bool = False,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
@@ -3731,14 +3794,29 @@ def plot_abundance_by_change(
         min_time_difference=mtd,
         timepoint=timepoint
     )
+    print(change_marked_df.change_type.unique())
     fname_prefix = save_path + os.sep \
         + 'abundance_by_bias_change' \
         + 't' + str(timepoint) \
         + '_mtd' + str(mtd)
+    desc_add = ''
+    if sum:
+        change_marked_df = pd.DataFrame(
+            change_marked_df.groupby([
+                'mouse_id',
+                'group',
+                'cell_type',
+                'change_type',
+                timepoint_col,
+            ]).percent_engraftment.sum()
+        ).reset_index()
+        desc_add = 'sum'
+    
     for (group, cell_type), c_df in change_marked_df.groupby(['group', 'cell_type']):
         plt.figure(figsize=(7,5))
         plt.title(
-            cell_type.title()
+            cell_type.title() + ' '
+            + desc_add.title() 
             + ' Abundance by Lineage Bias Change'
         )
         plt.suptitle('Group: ' + y_col_to_title(group))
@@ -3746,9 +3824,9 @@ def plot_abundance_by_change(
             x=timepoint_col,
             y='percent_engraftment',
             data=c_df,
-            hue='change_status',
-            hue_order=['Unchanged', 'Changed'],
-            palette=COLOR_PALETTES['change_status'],
+            hue='change_type',
+            hue_order=['Unchanged', 'Lymphoid', 'Myeloid'],
+            palette=COLOR_PALETTES['change_type'],
         )
         ax.set(yscale='log')
         plt.xlabel(timepoint_col.title())
@@ -3756,28 +3834,31 @@ def plot_abundance_by_change(
         plt.legend().remove()
         fname = fname_prefix + '_' + cell_type \
             + '_' + group \
+            + '_' + desc_add \
             + '.' + save_format
         save_plot(fname, save, save_format)
 
     for cell_type, c_df in change_marked_df.groupby(['cell_type']):
         plt.figure(figsize=(10,9))
         plt.title(
-            cell_type.title()
+            cell_type.title() + ' '
+            + desc_add.title()
             + ' Abundance by Lineage Bias Change'
         )
         ax = sns.boxplot(
             x=timepoint_col,
             y='percent_engraftment',
             data=c_df,
-            hue='change_status',
-            hue_order=['Unchanged', 'Changed'],
-            palette=COLOR_PALETTES['change_status'],
+            hue='change_type',
+            hue_order=['Unchanged', 'Lymphoid', 'Myeloid'],
+            palette=COLOR_PALETTES['change_type'],
         )
         ax.set(yscale='log')
         plt.xlabel(timepoint_col.title())
         plt.ylabel(y_col_to_title(cell_type+'_percent_engraftment'))
         plt.legend(title='Lineage Bias Change Type')
         fname = fname_prefix + '_' + cell_type \
+            + '_' + desc_add \
             + '.' + save_format
         save_plot(fname, save, save_format)
 
@@ -3972,3 +4053,98 @@ def plot_clone_count_swarm(
             + '_a' + str(abundance_cutoff).replace('.', '-') \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_swarm_violin_first_last_bias(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[float, str],
+        abundance_cutoff: float,
+        by_group: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ) -> None:
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+
+    with_time_desc = add_first_last_to_lineage_bias(
+        lineage_bias_df,
+        timepoint_col
+    )    
+    with_time_desc_filt = with_time_desc[with_time_desc.time_description.isin(['First', 'Last'])]
+    filt_df = filter_lineage_bias_thresholds(
+        with_time_desc_filt,
+        thresholds
+    )
+    if by_group:
+        for group, g_df in filt_df.groupby('group'):
+            plt.figure(figsize=(7,5))
+            ax = sns.violinplot(
+                x='time_description',
+                y='lineage_bias',
+                order=['First', 'Last'],
+                color='white',
+                data=g_df,
+                dodge=False,
+                cut=0,
+            )
+            sns.swarmplot(
+                x='time_description',
+                y='lineage_bias',
+                hue='mouse_id',
+                order=['First', 'Last'],
+                palette=COLOR_PALETTES['mouse_id'],
+                data=g_df,
+                ax=ax,
+            )
+            plt.legend().remove()
+            plt.ylabel('Lineage Bias')
+            plt.xlabel('Time Point')
+            plt.suptitle('Lineage Bias of Clones: ' + group.replace('_', ' ').title())
+            plt.title(
+                'Filtered by Clones With Cumulative Abundance '
+                + ' > ' + str(100 - abundance_cutoff)
+                + ' in Any Cell Type'
+                )
+
+            file_name = save_path + os.sep \
+                + 'first-last-lineage-bias' \
+                + '_a' + str(abundance_cutoff).replace('.', '-') \
+                + '_' + group \
+                + '.' + save_format
+            save_plot(file_name, save, save_format)
+    else:
+        plt.figure(figsize=(10,9))
+        ax = sns.violinplot(
+            x='time_description',
+            y='lineage_bias',
+            color='white',
+            order=['First', 'Last'],
+            data=filt_df,
+            dodge=False,
+            cut=0,
+        )
+        sns.swarmplot(
+            x='time_description',
+            y='lineage_bias',
+            order=['First', 'Last'],
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            data=filt_df,
+            ax=ax,
+        )
+        plt.legend().remove()
+        plt.ylabel('Lineage Bias')
+        plt.xlabel('Time Point')
+        plt.title(
+            'Filtered by Clones With Cumulative Abundance '
+            + ' > ' + str(100 - abundance_cutoff)
+            + ' in Any Cell Type'
+            )
+        plt.suptitle('Lineage Bias of Clones First And Last Time Point')
+        file_name = save_path + os.sep \
+            + 'first-last-lineage-bias' \
+            + '_a' + str(abundance_cutoff).replace('.', '-') \
+            + '.' + save_format
+        save_plot(file_name, save, save_format)
