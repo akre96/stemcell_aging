@@ -29,7 +29,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
     not_survived_bias_by_time_change, mark_changed, filter_bias_change_timepoint, \
     find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff, \
-    find_last_clones, add_bias_category
+    find_last_clones, add_bias_category, find_last_clones_in_mouse
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -2800,16 +2800,27 @@ def plot_dist_bias_at_time(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         timepoint: int,
+        thresholds: Dict[str, float],
         save: bool = False,
+        abundance_cutoff: float = 0,
         save_path: str = './output',
         save_format: str = 'png',
         by_mouse: bool = False,
     ) -> None:
     i: int = 0
-    t_df = lineage_bias_df[lineage_bias_df[timepoint_col] == timepoint]
+    if timepoint == 'last':
+        t_df = find_last_clones_in_mouse(lineage_bias_df, timepoint_col)
+    else:
+        t_df = lineage_bias_df[lineage_bias_df[timepoint_col].isin([timepoint])]
+    print(t_df)
+    filt_df = filter_lineage_bias_anytime(
+        t_df,
+        thresholds
+    )
     if by_mouse:
-        for group, g_df in t_df.groupby('group'):
+        for group, g_df in filt_df.groupby('group'):
             plt.figure()
+            plt.suptitle('Abundance Cutoff: ' + str(abundance_cutoff))
             plt.title(
                 'Distribution of Lineage Bias at ' \
                     + timepoint_col.title() \
@@ -2836,17 +2847,19 @@ def plot_dist_bias_at_time(
                 + 'bias_dist_at_' + timepoint_col[0] \
                 + str(timepoint) + '_by-mouse' \
                 + group \
+                + '_a' + str(abundance_cutoff).replace('.','-') \
                 + '.' + save_format
             save_plot(file_name, save, save_format)
     else:
         plt.figure()
+        plt.suptitle('Abundance Cutoff: ' + str(abundance_cutoff))
         plt.title(
             'Distribution of Lineage Bias at ' \
                 + timepoint_col.title() \
                 + ' ' + str(timepoint)
         )
         plt.ylabel('')
-        for group, g_df in t_df.groupby('group'):
+        for group, g_df in filt_df.groupby('group'):
             sns.distplot(
                 g_df.lineage_bias,
                 label=group.replace('_', ' ').title(),
@@ -2861,6 +2874,7 @@ def plot_dist_bias_at_time(
         file_name = save_path + os.sep \
             + 'bias_dist_at_' + timepoint_col[0] \
             + str(timepoint) \
+            + '_a' + str(abundance_cutoff).replace('.','-') \
             + '.' + save_format
         save_plot(file_name, save, save_format)
 
@@ -3650,6 +3664,7 @@ def plot_bias_dist_by_change(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         mtd: int,
+        group: str,
         timepoint: Any = None,
         save: bool = False,
         save_path: str = './output',
@@ -3665,12 +3680,16 @@ def plot_bias_dist_by_change(
         min_time_difference=mtd,
         timepoint=timepoint
     )
+    if group != 'all':
+        change_marked_df = change_marked_df[change_marked_df.group == group]
+    
     fname_prefix = save_path + os.sep \
         + 'lineage_bias_by_change_' \
         + 't' + str(timepoint) \
         + '_mtd' + str(mtd)
     for time, t_df in change_marked_df.groupby(timepoint_col):
         plt.figure()
+        plt.suptitle('Group: ' + y_col_to_title(group))
         plt.title(
             'Distrubution of Lineage Bias of Clones at '
             + timepoint_col.title() + ' ' + str(time))
@@ -3687,6 +3706,7 @@ def plot_bias_dist_by_change(
         plt.ylabel('')
         plt.legend(title='Lineage Bias Change Type')
         fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
+            + '_' + group \
             + '.' + save_format
         save_plot(fname, save, save_format)
 
@@ -3843,3 +3863,112 @@ def plot_bias_dist_contribution_over_time(
             + cell_type + '_' \
             + 'bias_dist_time.' + save_format
         save_plot(file_name, save, save_format)
+
+def plot_n_most_abundant(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        n: int, 
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+
+    most_abund_contrib = pd.DataFrame(
+        clonal_abundance_df.groupby(
+            ['mouse_id', 'group', timepoint_col, 'cell_type']
+        )['percent_engraftment'].apply(lambda x: x.nlargest(n).sum())
+    ).reset_index()
+
+    for cell_type, c_df in most_abund_contrib.groupby(['cell_type']):
+        plt.figure(figsize=(7,5))
+        ax = sns.swarmplot(
+            x=timepoint_col,
+            y='percent_engraftment',
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            dodge=True,
+            data=c_df,
+        )
+        sns.boxplot(
+            x=timepoint_col,
+            y='percent_engraftment',
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            showbox=False,
+            whiskerprops={
+                "alpha": 0
+            },
+            showcaps=False,
+            ax=ax,
+            data=c_df,
+        )
+        plt.title(
+            'Top ' + str(n) + ' Clones Combined Abundance in '
+            + cell_type.title()
+        )
+        plt.ylabel(cell_type.title() + ' Abundance (% WBC)')
+        plt.xlabel(timepoint_col.title())
+        plt.legend().remove()
+        file_name = save_path + os.sep \
+            + 'top' + str(n) \
+            + '_sum-abundance' \
+            + '_' + cell_type \
+            + '.' + save_format
+
+        save_plot(file_name, save, save_format)
+        
+def plot_clone_count_swarm(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[str, float],
+        abundance_cutoff: float,
+        analyzed_cell_types: List[str],
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+
+    threshold_df = filter_cell_type_threshold(
+        clonal_abundance_df,
+        thresholds, 
+        analyzed_cell_types
+    )
+        
+    clone_counts = count_clones(threshold_df, timepoint_col)
+
+    for cell_type, c_df in clone_counts.groupby(['cell_type']):
+        plt.figure(figsize=(6,5))
+        ax = sns.swarmplot(
+            x=timepoint_col,
+            y='code',
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            dodge=True,
+            data=c_df,
+        )
+        sns.boxplot(
+            x=timepoint_col,
+            y='code',
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            showbox=False,
+            whiskerprops={
+                "alpha": 0
+            },
+            showcaps=False,
+            ax=ax,
+            data=c_df,
+        )
+        plt.title(
+            cell_type.title() 
+            + ' Clone Counts with Abundance Cutoff ' 
+            + str(100 - abundance_cutoff)
+        )
+        plt.xlabel(timepoint_col.title())
+        plt.ylabel('Number of Clones')
+        plt.legend().remove()
+        fname = save_path + os.sep \
+            + 'clone_count_' + cell_type \
+            + '_a' + str(abundance_cutoff).replace('.', '-') \
+            + '.' + save_format
+        save_plot(fname, save, save_format)

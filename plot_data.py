@@ -55,7 +55,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_not_survived_count_box, plot_hsc_abund_bias_at_last, \
     plot_change_marked, plot_stable_abund_time_clones, \
     plot_perc_survival_bias, plot_bias_dist_by_change, \
-    plot_abundance_by_change, plot_bias_dist_contribution_over_time
+    plot_abundance_by_change, plot_bias_dist_contribution_over_time, \
+    plot_n_most_abundant, plot_clone_count_swarm
      
 
 
@@ -247,6 +248,52 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+    if graph_type in ['clone_count_swarm']:
+        save_path = args.output_dir + os.sep + 'clone_count_swarm'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        abundance_cutoff = 0.01
+        thresholds = {'gr': 0.01, 'b': 0.01}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+            
+        plot_clone_count_swarm(
+            present_clones_df,
+            timepoint_col,
+            thresholds,
+            abundance_cutoff=abundance_cutoff,
+            analyzed_cell_types=list(thresholds.keys()),
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
+    if graph_type in ['n_most_abund']:
+        save_path = args.output_dir + os.sep + 'n_most_abund_contrib'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        n = 5
+        if options != 'default':
+            n = int(options)
+
+        plot_n_most_abundant(
+            present_clones_df,
+            timepoint_col,
+            n,
+            save=args.save,
+            save_path=save_path
+        )
+        
+
     if graph_type in ['bias_dist_contrib_over_time']:
         save_path = args.output_dir + os.sep + 'bias_distribution_contribution_over_time'
         for cell_type in ['gr', 'b']:
@@ -294,6 +341,7 @@ def main():
             lineage_bias_df,
             timepoint_col,
             mtd,
+            args.group,
             args.timepoint,
             save=args.save,
             save_path=save_path
@@ -483,10 +531,22 @@ def main():
         timepoint = first_timepoint
         if args.timepoint:
             timepoint = args.timepoint
+
+        abundance_cutoff = 0
+        thresholds = {'gr': 0, 'b': 0}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                input_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
         plot_dist_bias_at_time(
             lineage_bias_df,
             timepoint_col,
             timepoint,
+            thresholds=thresholds,
+            abundance_cutoff=abundance_cutoff,
             by_mouse=args.by_mouse,
             save=args.save,
             save_path=save_path,

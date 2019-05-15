@@ -77,6 +77,20 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
         filtered_df = filtered_df.append(cell_df)
     return filtered_df
 
+def find_last_clones_in_mouse(
+        input_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    last_clones = pd.DataFrame(
+        input_df.groupby(['mouse_id'])[timepoint_col].max()
+        ).reset_index()
+    last_clones_with_data = last_clones.merge(
+        input_df,
+        how='inner',
+        on=['mouse_id', timepoint_col],
+        validate='1:m'
+    )
+    return last_clones_with_data
 def find_last_clones(
         input_df: pd.DataFrame,
         timepoint_col: str,
@@ -218,9 +232,9 @@ def count_clones(input_df: pd.DataFrame, timepoint_col: str) -> pd.DataFrame:
     """
 
     clone_counts = pd.DataFrame(
-        input_df.groupby(['mouse_id', timepoint_col, 'cell_type'])['code'].nunique()
+        input_df.groupby(['mouse_id', 'group', timepoint_col, 'cell_type'])['code'].nunique()
         ).reset_index()
-    total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', timepoint_col])['code'].nunique()).reset_index()
+    total_clone_counts = pd.DataFrame(input_df.groupby(['mouse_id', 'group', timepoint_col])['code'].nunique()).reset_index()
     total_clone_counts['cell_type'] = 'Total'
     clone_counts = clone_counts.append(total_clone_counts, sort=True)
 
