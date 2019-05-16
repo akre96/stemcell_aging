@@ -31,7 +31,9 @@ from aggregate_functions import filter_threshold, count_clones, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
     not_survived_bias_by_time_change, mark_changed, filter_bias_change_timepoint, \
     find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff, \
-    find_last_clones, add_bias_category, find_last_clones_in_mouse, filter_lineage_bias_thresholds
+    find_last_clones, add_bias_category, find_last_clones_in_mouse, \
+    filter_lineage_bias_thresholds, filter_lymphoid_exhausted_at_time, \
+    calculate_survival_perc
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -3656,7 +3658,9 @@ def plot_perc_survival_bias(
     colors = get_myeloid_to_lymphoid_colors(cats)
     palette = dict(zip(cats, colors))
     survival_perc = calculate_survival_perc(
-        survival_df
+        survival_df,
+        lineage_bias_df,
+        timepoint_col,
     )
     survival_perc['bias_category'] = survival_perc.bias_category.apply(
         lambda x: MAP_LINEAGE_BIAS_CATEGORY[x]
@@ -4139,6 +4143,13 @@ def plot_not_survived_abundance_at_time(
         lineage_bias_df,
         timepoint_col
     )
+    end_at_14m = lineage_bias_df[lineage_bias_df.month == 14]
+#    print(
+        #lineage_bias_df[
+            #(lineage_bias_df.month == 12) &\
+            #(survival_df.code.isin(end_at_14m.code))
+        #]
+    #)
     print(
         Fore.CYAN + Style.BRIGHT 
         + '\nPerforming Independent T-Test of Exhausted vs. Survived'
@@ -4188,3 +4199,76 @@ def plot_not_survived_abundance_at_time(
                 + '_' + cell_type \
                 + '.' + save_format
             save_plot(fname, save, save_format)
+
+def plot_exhausted_lymphoid_at_time(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        timepoint: int,
+        y_col: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ) -> None:
+    
+    filt_survival_df = filter_lymphoid_exhausted_at_time(
+        lineage_bias_df,
+        timepoint_col,
+        timepoint,
+    )
+    filt_survival_all_df = lineage_bias_df.merge(
+        filt_survival_df[['mouse_id','code','group']].drop_duplicates(),
+        on=['mouse_id', 'code', 'group'],
+        how='inner',
+        validate='m:1'
+    )
+    fname_prefix = save_path + os.sep + 'exhausted_lymph_at_' \
+        + timepoint_col[0] + str(timepoint) + '_'
+    y_title = y_col_to_title(y_col)
+    x_title = timepoint_col.title()
+
+    if y_col != 'lineage_bias':
+        filt_survival_all_df = bias_clones_to_abundance(
+            filt_survival_all_df,
+            clonal_abundance_df,
+            y_col
+        )
+
+    plt.figure(figsize=(7, 5))
+    sns.lineplot(
+        x=timepoint_col,
+        y=y_col,
+        data=group_names_pretty(filt_survival_all_df),
+        hue='group',
+        palette=COLOR_PALETTES['group']
+    )
+    plt.ylabel(y_title)
+    plt.xlabel(x_title)
+    title = 'Lymphoid Clones Exhausted at ' \
+        + str(timepoint_col.title()) + ' ' + str(timepoint)
+    plt.title(title)
+    
+
+    fname = fname_prefix + '_' + y_col + '_' \
+        + '_average.' + save_format
+    save_plot(fname, save, save_format)
+    for gname, group_df in filt_survival_all_df.groupby('group'):
+        plt.figure(figsize=(7, 5))
+        sns.lineplot(
+            x=timepoint_col,
+            y=y_col,
+            data=group_df,
+            hue='mouse_id',
+            palette=COLOR_PALETTES['mouse_id'],
+            units='code',
+            estimator=None,
+            legend=False,
+        )
+        plt.suptitle('Group: ' + gname.replace('_', ' ').title())
+        plt.title(title)
+        plt.ylabel(y_title)
+        plt.xlabel(x_title)
+        fname = fname_prefix + '_' + y_col + '_' \
+            + '_' + gname + '_' + 'by-clone_' \
+            + '.' + save_format
+        save_plot(fname, save, save_format)

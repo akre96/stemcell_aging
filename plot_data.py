@@ -57,7 +57,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_perc_survival_bias, plot_bias_dist_by_change, \
     plot_abundance_by_change, plot_bias_dist_contribution_over_time, \
     plot_n_most_abundant, plot_clone_count_swarm, \
-    plot_swarm_violin_first_last_bias, plot_not_survived_abundance_at_time
+    plot_swarm_violin_first_last_bias, \
+    plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time
      
 
 
@@ -103,6 +104,12 @@ def main():
         
 
     """
+    def y_col_type(string: str):
+        if string in ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']:
+            return string
+        if string == 'None':
+            return None
+        raise ValueError('y_col not in available values')
     def timepoint_type(string: str):
         try:
             int(string)
@@ -144,7 +151,7 @@ def main():
     parser.add_argument('--magnitude', dest='magnitude', help='Plot change in magnitude', action="store_true")
     parser.add_argument('--cache', dest='cache', help='Use Cached Data', action="store_true")
     parser.add_argument('--cache-dir', dest='cache_dir', help='Where cache data is stored', default='/home/sakre/Data/cache')
-    parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False, default='lineage_bias')
+    parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False, default='lineage_bias', type=y_col_type)
 
     # Init colorama
     init(autoreset=True)
@@ -250,6 +257,25 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+    if graph_type in ['exhausted_lymphoid_at_time']:
+        save_path = args.output_dir + os.sep + 'exhausted_lymphoid_at_time' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
+        timepoint = first_timepoint
+        if args.timepoint:
+            timepoint = args.timepoint
+
+        plot_exhausted_lymphoid_at_time(
+            lineage_bias_df,
+            clonal_abundance_df=present_clones_df,
+            timepoint_col=timepoint_col,
+            timepoint=timepoint,
+            y_col=args.y_col,
+            save=args.save,
+            save_path=save_path,
+            save_format='png',
+        )
+
     if graph_type in ['exhausted_abund_at_time']:
         save_path = args.output_dir + os.sep + 'exhausted_abundance_at_time' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
