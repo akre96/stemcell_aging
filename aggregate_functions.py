@@ -1230,8 +1230,6 @@ def add_time_difference(
     timepoint_col: str,
 ) -> pd.DataFrame:
 
-    # Find First Time Point
-
     # Find Last Time Point
     last_timepoint_df = pd.DataFrame(
         lineage_bias_or_clonal_abundance_df.groupby(UNIQUE_CODE_COLS)[timepoint_col].max()
@@ -1252,7 +1250,7 @@ def add_time_difference(
         how='outer',
         validate='m:1'
     ).assign(
-        time_change=lambda x: x.t2 - x[timepoint_col]
+        time_change=lambda x: x[timepoint_col] - x.t1
     )
 
     return with_t_diff_df
@@ -1284,6 +1282,14 @@ def define_bias_category(lineage_bias: float) -> str:
 def add_bias_category(
         lineage_bias_df: pd.DataFrame
     ) -> pd.DataFrame:
+    """ Appends long (7 bins) and short (5 bins) descriptions lineage bias
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame}
+    
+    Returns:
+        lineage_bias_df
+    """
 
     lineage_bias_df['bias_category'] = lineage_bias_df.lineage_bias.apply(
         define_bias_category,
@@ -1359,26 +1365,17 @@ def create_clonal_survival_df(
         with_abund_df,
         timepoint_col
     )
-    time_changes = with_labels_df['time_change'].unique()
 
     with_labels_df = with_labels_df.assign(
         isLast=lambda x: x.total_time_change == x.time_change
     )
     survived = pd.DataFrame()
-    not_survived = pd.DataFrame()
-    for LTC in with_labels_df.total_time_change.unique():
-        survived = survived.append(with_labels_df[
-            (with_labels_df['total_time_change'] > LTC) &\
-            (with_labels_df['time_change'] == LTC)
-        ].assign(
-            survived='Survived'
-        ))
-        not_survived = not_survived.append(with_labels_df[
-            (with_labels_df['total_time_change'] == LTC) &\
-            (with_labels_df['time_change'] == LTC)
-        ].assign(
-            survived='Exhausted'
-        ))
+    not_survived = with_labels_df[with_labels_df.isLast].assign(
+        survived='Exhausted'
+    )
+    survived = with_labels_df[~with_labels_df.isLast].assign(
+        survived='Survived'
+    )
     survival_df = survived.append(not_survived)
     return survival_df
 
@@ -1386,6 +1383,15 @@ def filter_bias_change_timepoint(
         bias_change_df: pd.DataFrame,
         timepoint: Any,
     ) -> pd.DataFrame:
+    """ Only include bias changes for clones with data at required timepoint
+    
+    Arguments:
+        bias_change_df {pd.DataFrame} 
+        timepoint {Any}
+    
+    Returns:
+        pd.DataFrame
+    """
 
     if timepoint == 'last':
         filt_df = pd.DataFrame()
@@ -1410,9 +1416,20 @@ def filter_bias_change_timepoint(
 
 def calculate_survival_perc(
         clonal_survival_df: pd.DataFrame,
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
     ) -> pd.DataFrame:
+    """ Calculates percentage of clones
+         survived and exhausted at each timepoint
+    
+    Arguments:
+        clonal_survival_df {pd.DataFrame} -- output from create_clonal_survival_df()
+    
+    Returns:
+        pd.DataFrame
+    """
     survival_counts = pd.DataFrame(
-        survival_df.groupby(
+        clonal_survival_df.groupby(
             ['survived', 'time_change', 'bias_category', 'mouse_id', 'group']
         ).code.nunique()
     ).reset_index()
@@ -1436,3 +1453,20 @@ def calculate_survival_perc(
         last_time=lambda x: x.time_change + first_time
     )
     return survival_perc
+
+def filter_lymphoid_exhausted_at_time(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        timepoint: int,
+    ) -> pd.DataFrame:
+    survival_df = create_clonal_survival_df(
+        lineage_bias_df,
+        timepoint_col
+    )
+    min_time =  lineage_bias_df[timepoint_col].min()
+    filt_df = survival_df[
+        (survival_df.survived == 'Exhausted') &\
+        (survival_df.bias_category.isin(['LC', 'LB'])) &\
+        (survival_df['time_change'] == int(timepoint) - min_time)
+    ]
+    return filt_df
