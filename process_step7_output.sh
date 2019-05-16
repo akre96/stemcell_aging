@@ -1,19 +1,20 @@
 ### Process Step 7 Output Data
+## NOTE: Many directories set as variables MUST exist before running this script
 
-## Variable Assignments
+## Variable Assignments 
 # Results from the 7 step processing pipeline
 STEP_7_RESULTS_DIR=~/Data/stemcell_aging/aging_proc_03122019
 
-# Desired output for long formatted data
+# Desired output folder for long formatted data, must exist before running script
 OUTPUT_DIR=~/Data/stemcell_aging/aging_proc_03122019_long
 
-# Desired output location for consolidated long format data ( will be one file)
+# Desired output location for consolidated long format data ( will be one file), must exist before running script
 CONSOLIDATED_OUTPUT_DIR=~/Data/stemcell_aging/aging_proc_03122019_long_consolidated
 
 # Manually generated csv file with columns 'mouse_id', 'group'
 MOUSE_GROUP_PHENOTYPE_FILE=~/Data/stemcell_aging/mouse_id_group_aging.csv
 
-# Desired output for lineage bias data
+# Desired output for lineage bias data, must exist before running script
 LINEAGE_BIAS_DIR=~/Data/stemcell_aging/lineage_bias
 
 # GFP Percentage file
@@ -34,7 +35,7 @@ TIMEPOINT_COL='month'
 # Time point to use as 'balanced' for lineage bias analysis. Use 4 for time series, and 1 for serial transplant
 BASELINE_TIMEPOINT='4'
 
-# Output directory for 'rest of clones' analysis
+# Output directory for 'rest of clones' analysis, must exist before running this
 REST_OF_CLONES_OUTPUT_DIR=~/Data/stemcell_aging/rest_of_clones
 
 
