@@ -3219,7 +3219,7 @@ def plot_not_survived_abundance(
             Fore.CYAN + Style.BRIGHT 
             + '\n  - Group: ' + group.replace('_', ' ').title()
         )
-        fig, ax = plt.subplots(figsize=(10,8))
+        fig, ax = plt.subplots(figsize=(7,5))
         # T-Test on interesting result
 
         for time_change, t_df in g_df.groupby('time_change'):
@@ -3245,6 +3245,7 @@ def plot_not_survived_abundance(
             timepoint_col.title()
             + '(s) Survived'
         )
+        plt.legend().remove()
         plt.ylabel('Average Abundance Until Last Time Point')
         plt.suptitle(
             'Abundance Of Not Surviving Clones Over Time'
@@ -3255,6 +3256,47 @@ def plot_not_survived_abundance(
             + '_' + group \
             + '.' + save_format
         save_plot(fname, save, save_format)
+    group = 'all'
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\n  - Group: ' + group.replace('_', ' ').title()
+    )
+    fig, ax = plt.subplots(figsize=(10,8))
+    # T-Test on interesting result
+
+    for time_change, t_df in survival_df.groupby('time_change'):
+        t_s = t_df[t_df['survived'] == 'Survived']
+        t_e = t_df[t_df['survived'] == 'Exhausted']
+        stat, p_value = stats.ttest_ind(
+            t_e.accum_abundance,
+            t_s.accum_abundance,
+        )
+        context: str = timepoint_col.title() + ' ' + str(int(time_change))
+        print_p_value(context, p_value)
+        
+
+    ax = sns.boxplot(
+        x='time_change',
+        y='accum_abundance',
+        hue='survived',
+        data=survival_df,
+        hue_order=['Exhausted', 'Survived']
+    )
+    ax.set(yscale='log')
+    plt.xlabel(
+        timepoint_col.title()
+        + '(s) Survived'
+    )
+    plt.ylabel('Average Abundance Until Last Time Point')
+    plt.suptitle(
+        'Abundance Of Not Surviving Clones Over Time'
+    )
+    plt.title('Group: ' + group.replace('_', ' ').title())
+    fname = save_path + os.sep \
+        + 'abundance_not_survived' \
+        + '_' + group \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
 
 def plot_not_survived_count_box(
         lineage_bias_df: pd.DataFrame,
@@ -3289,13 +3331,13 @@ def plot_not_survived_count_box(
     _, max_codes = plt.ylim()
     ax2 = ax.twinx()
     ax.set_ylim(0, max_codes)
-    ax.set_ylabel('Clones Not Survived (Count Per Mouse)')
+    ax.set_ylabel('Exhausted Clones (Count Per Mouse)')
     ax2.set_ylim(0, 100 * max_codes/all_clone_num)
     ax2.set_ylabel('% Of Average Total Unique Clones Per Mouse')
 
     ax.set_xlabel('Last ' + timepoint_col.title() + ' Survived')
     plt.title(
-        'Count of Not Surviving Clones Over Time'
+        'Count of Exhausted Clones Over Time'
     )
     fname = save_path + os.sep \
         + 'not_survived_count' \
@@ -3318,13 +3360,13 @@ def plot_not_survived_count_box(
         _, max_codes = plt.ylim()
         ax2 = ax.twinx()
         ax.set_ylim(0, max_codes)
-        ax.set_ylabel('Clones Not Survived (Count Per Mouse)')
+        ax.set_ylabel('Exhausted Clones (Count Per Mouse)')
         ax2.set_ylim(0, 100 * max_codes/all_clone_num)
         ax2.set_ylabel('% Of Average Total Unique Clones Per Mouse')
 
         ax.set_xlabel('Last ' + timepoint_col.title() + ' Survived')
         plt.suptitle(
-            'Count of Not Surviving Clones Over Time'
+            'Count of Exhausted Clones Over Time'
         )
         plt.title('Group: ' + group.replace('_', ' ').title())
         fname = save_path + os.sep \
