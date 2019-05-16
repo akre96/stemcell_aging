@@ -3,6 +3,7 @@ __Intended for use in the Rong Lu Lab__
 Uses python 3.7.2
 
 ## Directory Structure
+  - __process_step7_output.sh:__ Example script for running entire processing pipeline needed before plotting graphs   
   - __test:__ Folder for unit testing functions
     - __test_data:__ Folder for curated data with known output
   - __step7_to_long_format.py:__ Takes output of step 7 scripts and formats with columns: code, mouse_id, user, cell_type, day, percent_engraftment
