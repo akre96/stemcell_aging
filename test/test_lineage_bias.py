@@ -2,10 +2,13 @@
 
 """
 
+from math import pi, sin
 import pandas as pd
 from pandas.testing import assert_frame_equal
 from numpy.testing import assert_array_equal, assert_array_almost_equal
-from ..lineage_bias import create_lineage_bias_df, calculate_baseline_max, calc_bias, normalize_to_baseline_max, normalize_input_to_baseline_max
+from ..lineage_bias import create_lineage_bias_df, calculate_baseline_max, \
+    calc_bias, normalize_to_baseline_max, normalize_input_to_baseline_max, \
+    calc_angle, calc_bias_from_angle
 
 TEST_LONG_DATA = pd.read_csv('test/test_data/test_long_for_lineage_bias.csv')
 EXPECTED_LINEAGE_BIAS = pd.read_csv('test/test_data/expected_lineage_bias.csv')
@@ -126,4 +129,24 @@ def test_lineage_bias_no_gr():
     lineage_bias_df = create_lineage_bias_df(norm_data_df)
     assert_array_almost_equal(lineage_bias_df.lineage_bias, test_expected.lineage_bias_expected, decimal=6)
 
+def test_bias_angle():
+    """ test calculated lineage bias angle is as expected from known scenarios
+    """
+    assert calc_angle(1, 1) == pi/4
+    assert calc_angle(0, 0) == pi/4
+    assert calc_angle(1, 0) == pi/2
+    assert calc_angle(0, 1) == 0
+
+def test_angle_to_bias():
+    """ Test certain angles lead to expected lineage biases
+    """
+    balanced_angle_min = pi/8
+    balanced_value_min = sin(2 * (balanced_angle_min - (pi/4)))
+    balanced_angle_max = 3*pi/8
+    balanced_value_max = sin(2 * (balanced_angle_max - (pi/4)))
+    balanced_angle = pi/4
+    
+    assert calc_bias_from_angle(balanced_angle) == 0
+    assert calc_bias_from_angle(balanced_angle_min) == balanced_value_min
+    assert calc_bias_from_angle(balanced_angle_max) == balanced_value_max
 
