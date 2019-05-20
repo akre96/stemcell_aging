@@ -2,6 +2,7 @@
 
 """
 from typing import List, Dict, Tuple, Any
+from math import pi, sin
 import os
 import numpy as np
 import scipy.stats as stats
@@ -1264,19 +1265,20 @@ def define_bias_category(lineage_bias: float) -> str:
     Returns:
         str -- categorical classification of lineage bias
     """
+    balanced_angle_min = pi/8
+    balanced_value_min = sin(2 * (balanced_angle_min - (pi/4)))
+    balanced_angle_max = 3*pi/8
+    balanced_value_max = sin(2 * (balanced_angle_max - (pi/4)))
+    balanced_angle = pi/4
     
     if lineage_bias == -1:
         return 'LC'
     if lineage_bias == 1:
         return 'MC'
-    if lineage_bias >= 0.4:
+    if lineage_bias >= balanced_value_max:
         return 'MB'
-    if lineage_bias <= -0.4:
+    if lineage_bias <= balanced_value_min:
         return 'LB'
-    if lineage_bias >= 0.1:
-         return 'BM'
-    if lineage_bias <= -0.1:
-        return 'BL'
     return 'B'
 
 def add_bias_category(

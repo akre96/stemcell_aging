@@ -3429,7 +3429,7 @@ def plot_hsc_abund_bias_at_last(
         )
         ax.set(yscale='log')
         plt.xlabel('')
-        plt.ylabel('HSC Abundance (% WBC)')
+        plt.ylabel('HSC Relative Abundance (% Tracked HSCs)')
         plt.title(
             'HSC Abundance by Bias at Last Time Point'
             )
@@ -3463,7 +3463,7 @@ def plot_hsc_abund_bias_at_last(
         )
         ax.set(yscale='log')
         plt.xlabel('')
-        plt.ylabel('HSC Abundance (% WBC)')
+        plt.ylabel('HSC Relative Abundance (% Tracked HSCs)')
         plt.title(
             'HSC Abundance by Bias at Last Time Point'
             )
