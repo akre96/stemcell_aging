@@ -33,7 +33,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff, \
     find_last_clones, add_bias_category, find_last_clones_in_mouse, \
     filter_lineage_bias_thresholds, filter_lymphoid_exhausted_at_time, \
-    calculate_survival_perc
+    calculate_survival_perc, filter_first_last_by_mouse
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -44,9 +44,7 @@ LINE_STYLES = json.load(open('line_styles.json', 'r'))
 MAP_LINEAGE_BIAS_CATEGORY_SHORT = {
     'LC': 'Lymphoid Committed',
     'LB': 'Lymphoid Biased',
-    'BL': 'Balanced',
     'B': 'Balanced',
-    'BM': 'Balanced',
     'MB': 'Myeloid Biased',
     'MC': 'Myeloid Committed',
 }
@@ -117,16 +115,16 @@ def get_myeloid_to_lymphoid_colors(cats: List[str]) -> List[str]:
     myeloid_color = Color(COLOR_PALETTES['change_type']['Myeloid'])
     myeloid_colors = list(Color('white').range_to(
         myeloid_color,
-        int(round(len(cats)/2)) + 2
+        int(round(len(cats)/2)) + 1
     ))
     lymphoid_color = Color(COLOR_PALETTES['change_type']['Lymphoid'])
     lymphoid_colors = list(lymphoid_color.range_to(
         Color('white'),
         int(round(len(cats)/2)) + 1
     ))
-    colors = lymphoid_colors[:-2] \
+    colors = lymphoid_colors[:-1] \
         + [Color(COLOR_PALETTES['change_type']['Unchanged'])] \
-        + myeloid_colors[2:]
+        + myeloid_colors[1:]
     colors = [x.hex_l for x in colors]
     return colors
 
@@ -3391,9 +3389,7 @@ def plot_hsc_abund_bias_at_last(
     cats_order = [
         'LC',
         'LB',
-        'BL',
         'B',
-        'BM',
         'MB',
         'MC'
     ]
@@ -4314,3 +4310,106 @@ def plot_exhausted_lymphoid_at_time(
             + '_' + gname + '_' + 'by-clone_' \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_contribution_by_bias_cat(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        cell_type: str,
+        by_sum: bool,
+        by_group: bool = False,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ) -> None:
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+    cats = [
+        'LC',
+        'LB',
+        'B',
+        'MB',
+        'MC'
+    ]
+    cats = [MAP_LINEAGE_BIAS_CATEGORY[x] for x in cats]
+    colors = get_myeloid_to_lymphoid_colors(cats)
+    palette = dict(zip(cats, colors))
+
+    with_bias_cats = add_bias_category(
+        lineage_bias_df,
+    )    
+    first_last_by_mouse_df = filter_first_last_by_mouse(
+        with_bias_cats,
+        timepoint_col,
+    )
+    y_col = cell_type + '_percent_engraftment'
+    if by_sum:
+        group_df = pd.DataFrame(
+            first_last_by_mouse_df.groupby(
+                ['mouse_id', 'group', 'mouse_time_desc', 'bias_category_short']
+            )[y_col].sum()
+        ).reset_index()
+        math_desc = 'sum'
+    else:
+        group_df = pd.DataFrame(
+            first_last_by_mouse_df.groupby(
+                ['mouse_id', 'group', 'mouse_time_desc', 'bias_category_short']
+            )[y_col].mean()
+        ).reset_index()
+        math_desc = 'mean'
+
+    if by_group:
+        for group, g_df in group_df.groupby('group'):
+            plt.figure(figsize=(7,5))
+            ax = sns.barplot(
+                x='mouse_time_desc',
+                y=y_col,
+                order=['First', 'Last'],
+                hue='bias_category_short',
+                hue_order=cats,
+                data=g_df,
+                palette=palette,
+                saturation=1,
+            )
+            ax.set(yscale='log')
+            plt.legend().remove()
+            plt.ylabel(y_col_to_title(y_col))
+            plt.xlabel('Time Point')
+            plt.suptitle('Group: ' + group.replace('_', ' ').title())
+            plt.title(
+                math_desc.title() + ' ' + y_col_to_title(y_col)
+                )
+
+            file_name = save_path + os.sep \
+                + 'first-last_' \
+                + math_desc + '_' \
+                + y_col \
+                + '_' + group \
+                + '.' + save_format
+            save_plot(file_name, save, save_format)
+    else:
+        plt.figure(figsize=(10,9))
+        ax = sns.barplot(
+            x='mouse_time_desc',
+            y=y_col,
+            order=['First', 'Last'],
+            hue='bias_category_short',
+            hue_order=cats,
+            data=group_df,
+            palette=palette,
+            saturation=1,
+        )
+        ax.set(yscale='log')
+
+        plt.ylabel(y_col_to_title(y_col))
+        plt.xlabel('Time Point')
+        plt.title(
+            math_desc.title() + ' ' + y_col_to_title(y_col)
+            )
+        plt.legend(title='')
+        file_name = save_path + os.sep \
+            + 'first-last_' \
+            + math_desc + '_' \
+            + y_col \
+            + '.' + save_format
+        save_plot(file_name, save, save_format)

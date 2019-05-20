@@ -58,7 +58,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_abundance_by_change, plot_bias_dist_contribution_over_time, \
     plot_n_most_abundant, plot_clone_count_swarm, \
     plot_swarm_violin_first_last_bias, \
-    plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time
+    plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time, \
+    plot_contribution_by_bias_cat
      
 
 
@@ -257,6 +258,22 @@ def main():
     if args.save:
         print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
+    if graph_type in ['contrib_by_bias_cat']:
+        save_path = args.output_dir + os.sep + 'contrib_by_bias_cat' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+        for cell_type in ['gr', 'b']:
+            plot_contribution_by_bias_cat(
+                lineage_bias_df,
+                timepoint_col,
+                cell_type,
+                by_sum=args.sum,
+                by_group=args.by_group,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
+        
+
     if graph_type in ['exhausted_lymphoid_at_time']:
         save_path = args.output_dir + os.sep + 'exhausted_lymphoid_at_time' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
@@ -581,7 +598,7 @@ def main():
         if args.threshold:
             threshold = args.threshold
         else:
-            threshold = 0.01
+            threshold = 0.0
         if args.y_col == 'lineage_bias':
             raise ValueError("Y-Col must be 'sum_abundance', 'gr_percent_engraftment', or 'b_percent_engraftment")
         plot_bias_first_last(

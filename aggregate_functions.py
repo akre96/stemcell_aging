@@ -1472,3 +1472,23 @@ def filter_lymphoid_exhausted_at_time(
         (survival_df['time_change'] == int(timepoint) - min_time)
     ]
     return filt_df
+
+def filter_first_last_by_mouse(
+        input_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    out_df = pd.DataFrame()
+    for _ , m_df in input_df.groupby('mouse_id'):
+        first_t = m_df[timepoint_col].min()
+        last_t = m_df[timepoint_col].max()
+        out_df = out_df.append(
+            m_df[m_df[timepoint_col] == first_t].assign(
+                mouse_time_desc='First'
+            )
+        )
+        out_df = out_df.append(
+            m_df[m_df[timepoint_col] == last_t].assign(
+                mouse_time_desc='Last'
+            )
+        )
+    return out_df
