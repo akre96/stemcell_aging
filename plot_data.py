@@ -59,7 +59,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_n_most_abundant, plot_clone_count_swarm, \
     plot_swarm_violin_first_last_bias, \
     plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time, \
-    plot_contribution_by_bias_cat
+    plot_contribution_by_bias_cat, plot_clone_count_bar_first_last
      
 
 
@@ -331,6 +331,32 @@ def main():
             save_path=save_path,
             save_format='png'
         )
+    if graph_type in ['clone_count_first_last']:
+        save_path = args.output_dir + os.sep + 'clone_count_bar'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        abundance_cutoff = 0.01
+        thresholds = {'gr': 0.01, 'b': 0.01}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+            
+        plot_clone_count_bar_first_last(
+            present_clones_df,
+            timepoint_col,
+            thresholds,
+            abundance_cutoff=abundance_cutoff,
+            analyzed_cell_types=list(thresholds.keys()),
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['clone_count_swarm']:
         save_path = args.output_dir + os.sep + 'clone_count_swarm'
 
@@ -353,6 +379,7 @@ def main():
             thresholds,
             abundance_cutoff=abundance_cutoff,
             analyzed_cell_types=list(thresholds.keys()),
+            line=args.line,
             save=args.save,
             save_path=save_path,
             save_format='png'

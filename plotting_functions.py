@@ -2741,6 +2741,15 @@ def plot_bias_change_mean_scatter(
             + '_logX' \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def moving_average(row):
+    mean = row.mean()
+    std = row.std()
+    filt = (row - mean / std).abs() < 5
+    #print(filt)
+    filt_row = row[filt]
+    return filt_row.mean()
+
 def plot_dist_bias_over_time(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
@@ -2749,6 +2758,9 @@ def plot_dist_bias_over_time(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    num_points = 2000
+    rolling_div = 10
+    x_points = np.linspace(-1.8, 1.8, num_points)
     if timepoint_col == 'gen':
         lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
     if by_group:
@@ -2760,16 +2772,30 @@ def plot_dist_bias_over_time(
             plt.ylabel('')
             plt.title('Group: ' + group.replace('_', ' ').title())
             palette = COLOR_PALETTES[timepoint_col]
+            pdfs = {}
             for t, t_df in g_df.groupby(timepoint_col):
-                sns.distplot(
-                    t_df.lineage_bias,
-                    label=str(int(t)),
-                    bins=15,
-                    hist=False,
+                for mouse_id, m_df in t_df.groupby('mouse_id'):
+                    try:
+                        kde = stats.gaussian_kde(m_df.lineage_bias)
+                    except np.linalg.LinAlgError:
+                        print(Fore.YELLOW + 'Adding noise to: ' + mouse_id)
+                        print('Unique Bias Before Noise:')
+                        print(m_df.lineage_bias.unique())
+                        print('Unique Bias After Noise:')
+                        noisey = np.random.normal(m_df.lineage_bias, 0.001)
+                        print(np.unique(noisey).tolist())
+                        kde = stats.gaussian_kde(noisey)
+                    m_kde = kde.pdf(x_points)
+                    pdfs[mouse_id] = m_kde.tolist()
+                pdfs = pd.DataFrame.from_dict(pdfs)
+                pdfs['average_pdf']= pdfs.mean(axis=1)
+                pdfs['rolling_average_pdf']= pdfs.average_pdf.rolling(round(num_points/rolling_div)).mean()
+                plt.plot(
+                    x_points,
+                    pdfs.rolling_average_pdf,
                     color=palette[str(int(t))],
-                    kde_kws={
-                        "linewidth": 2,
-                    }
+                    label=str(int(t)),
+                    alpha=0.8,
                 )
 
             plt.xlabel('Lineage Bias')
@@ -2790,16 +2816,34 @@ def plot_dist_bias_over_time(
             n_colors=lineage_bias_df[timepoint_col].nunique()
         )
         palette = COLOR_PALETTES[timepoint_col]
+        pdfs = {}
         for t, t_df in lineage_bias_df.groupby(timepoint_col):
-            sns.distplot(
-                t_df.lineage_bias,
+            for mouse_id, m_df in t_df.groupby('mouse_id'):
+                if m_df.group.isna().any():
+                    print(Fore.YELLOW + 'Skippping mouse: ' + mouse_id + ', no group')
+                    continue
+                else:
+                    try:
+                        kde = stats.gaussian_kde(m_df.lineage_bias)
+                    except np.linalg.LinAlgError:
+                        print(Fore.YELLOW + 'Adding noise to: ' + mouse_id)
+                        print('Unique Bias Before Noise:')
+                        print(m_df.lineage_bias.unique())
+                        print('Unique Bias After Noise:')
+                        noisey = np.random.normal(m_df.lineage_bias, 0.001)
+                        print(np.unique(noisey).tolist())
+                        kde = stats.gaussian_kde(noisey)
+
+                m_kde = kde.pdf(x_points)
+                pdfs[mouse_id] = m_kde.tolist()
+            pdfs = pd.DataFrame.from_dict(pdfs)
+            pdfs['average_pdf']= pdfs.mean(axis=1)
+            pdfs['rolling_average_pdf']= pdfs.average_pdf.rolling(round(num_points/rolling_div)).mean()
+            plt.plot(
+                x_points,
+                pdfs.rolling_average_pdf,
+                color=palette[str(int(t))],
                 label=str(int(t)),
-                bins=15,
-                hist=False,
-                kde_kws={
-                    "linewidth": 2,
-                    "color": palette[str(int(t))],
-                }
             )
         plt.xlabel('Lineage Bias')
         plt.legend(title=timepoint_col.title())
@@ -3793,6 +3837,33 @@ def plot_bias_dist_by_change(
             + '_' + group \
             + '.' + save_format
         save_plot(fname, save, save_format)
+    time='last'
+    plt.figure()
+    plt.suptitle('Group: ' + y_col_to_title(group))
+    plt.title(
+        'Distrubution of Lineage Bias of Clones at '
+        + timepoint_col.title() + ' ' + str(time))
+    t_df = filter_first_last_by_mouse(
+        change_marked_df,
+        timepoint_col
+    )
+    t_df = t_df[t_df.mouse_time_desc == 'Last']
+    for status, c_df in t_df.groupby('change_status'):
+        sns.distplot(
+            c_df['lineage_bias'],
+            color=COLOR_PALETTES['change_status'][status],
+            label=status,
+            hist=False,
+            rug=True,
+            rug_kws={'alpha': 0.2}
+        )
+    plt.xlabel('Lineage Bias Distribution')
+    plt.ylabel('')
+    plt.legend(title='Lineage Bias Change Type')
+    fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
+        + '_' + group \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
 
 
 def plot_abundance_by_change(
@@ -4004,6 +4075,7 @@ def plot_n_most_abundant(
             ax=ax,
             data=c_df,
         )
+        ax.set(yscale='log')
         plt.title(
             'Top ' + str(n) + ' Clones Combined Abundance in '
             + cell_type.title()
@@ -4025,6 +4097,7 @@ def plot_clone_count_swarm(
         thresholds: Dict[str, float],
         abundance_cutoff: float,
         analyzed_cell_types: List[str],
+        line: bool,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -4040,27 +4113,46 @@ def plot_clone_count_swarm(
 
     for cell_type, c_df in clone_counts.groupby(['cell_type']):
         plt.figure(figsize=(6,5))
-        ax = sns.swarmplot(
-            x=timepoint_col,
-            y='code',
-            hue='group',
-            palette=COLOR_PALETTES['group'],
-            dodge=True,
-            data=c_df,
-        )
-        sns.boxplot(
-            x=timepoint_col,
-            y='code',
-            hue='group',
-            palette=COLOR_PALETTES['group'],
-            showbox=False,
-            whiskerprops={
-                "alpha": 0
-            },
-            showcaps=False,
-            ax=ax,
-            data=c_df,
-        )
+        if line:
+            ax = sns.lineplot(
+                x=timepoint_col,
+                y='code',
+                hue='mouse_id',
+                palette=COLOR_PALETTES['mouse_id'],
+                data=c_df,
+            )
+            sns.scatterplot(
+                x=timepoint_col,
+                y='code',
+                hue='mouse_id',
+                palette=COLOR_PALETTES['mouse_id'],
+                data=c_df,
+                ax=ax
+            )
+            desc = 'line'
+        else:
+            ax = sns.swarmplot(
+                x=timepoint_col,
+                y='code',
+                hue='group',
+                palette=COLOR_PALETTES['group'],
+                dodge=True,
+                data=c_df,
+            )
+            sns.boxplot(
+                x=timepoint_col,
+                y='code',
+                hue='group',
+                palette=COLOR_PALETTES['group'],
+                showbox=False,
+                whiskerprops={
+                    "alpha": 0
+                },
+                showcaps=False,
+                ax=ax,
+                data=c_df,
+            )
+            desc = 'swarm'
         plt.title(
             cell_type.title() 
             + ' Clone Counts with Abundance Cutoff ' 
@@ -4070,6 +4162,7 @@ def plot_clone_count_swarm(
         plt.ylabel('Number of Clones')
         plt.legend().remove()
         fname = save_path + os.sep \
+            + desc + '_' \
             + 'clone_count_' + cell_type \
             + '_a' + str(abundance_cutoff).replace('.', '-') \
             + '.' + save_format
@@ -4413,3 +4506,50 @@ def plot_contribution_by_bias_cat(
             + y_col \
             + '.' + save_format
         save_plot(file_name, save, save_format)
+        
+def plot_clone_count_bar_first_last(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[str, float],
+        abundance_cutoff: float,
+        analyzed_cell_types: List[str],
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+
+    threshold_df = filter_cell_type_threshold(
+        clonal_abundance_df,
+        thresholds, 
+        analyzed_cell_types
+    )
+        
+    clone_counts = count_clones(threshold_df, timepoint_col)
+    clone_counts = filter_first_last_by_mouse(
+        clone_counts,
+        timepoint_col
+    )
+
+    for cell_type, c_df in clone_counts.groupby(['cell_type']):
+        plt.figure(figsize=(6,5))
+        ax = sns.barplot(
+            x='mouse_time_desc',
+            order=['First', 'Last'],
+            y='code',
+            hue='group',
+            palette=COLOR_PALETTES['group'],
+            data=c_df,
+        )
+        plt.title(
+            cell_type.title() 
+            + ' Clone Counts with Abundance Cutoff ' 
+            + str(100 - abundance_cutoff)
+        )
+        plt.xlabel(timepoint_col.title())
+        plt.ylabel('Number of Clones')
+        plt.legend().remove()
+        fname = save_path + os.sep \
+            + 'clone_count_' + cell_type \
+            + '_a' + str(abundance_cutoff).replace('.', '-') \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
