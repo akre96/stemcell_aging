@@ -59,7 +59,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_n_most_abundant, plot_clone_count_swarm, \
     plot_swarm_violin_first_last_bias, \
     plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time, \
-    plot_contribution_by_bias_cat, plot_clone_count_bar_first_last
+    plot_contribution_by_bias_cat, plot_clone_count_bar_first_last, \
+    plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap
      
 
 
@@ -166,7 +167,19 @@ def main():
     analysed_cell_types = ['gr', 'b']
     phenotypic_groups = ['aging_phenotype', 'no_change']
     cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'b', 'wbc'])
+    sns.set_context(
+        'paper',
+        font_scale=2,
+        rc={
+            'lines.linewidth': 2,
+            'axes.linewidth': 3,
+            'axes.labelsize': 22,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'font.weight': 900,
+        }
 
+        )
     if not input_df[~input_df.group.isin(phenotypic_groups)].empty:
         print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
         print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
@@ -357,6 +370,32 @@ def main():
             save_path=save_path,
             save_format='png'
         )
+    if graph_type in ['clone_count_swarm_vs_ct']:
+        save_path = args.output_dir + os.sep + 'clone_count_swarm_vs_cell-type'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        abundance_cutoff = 0.01
+        thresholds = {'gr': 0.01, 'b': 0.01}
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+            )
+            
+        plot_clone_count_swarm_vs_cell_type(
+            present_clones_df,
+            timepoint_col,
+            thresholds,
+            abundance_cutoff=abundance_cutoff,
+            analyzed_cell_types=list(thresholds.keys()),
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['clone_count_swarm']:
         save_path = args.output_dir + os.sep + 'clone_count_swarm'
 
@@ -458,6 +497,20 @@ def main():
             save_path=save_path
         )
 
+    if graph_type in ['perc_survival_bias_heatmap']:
+        save_path = args.output_dir + os.sep + 'perc_survival_bias_type' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        plot_perc_survival_bias_heatmap(
+            lineage_bias_df,
+            timepoint_col,
+            by_clone=args.by_clone,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['perc_survival_bias_type']:
         save_path = args.output_dir + os.sep + 'perc_survival_bias_type' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
@@ -1821,7 +1874,7 @@ def main():
             + os.sep
         plot_lineage_average(
             filt_lineage_bias_gr_df,
-            title_addon='Filtered by clones with Gr > ' + str(round(thresholds['gr'], 2)) + '% WBC abundance in GR at ' + timepoint_col.title() + ': ' + str(timepoint),
+            title_addon='Gr > ' + str(round(thresholds['gr'], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
             save=args.save,
             timepoint=timepoint,
             timepoint_col=timepoint_col,
@@ -1833,7 +1886,7 @@ def main():
         )
         plot_lineage_average(
             filt_lineage_bias_b_df,
-            title_addon='Filtered by clones with B > ' + str(round(thresholds['b'], 2)) + '% WBC abundance in B at ' + timepoint_col.title() + ': ' + str(timepoint),
+            title_addon='B > ' + str(round(thresholds['b'], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
             timepoint=timepoint,
             timepoint_col=timepoint_col,
             by_clone=args.by_clone,
