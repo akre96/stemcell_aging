@@ -65,7 +65,7 @@ python rest_of_clones_calc.py \
     --gfp $GFP_FILE \
     --wbcs $WBC_FILE \
     --donor $DONOR_FILE \
-    --group $GROUP_FILE \
+    --group $MOUSE_GROUP_PHENOTYPE_FILE \
     --timepoint-col $TIMEPOINT_COL \
     --baseline-timepoint $BASELINE_TIMEPOINT \
     -o $REST_OF_CLONES_OUTPUT_DIR
