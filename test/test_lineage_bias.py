@@ -149,4 +149,5 @@ def test_angle_to_bias():
     assert calc_bias_from_angle(balanced_angle) == 0
     assert calc_bias_from_angle(balanced_angle_min) == balanced_value_min
     assert calc_bias_from_angle(balanced_angle_max) == balanced_value_max
+    assert balanced_value_max == balanced_value_min * -1
 
