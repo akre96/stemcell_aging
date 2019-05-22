@@ -24,13 +24,11 @@ MAP_LINEAGE_BIAS_CATEGORY = {
 }
 
 MAP_LINEAGE_BIAS_CATEGORY_SHORT = {
-    'LC': 'Lymphoid Committed',
-    'LB': 'Lymphoid Biased',
-    'BL': 'Balanced',
+    'LC': 'Ly Committed',
+    'LB': 'Ly Biased',
     'B': 'Balanced',
-    'BM': 'Balanced',
-    'MB': 'Myeloid Biased',
-    'MC': 'Myeloid Committed',
+    'MB': 'My Biased',
+    'MC': 'My Committed',
 }
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
@@ -291,7 +289,7 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
             last_time = m_df[timepoint_col].max()
             time_df = time_df.append(m_df[m_df[timepoint_col] == last_time])
     else:
-        time_df = input_df[input_df[timepoint_col] == enrichment_time]
+        time_df = input_df[input_df[timepoint_col] == int(enrichment_time)]
     enriched_at_time_df = time_df[time_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id'])
 
     if lineage_bias:
