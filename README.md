@@ -152,6 +152,9 @@ In the root directory of the repository run:
 `pytest`
 
   
+# Manual Data Cleaning Steps:
+For mouse 3026, Day 122 B cell columns changed from `Ania_M3026D122CB` to `Ania_M3026D122Cb`
+
 
 ---
 By Samir Akre

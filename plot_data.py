@@ -167,16 +167,18 @@ def main():
     analysed_cell_types = ['gr', 'b']
     phenotypic_groups = ['aging_phenotype', 'no_change']
     cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'b', 'wbc'])
+
+    # CONTEXT for paper/publication
     sns.set_context(
         'paper',
-        font_scale=2,
+        font_scale=2.0,
         rc={
             'lines.linewidth': 2,
-            'axes.linewidth': 3,
-            'axes.labelsize': 22,
-            'xtick.major.width': 3,
-            'ytick.major.width': 3,
-            'font.weight': 900,
+            'axes.linewidth': 4,
+            'axes.labelsize': 25,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'figure.titlesize': 'medium',
         }
 
         )
@@ -264,12 +266,6 @@ def main():
         print(' - Time By Month Set \n')
         first_timepoint = 4
         timepoint_col = 'month'
-
-
-
-
-    if args.save:
-        print(Style.BRIGHT + Fore.GREEN + '\n*** Saving Plots Enabled ***\n')
     
     if graph_type in ['contrib_by_bias_cat']:
         save_path = args.output_dir + os.sep + 'contrib_by_bias_cat' \
@@ -391,7 +387,7 @@ def main():
             timepoint_col,
             thresholds,
             abundance_cutoff=abundance_cutoff,
-            analyzed_cell_types=list(thresholds.keys()),
+            analyzed_cell_types=['gr', 'b'],
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -1874,6 +1870,7 @@ def main():
             + os.sep
         plot_lineage_average(
             filt_lineage_bias_gr_df,
+            present_clones_df,
             title_addon='Gr > ' + str(round(thresholds['gr'], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
             save=args.save,
             timepoint=timepoint,
@@ -1886,6 +1883,7 @@ def main():
         )
         plot_lineage_average(
             filt_lineage_bias_b_df,
+            present_clones_df,
             title_addon='B > ' + str(round(thresholds['b'], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
             timepoint=timepoint,
             timepoint_col=timepoint_col,
