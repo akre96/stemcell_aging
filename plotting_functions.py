@@ -43,10 +43,10 @@ COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
 LINE_STYLES = json.load(open('line_styles.json', 'r'))
 
 def y_col_to_title(y_col: str) -> str:
-    y_title = y_col.replace('_', ' ').replace(
-        'percent engraftment',
-        'Abundance'
-    ).title()
+    y_title = y_col.replace('_', ' ').title().replace(
+        'Percent Engraftment',
+        'Abundance (%WBC)'
+    )
     return y_title
 
 def save_plot(file_name: str, save: bool, save_format: str) -> None:
@@ -505,12 +505,27 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
         )
         log_scale = True
 
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+
+        )
+
     if by_clone:
         fname_prefix += '_by-clone'
         phenotype = 'all'
         ymax = lineage_bias_df[y_col].max()
         ymin = lineage_bias_df[y_col].min()
-        plt.figure(figsize=(7, 6))
+        plt.figure(figsize=(5, 4))
 
         ax = sns.lineplot(
             x=timepoint_col,
@@ -526,6 +541,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
             ax.set(yscale='log')
 
         plt.xlabel(timepoint_col.title())
+        plt.xticks(ticks=lineage_bias_df[timepoint_col].unique())
         y_title = y_col.replace('percent_engraftment', 'Abundance (% WBC)').replace('_', ' ').title()
         plt.ylabel(y_title)
         plt.title(title_addon)
@@ -535,7 +551,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
         save_plot(fname, save, save_format)
 
         for phenotype, group in lineage_bias_df.groupby('group'):
-            plt.figure(figsize=(7, 6))
+            plt.figure(figsize=(5, 4))
             ax = sns.lineplot(
                 x=timepoint_col,
                 y=y_col,
@@ -547,6 +563,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
                 units='code',
                 estimator=None
             )
+            plt.xticks(ticks=lineage_bias_df[timepoint_col].unique())
             if log_scale:
                 ax.set(yscale='log')
             plt.xlabel(timepoint_col.title())
@@ -573,6 +590,7 @@ def plot_lineage_average(lineage_bias_df: pd.DataFrame,
             hue='group',
             palette=COLOR_PALETTES['group']
         )
+        plt.xticks(ticks=lineage_bias_df[timepoint_col].unique())
         if log_scale:
             ax.set(yscale='log')
         plt.suptitle('All Mice, Overall Trend')
@@ -1098,7 +1116,14 @@ def plot_change_contributions(
         last_time_per_mouse_df = last_time_per_mouse_df.assign(total=100)
         first_time_per_mouse_df = first_time_per_mouse_df.assign(total=100)
 
-        sns.set(style="whitegrid")
+        sns.set(
+            style="whitegrid",
+            font_scale=2.0,
+            rc={
+                'xtick.labelsize': 22,
+                'ytick.labelsize': 22,
+            }
+        )
 
         for group, g_df in last_time_per_mouse_df.groupby('group'):
             for m, m_df in g_df.groupby('mouse_id'):
@@ -1132,7 +1157,7 @@ def plot_change_contributions(
             plt.ylabel('')
             plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
             plt.title('Group: ' + group.replace('_', ' ').title() + ' - Last Time Point')
-            plt.gca().legend(title='Change Direction', loc='lower right')
+            plt.gca().legend(title='Change Direction', loc='lower right').remove()
             sns.despine(left=True, bottom=True)
 
             fname = save_path + os.sep + 'percent_contribution_changed_' + cell_type + '_' + group + '.' + save_format
@@ -1170,7 +1195,7 @@ def plot_change_contributions(
             plt.ylabel('')
             plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
             plt.title('Group: ' + group.replace('_', ' ').title() + ' - First Time Point')
-            plt.gca().legend(title='Change Direction', loc='lower right')
+            plt.gca().legend(title='Change Direction', loc='lower right').remove()
             sns.despine(left=True, bottom=True)
 
             fname = save_path + os.sep + 'percent_contribution_changed_init' + cell_type + '_' + group + '.' + save_format
@@ -3432,6 +3457,20 @@ def plot_not_survived_count_box(
         save_path: str = './output',
         save_format: str = 'png',
     ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+
+        )
     labeled_df = create_clonal_survival_df(
         lineage_bias_df,
         timepoint_col
@@ -3447,7 +3486,7 @@ def plot_not_survived_count_box(
     count_df = pd.DataFrame(not_survived_df.groupby(
         ['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
         ).reset_index().sort_values(by='time_change')
-    fig, ax = plt.subplots()
+    fig = plt.figure(figsize=(8,6))
     ax = sns.boxplot(
         x='last_timepoint',
         y='code',
@@ -3458,9 +3497,9 @@ def plot_not_survived_count_box(
     _, max_codes = plt.ylim()
     ax2 = ax.twinx()
     ax.set_ylim(0, max_codes)
-    ax.set_ylabel('Exhausted Clones (Count Per Mouse)')
+    ax.set_ylabel('Exhausted Clones Per Mouse')
     ax2.set_ylim(0, 100 * max_codes/all_clone_num)
-    ax2.set_ylabel('% Of Average Total Unique Clones Per Mouse')
+    ax2.set_ylabel('% Average Unique Clones Per Mouse')
 
     ax.set_xlabel('Last ' + timepoint_col.title() + ' Survived')
     plt.title(
@@ -3476,7 +3515,7 @@ def plot_not_survived_count_box(
         count_df = pd.DataFrame(
             g_df.groupby(['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
             ).reset_index().sort_values(by='time_change')
-        fig, ax = plt.subplots()
+        fig = plt.figure(figsize=(10,7))
         ax = sns.boxplot(
             x='last_timepoint',
             y='code',
@@ -3487,9 +3526,9 @@ def plot_not_survived_count_box(
         _, max_codes = plt.ylim()
         ax2 = ax.twinx()
         ax.set_ylim(0, max_codes)
-        ax.set_ylabel('Exhausted Clones (Count Per Mouse)')
+        ax.set_ylabel('Exhausted Clones Per Mouse')
         ax2.set_ylim(0, 100 * max_codes/all_clone_num)
-        ax2.set_ylabel('% Of Average Total Unique Clones Per Mouse')
+        ax2.set_ylabel('% Average Unique Clones Per Mouse')
 
         ax.set_xlabel('Last ' + timepoint_col.title() + ' Survived')
         plt.suptitle(
@@ -3918,7 +3957,8 @@ def plot_bias_dist_by_change(
             )
         plt.xlabel('Lineage Bias Distribution')
         plt.ylabel('')
-        plt.legend(title='Lineage Bias Change Type')
+        plt.xlim((-2,2))
+        plt.legend(title='Lineage Bias Change Type').remove()
         fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
             + '_' + group \
             + '.' + save_format
@@ -3926,6 +3966,7 @@ def plot_bias_dist_by_change(
     time='last'
     plt.figure()
     plt.suptitle('Group: ' + y_col_to_title(group))
+    plt.xlim((-2,2))
     plt.title(
         'Distrubution of Lineage Bias of Clones at '
         + timepoint_col.title() + ' ' + str(time))
@@ -3945,7 +3986,7 @@ def plot_bias_dist_by_change(
         )
     plt.xlabel('Lineage Bias Distribution')
     plt.ylabel('')
-    plt.legend(title='Lineage Bias Change Type')
+    plt.legend(title='Lineage Bias Change Type').remove()
     fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
         + '_' + group \
         + '.' + save_format
@@ -3990,6 +4031,10 @@ def plot_abundance_by_change(
         ).reset_index()
         desc_add = 'sum'
     
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Independent T-Test Between Change Status '+ desc_add.title() + ' Abundance at each time point'
+    )
     for (group, cell_type), c_df in change_marked_df.groupby(['group', 'cell_type']):
         plt.figure(figsize=(7,5))
         plt.title(
@@ -4015,8 +4060,39 @@ def plot_abundance_by_change(
             + '_' + desc_add \
             + '.' + save_format
         save_plot(fname, save, save_format)
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\n  - Group: ' + group.replace('_', ' ').title()
+            + '  Cell Type: ' + cell_type.title()
+        )
+        for timepoint, t_df in c_df.groupby(timepoint_col):
+            for (a, b) in combinations(['Unchanged', 'Myeloid', 'Lymphoid'],2):
+                a_vals = t_df[t_df['change_type'] == a]
+                b_vals = t_df[t_df['change_type'] == b]
+                stat, p_value = stats.ttest_ind(
+                    a_vals['percent_engraftment'],
+                    b_vals['percent_engraftment'],
+                )
+                context: str = str(timepoint) + ' - ' + a + ' vs ' + b
+                print_p_value(context, p_value)
 
+    group = 'all'
     for cell_type, c_df in change_marked_df.groupby(['cell_type']):
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\n  - Group: ' + group.replace('_', ' ').title()
+            + '  Cell Type: ' + cell_type.title()
+        )
+        for timepoint, t_df in c_df.groupby(timepoint_col):
+            for (a, b) in combinations(['Unchanged', 'Myeloid', 'Lymphoid'],2):
+                a_vals = t_df[t_df['change_type'] == a]
+                b_vals = t_df[t_df['change_type'] == b]
+                stat, p_value = stats.ttest_ind(
+                    a_vals['percent_engraftment'],
+                    b_vals['percent_engraftment'],
+                )
+                context: str = str(timepoint) + ' - ' + a + ' vs ' + b
+                print_p_value(context, p_value)
         plt.figure(figsize=(10,9))
         plt.title(
             cell_type.title() + ' '
@@ -4034,7 +4110,13 @@ def plot_abundance_by_change(
         ax.set(yscale='log')
         plt.xlabel(timepoint_col.title())
         plt.ylabel(y_col_to_title(cell_type+'_percent_engraftment'))
-        plt.legend(title='Lineage Bias Change Type')
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                        box.width, box.height * 0.9])
+
+        # Put a legend below current axis
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.18),
+            fancybox=True, shadow=True, ncol=3, title='')
         fname = fname_prefix + '_' + cell_type \
             + '_' + desc_add \
             + '.' + save_format
@@ -4131,6 +4213,22 @@ def plot_n_most_abundant(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    sns.set_context(
+        'paper',
+        font_scale=2.0,
+        rc={
+            'lines.linewidth': 4,
+            'axes.linewidth': 3,
+            'axes.labelsize': 20,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'ytick.major.size': 4,
+            'ytick.minor.size': 4,
+            'xtick.labelsize': 28,
+            'ytick.labelsize': 28,
+            'figure.titlesize': 'medium',
+        }
+        )
 
     most_abund_contrib = pd.DataFrame(
         clonal_abundance_df.groupby(
@@ -4146,6 +4244,7 @@ def plot_n_most_abundant(
             hue='group',
             palette=COLOR_PALETTES['group'],
             dodge=True,
+            size=8,
             data=c_df,
         )
         sns.boxplot(
@@ -4278,6 +4377,21 @@ def plot_swarm_violin_first_last_bias(
         with_time_desc_filt,
         thresholds
     )
+    sns.set_context(
+        'paper',
+        font_scale=2.0,
+        rc={
+            'lines.linewidth': 2.5,
+            'axes.linewidth': 4,
+            'axes.labelsize': 30,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 28,
+            'ytick.labelsize': 28,
+            'figure.titlesize': 'medium',
+        }
+
+        )
     if by_group:
         for group, g_df in filt_df.groupby('group'):
             plt.figure(figsize=(7,5))
@@ -4297,6 +4411,7 @@ def plot_swarm_violin_first_last_bias(
                 order=['First', 'Last'],
                 palette=COLOR_PALETTES['mouse_id'],
                 data=g_df,
+                size=7,
                 ax=ax,
             )
             #plt.legend().remove()
@@ -4308,7 +4423,7 @@ def plot_swarm_violin_first_last_bias(
                 + ' > ' + str(100 - abundance_cutoff)
                 + ' in Any Cell Type'
                 )
-
+            plt.legend().remove()
             file_name = save_path + os.sep \
                 + 'first-last-lineage-bias' \
                 + '_a' + str(abundance_cutoff).replace('.', '-') \
@@ -4610,6 +4725,20 @@ def plot_clone_count_bar_first_last(
         clone_counts,
         timepoint_col
     )
+    sns.set_context(
+        'paper',
+        font_scale=2.0,
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 25,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 28,
+            'ytick.labelsize': 22,
+        }
+
+        )
 
     for cell_type, c_df in clone_counts.groupby(['cell_type']):
         plt.figure(figsize=(6,5))
@@ -4714,6 +4843,20 @@ def plot_perc_survival_bias_heatmap(
         save_path: str = './output',
         save_format: str = 'png',
     ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+
+        )
     fname_prefix = save_path + os.sep
     if by_clone:
         y_col = 'exhausted_count'
@@ -4759,7 +4902,7 @@ def plot_perc_survival_bias_heatmap(
             pivot_df[cats],
             cmap='cividis',
         )
-        plt.ylabel('Last Time Point of Exhausted Clones')
+        plt.ylabel(timepoint_col.title() + ' of Exhaustion')
         plt.xlabel('Lineage Bias Category')
         plt.title('Group: ' + y_col_to_title(group))
         plt.suptitle(y_label)
@@ -4780,7 +4923,7 @@ def plot_perc_survival_bias_heatmap(
         cmap='cividis'
     )
     plt.title('Group: ' + y_col_to_title(group))
-    plt.ylabel('Last Time Point of Exhausted Clones')
+    plt.ylabel(timepoint_col.title() + ' of Exhaustion')
     plt.xlabel('Lineage Bias Category')
     plt.suptitle(y_label)
     fname = fname_prefix + group + '.' + save_format

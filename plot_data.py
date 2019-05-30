@@ -173,11 +173,13 @@ def main():
         'paper',
         font_scale=2.0,
         rc={
-            'lines.linewidth': 2,
+            'lines.linewidth': 3,
             'axes.linewidth': 4,
-            'axes.labelsize': 25,
+            'axes.labelsize': 20,
             'xtick.major.width': 5,
             'ytick.major.width': 5,
+            'xtick.labelsize': 30,
+            'ytick.labelsize': 30,
             'figure.titlesize': 'medium',
         }
 
