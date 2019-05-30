@@ -6,8 +6,8 @@
         "Total" : "#930230"
     },
     "group": {
-        "no_change" : "#1BA2E4",
-        "aging_phenotype" : "#E45D1B",
+        "no_change" : "#f5883f",
+        "aging_phenotype" : "#2ab0cc",
         "No Change" : "#f5883f",
         "Aging Phenotype" : "#2ab0cc"
     },
