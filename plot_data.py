@@ -124,7 +124,7 @@ def main():
             raise ValueError('Time point wrong type')
 
     parser = argparse.ArgumentParser(description="Plot input data")
-    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='Ania_M_all_percent-engraftment_100818_long.csv')
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='~/Data/stemcell_aging/Ania_M_allAnia_percent-engraftment_052219_long.csv')
     parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default='~/Data/stemcell_aging/rest_of_clones')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
     parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default='/home/sakre/Data/stemcell_aging/OT_2.0_WBCs_051818-modified.txt')
@@ -168,22 +168,7 @@ def main():
     phenotypic_groups = ['aging_phenotype', 'no_change']
     cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'b', 'wbc'])
 
-    # CONTEXT for paper/publication
-    sns.set_context(
-        'paper',
-        font_scale=2.0,
-        rc={
-            'lines.linewidth': 3,
-            'axes.linewidth': 4,
-            'axes.labelsize': 20,
-            'xtick.major.width': 5,
-            'ytick.major.width': 5,
-            'xtick.labelsize': 30,
-            'ytick.labelsize': 30,
-            'figure.titlesize': 'medium',
-        }
 
-        )
     if not input_df[~input_df.group.isin(phenotypic_groups)].empty:
         print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
         print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
@@ -268,7 +253,8 @@ def main():
         print(' - Time By Month Set \n')
         first_timepoint = 4
         timepoint_col = 'month'
-    
+    print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
+    print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
     if graph_type in ['contrib_by_bias_cat']:
         save_path = args.output_dir + os.sep + 'contrib_by_bias_cat' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
