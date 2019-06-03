@@ -60,7 +60,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_swarm_violin_first_last_bias, \
     plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time, \
     plot_contribution_by_bias_cat, plot_clone_count_bar_first_last, \
-    plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap
+    plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap, \
+    plot_hsc_pie_mouse
      
 
 
@@ -173,8 +174,7 @@ def main():
         print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
         print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
 
-    presence_threshold = 0.0
-    present_clones_df = filter_threshold(input_df, presence_threshold, analysed_cell_types)
+    present_clones_df = input_df
 
     graph_type = args.graph_type
     if graph_type == 'default':
@@ -255,6 +255,15 @@ def main():
         timepoint_col = 'month'
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
+    if graph_type in ['hsc_mouse_pie']:
+        save_path = args.output_dir + os.sep + 'hsc_mouse_pie'
+        plot_hsc_pie_mouse(
+            present_clones_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['contrib_by_bias_cat']:
         save_path = args.output_dir + os.sep + 'contrib_by_bias_cat' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
