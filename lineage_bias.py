@@ -206,10 +206,6 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
 
         if b_engraftment < 0.01 and gr_engraftment < 0.01:
             continue
-        # Check no more than 2 cell types (gr and b)
-        if len(group) > 2:
-            print(group)
-            raise ValueError('More than two cell types detected for clone')
 
         new_row = pd.DataFrame(columns=lineage_bias_columns)
         new_row['has_null'] = [group.norm_percent_engraftment.isnull().values.any()]
