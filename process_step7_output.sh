@@ -39,6 +39,24 @@ BASELINE_TIMEPOINT='4'
 REST_OF_CLONES_OUTPUT_DIR=~/Data/stemcell_aging/rest_of_clones
 
 
+
+# 10x serial transplant Presets
+root_data_dir=~/Data/serial_transplant_10x
+STEP_7_RESULTS_DIR=${root_data_dir}/step7
+OUTPUT_DIR=${root_data_dir}/step7_long
+CONSOLIDATED_OUTPUT_DIR=${root_data_dir}
+MOUSE_GROUP_PHENOTYPE_FILE=${root_data_dir}/mouse_id_group.csv
+LINEAGE_BIAS_DIR=${root_data_dir}/lineage_bias
+GFP_FILE="${root_data_dir}/GFP*.txt"
+DONOR_FILE="${root_data_dir}/DONOR*.txt"
+WBC_FILE="${root_data_dir}/WBC*.txt"
+PREFIX=M
+TIMEPOINT_COL='day'
+BASELINE_TIMEPOINT='127'
+REST_OF_CLONES_OUTPUT_DIR=${root_data_dir}/rest_of_clones
+
+
+
 ## Run Processing Scripts
 
 # Format the output files of step 7 ( 1 file per mouse ) to long format (1 file per mouse)
