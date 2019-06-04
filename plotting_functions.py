@@ -5248,6 +5248,7 @@ def plot_dist_bias_at_time_vs_group(
         timepoint_col: str,
         timepoint: timepoint_type,
         bins: int,
+        change_type: str = None,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -5265,13 +5266,37 @@ def plot_dist_bias_at_time_vs_group(
             'figure.titlesize': 'small',
         }
     )
-
     bin_edge_count = bins + 1
     dodge_amount = 0.02
     bin_edges = np.linspace(-1, 1, bin_edge_count)
     center_points = (bin_edges[1:] + bin_edges[:-1]) / 2
     dodged_center_points = center_points + dodge_amount
 
+    desc_addon = ''
+    if change_type.lower() == 'changed':
+        desc_addon = 'changed_clones_'
+        bias_change_df = get_bias_change(
+            lineage_bias_df,
+            timepoint_col,
+        )
+        lineage_bias_df = mark_changed(
+            lineage_bias_df,
+            bias_change_df,
+            min_time_difference=1,
+        )
+        lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] != 'Unchanged']
+    elif change_type.lower() == 'unchanged':
+        desc_addon = 'unchanged_clones_'
+        bias_change_df = get_bias_change(
+            lineage_bias_df,
+            timepoint_col,
+        )
+        lineage_bias_df = mark_changed(
+            lineage_bias_df,
+            bias_change_df,
+            min_time_difference=1,
+        )
+        lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] == 'Unchanged']
 
     if timepoint_col == 'gen':
         lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
@@ -5320,11 +5345,13 @@ def plot_dist_bias_at_time_vs_group(
     )
     plt.ylabel('Clone Count')
     plt.xlabel('Lineage Bias')
+    plt.suptitle(desc_addon.replace('_', ' ').title())
     plt.title('Lineage Bias at ' + str(timepoint).title() + ' ' + timepoint_col.title())
     plt.legend().remove()
 
     fname = save_path + os.sep \
         + 'lineage_bias_pointplot_vs_group_' \
+        + desc_addon \
         + timepoint_col + '_' + str(timepoint) \
         + '_' + str(bins) + '-bins' \
         + '.' + save_format

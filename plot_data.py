@@ -22,7 +22,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from data_types import y_col_type, timepoint_type
+from data_types import y_col_type, timepoint_type, change_type
 from lineage_bias import get_bias_change, parse_wbc_count_file
 from aggregate_functions import filter_threshold, \
     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
@@ -127,6 +127,7 @@ def main():
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=timepoint_type, required=False)
+    parser.add_argument('--change-type', dest='change_type', help='Set type of lineage bias changed clones to inspect for certain graphs', type=change_type, required=False)
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--sum', dest='sum', help='Whether to plot sum abundance vs average abundance for certain graphs', action="store_true")
@@ -256,6 +257,7 @@ def main():
             lineage_bias_df,
             timepoint_col,
             bins=bins,
+            change_type=args.change_type,
             timepoint=args.timepoint,
             save=args.save,
             save_path=save_path,
