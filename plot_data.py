@@ -22,6 +22,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from data_types import y_col_type, timepoint_type
 from lineage_bias import get_bias_change, parse_wbc_count_file
 from aggregate_functions import filter_threshold, \
     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
@@ -61,7 +62,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time, \
     plot_contribution_by_bias_cat, plot_clone_count_bar_first_last, \
     plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap, \
-    plot_hsc_pie_mouse
+    plot_hsc_pie_mouse, plot_dist_bias_at_time_vs_group
      
 
 
@@ -107,23 +108,6 @@ def main():
         
 
     """
-    def y_col_type(string: str):
-        if string in ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']:
-            return string
-        if string == 'None':
-            return None
-        raise ValueError('y_col not in available values')
-    def timepoint_type(string: str):
-        try:
-            int(string)
-            return string
-        except ValueError:
-            if string in ['last', 'first']:
-                return string
-            if string == 'None':
-                return None
-            raise ValueError('Time point wrong type')
-
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='~/Data/stemcell_aging/Ania_M_allAnia_percent-engraftment_052219_long.csv')
     parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default='~/Data/stemcell_aging/rest_of_clones')
@@ -261,6 +245,23 @@ def main():
         rest_of_clones_bias_df = rest_of_clones_bias_df.assign(month=lambda x: day_to_month(x.day))
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
+
+    if graph_type in ['dist_bias_time_vs_group']:
+        save_path = args.output_dir + os.sep + 'dist_bias_time_vs_group'
+        bins = 20
+        if options != 'default':
+            bins = int(options)
+
+        plot_dist_bias_at_time_vs_group(
+            lineage_bias_df,
+            timepoint_col,
+            bins=bins,
+            timepoint=args.timepoint,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
     if graph_type in ['hsc_mouse_pie']:
         save_path = args.output_dir + os.sep + 'hsc_mouse_pie'
         plot_hsc_pie_mouse(

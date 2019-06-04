@@ -35,7 +35,8 @@ from aggregate_functions import filter_threshold, count_clones, \
     find_last_clones, add_bias_category, find_last_clones_in_mouse, \
     filter_lineage_bias_thresholds, filter_lymphoid_exhausted_at_time, \
     calculate_survival_perc, filter_first_last_by_mouse, MAP_LINEAGE_BIAS_CATEGORY_SHORT, \
-    MAP_LINEAGE_BIAS_CATEGORY
+    MAP_LINEAGE_BIAS_CATEGORY, get_clones_at_timepoint
+from data_types import timepoint_type, y_col_type
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
 
@@ -5241,3 +5242,90 @@ def plot_hsc_pie_mouse(
             + '_hsc_abund_pie.' \
             + save_format
         save_plot(fname, save, save_format)
+
+def plot_dist_bias_at_time_vs_group(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        timepoint: timepoint_type,
+        bins: int,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+
+    bin_edge_count = bins + 1
+    dodge_amount = 0.02
+    bin_edges = np.linspace(-1, 1, bin_edge_count)
+    center_points = (bin_edges[1:] + bin_edges[:-1]) / 2
+    dodged_center_points = center_points + dodge_amount
+
+
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+    lineage_bias_at_time_df = get_clones_at_timepoint(
+        lineage_bias_df,
+        timepoint_col,
+        timepoint
+    )
+
+
+    hist_df = pd.DataFrame()
+    for (mouse_id, group), m_df in lineage_bias_at_time_df.groupby(['mouse_id', 'group']):
+        m_hist, t_bins = np.histogram(m_df.lineage_bias, bins=bin_edges)
+
+        if not np.array_equal(t_bins, bin_edges):
+            raise ValueError('Bins from numpy histogram, and input not same')
+        if group == 'no_change':
+            m_row = pd.DataFrame.from_dict(
+                {
+                    'count': m_hist,
+                    'lineage_bias': dodged_center_points,
+                    'mouse_id': [mouse_id] * (bin_edge_count - 1),
+                    'group': [group] * (bin_edge_count - 1),
+                }
+            )
+        else:
+            m_row = pd.DataFrame.from_dict(
+                {
+                    'count': m_hist,
+                    'lineage_bias': center_points,
+                    'mouse_id': [mouse_id] * (bin_edge_count - 1),
+                    'group': [group] * (bin_edge_count - 1),
+                }
+            )
+        hist_df = hist_df.append(m_row, ignore_index=True)
+
+    plt.figure(figsize=(7,6))
+    sns.lineplot(
+        data=hist_df,
+        x='lineage_bias',
+        y='count',
+        hue='group',
+        err_style='bars',
+        palette=COLOR_PALETTES['group']
+    )
+    plt.ylabel('Clone Count')
+    plt.xlabel('Lineage Bias')
+    plt.title('Lineage Bias at ' + str(timepoint).title() + ' ' + timepoint_col.title())
+    plt.legend().remove()
+
+    fname = save_path + os.sep \
+        + 'lineage_bias_pointplot_vs_group_' \
+        + timepoint_col + '_' + str(timepoint) \
+        + '_' + str(bins) + '-bins' \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
