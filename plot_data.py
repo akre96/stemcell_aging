@@ -29,7 +29,7 @@ from aggregate_functions import filter_threshold, \
     filter_cell_type_threshold, combine_enriched_clones_at_time, \
     mark_changed, sum_abundance_by_change, between_gen_bias_change, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_threshold, \
-    across_gen_bias_change, \
+    across_gen_bias_change, day_to_month, \
     day_to_gen, calculate_bias_change
 from plotting_functions import plot_max_engraftment, \
     plot_clone_count_by_thresholds, venn_barcode_in_time, \
@@ -253,6 +253,12 @@ def main():
         print(' - Time By Month Set \n')
         first_timepoint = 4
         timepoint_col = 'month'
+        lineage_bias_df = lineage_bias_df.assign(month=lambda x: day_to_month(x.day))
+        input_df = input_df.assign(month=lambda x: day_to_month(x.day))
+        present_clones_df = present_clones_df.assign(month=lambda x: day_to_month(x.day))
+        cell_count_df = cell_count_df.assign(month=lambda x: day_to_month(x.day))
+        rest_of_clones_abundance_df = rest_of_clones_abundance_df.assign(month=lambda x: day_to_month(x.day))
+        rest_of_clones_bias_df = rest_of_clones_bias_df.assign(month=lambda x: day_to_month(x.day))
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
     if graph_type in ['hsc_mouse_pie']:
@@ -752,26 +758,35 @@ def main():
             threshold = args.threshold
         else:
             threshold = 0.01
+
+        if args.options != 'default':
+            mtd = int(args.options)
+        else:
+            mtd = 1
+        ## PLots unused, uncomment to filter based on b and gr average engraftment
+        #plot_bias_dist_mean_abund_group_vs(
+            #lineage_bias_df,
+            #timepoint_col,
+            #cutoff=threshold,
+            #y_col='b_percent_engraftment',
+            #save=args.save,
+            #save_path=save_path,
+        #)
+        #plot_bias_dist_mean_abund_group_vs(
+            #lineage_bias_df,
+            #timepoint_col,
+            #cutoff=threshold,
+            #y_col='gr_percent_engraftment',
+            #save=args.save,
+            #save_path=save_path,
+        #)
+
         plot_bias_dist_mean_abund_group_vs(
             lineage_bias_df,
             timepoint_col,
             cutoff=threshold,
-            y_col='b_percent_engraftment',
-            save=args.save,
-            save_path=save_path,
-        )
-        plot_bias_dist_mean_abund_group_vs(
-            lineage_bias_df,
-            timepoint_col,
-            cutoff=threshold,
-            y_col='gr_percent_engraftment',
-            save=args.save,
-            save_path=save_path,
-        )
-        plot_bias_dist_mean_abund_group_vs(
-            lineage_bias_df,
-            timepoint_col,
-            cutoff=threshold,
+            mtd=mtd,
+            timepoint=args.timepoint,
             y_col='sum_abundance',
             save=args.save,
             save_path=save_path,

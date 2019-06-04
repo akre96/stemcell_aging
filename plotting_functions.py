@@ -1571,6 +1571,20 @@ def swamplot_abundance_cutoff(
         None -- plt.show() to view plot
     """
 
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 4,
+            'axes.linewidth': 3,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+
+        )
 
     time_col = timepoint_col
 
@@ -1618,8 +1632,17 @@ def swamplot_abundance_cutoff(
                 y='percent_engraftment',
                 hue='mouse_id',
                 data=g_df,
-                palette=pal
+                palette=pal,
+                zorder=0
                 )
+            sns.boxplot(
+                x=time_col,
+                y='percent_engraftment',
+                data=g_df,
+                boxprops={'facecolor': 'None'},
+                ax=ax,
+                fliersize=0,
+            )
 
             
             title = cell_type.capitalize() \
@@ -1648,6 +1671,14 @@ def swamplot_abundance_cutoff(
             data=filtered_df,
             palette=pal
             )
+        sns.boxplot(
+            x=time_col,
+            y='percent_engraftment',
+            data=filtered_df,
+            boxprops={'facecolor': 'None'},
+            ax=ax,
+            fliersize=0,
+        )
 
         title = cell_type.capitalize() \
             + ' > ' \
@@ -2763,6 +2794,8 @@ def plot_bias_dist_mean_abund_group_vs(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         cutoff: float,
+        mtd: int,
+        timepoint: int,
         y_col: str = 'sum_abundance',
         save: bool = False,
         save_path: str = './output',
@@ -2784,6 +2817,15 @@ def plot_bias_dist_mean_abund_group_vs(
         }
 
         )
+    _, _, _, _, cutoffs, _ = calculate_bias_change_cutoff(
+        get_bias_change(
+            lineage_bias_df,
+            timepoint_col,
+        ),
+        mtd,
+        timepoint=timepoint
+    )
+    bias_change_cutoff = cutoffs[0]
     bias_dist_df = calculate_first_last_bias_change_with_avg_data(
         lineage_bias_df,
         y_col,
@@ -2827,6 +2869,9 @@ def plot_bias_dist_mean_abund_group_vs(
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.18),
             ncol=2)
 
+    min_max_change = [bias_change_cutoff, -1 * bias_change_cutoff]
+    ymin, ymax = plt.ylim()
+    plt.vlines(min_max_change, 0, ymax, linestyles='dashed')
     fname = save_path + os.sep +'bias_change_dist_vs_group_' \
         + y_col \
         + '_' + str(cutoff).replace('.','-') \
@@ -3427,7 +3472,7 @@ def plot_not_survived_abundance(
         )
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Independent T-Test of Exhausted vs. Survived'
+        + '\nPerforming Rank Sum Test of Exhausted vs. Survived'
     )
     for group, g_df in survival_df.groupby('group'):
         print(
@@ -3440,7 +3485,7 @@ def plot_not_survived_abundance(
         for time_change, t_df in g_df.groupby('time_change'):
             t_s = t_df[t_df['survived'] == 'Survived']
             t_e = t_df[t_df['survived'] == 'Exhausted']
-            stat, p_value = stats.ttest_ind(
+            stat, p_value = stats.ranksums(
                 t_e.accum_abundance,
                 t_s.accum_abundance,
             )
@@ -3480,7 +3525,7 @@ def plot_not_survived_abundance(
     for time_change, t_df in survival_df.groupby('time_change'):
         t_s = t_df[t_df['survived'] == 'Survived']
         t_e = t_df[t_df['survived'] == 'Exhausted']
-        stat, p_value = stats.ttest_ind(
+        stat, p_value = stats.ranksums(
             t_e.accum_abundance,
             t_s.accum_abundance,
         )
@@ -4000,6 +4045,20 @@ def plot_bias_dist_by_change(
         save_path: str = './output',
         save_format: str = 'png',
     ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 4,
+            'axes.linewidth': 3,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+
+        )
     bias_change_df = get_bias_change(
         lineage_bias_df,
         timepoint_col
@@ -4024,17 +4083,24 @@ def plot_bias_dist_by_change(
             'Distrubution of Lineage Bias of Clones at '
             + timepoint_col.title() + ' ' + str(time))
         for status, c_df in t_df.groupby('change_status'):
+            if status == 'Unchanged':
+                continue
             sns.distplot(
                 c_df['lineage_bias'],
                 color=COLOR_PALETTES['change_status'][status],
                 label=status,
-                hist=False,
-                rug=True,
-                rug_kws={'alpha': 0.2}
+                bins=20,
+                hist=True,
+                hist_kws={
+                    "histtype": "step",
+                    "linewidth": 2,
+                    "alpha": 1,
+                },
+                rug=False,
+                kde=False,
             )
         plt.xlabel('Lineage Bias Distribution')
-        plt.ylabel('')
-        plt.xlim((-2,2))
+        plt.ylabel('Clone Count')
         plt.legend(title='Lineage Bias Change Type').remove()
         fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
             + '_' + group \
@@ -4043,7 +4109,6 @@ def plot_bias_dist_by_change(
     time='last'
     plt.figure()
     plt.suptitle('Group: ' + y_col_to_title(group))
-    plt.xlim((-2,2))
     plt.title(
         'Distrubution of Lineage Bias of Clones at '
         + timepoint_col.title() + ' ' + str(time))
@@ -4053,16 +4118,24 @@ def plot_bias_dist_by_change(
     )
     t_df = t_df[t_df.mouse_time_desc == 'Last']
     for status, c_df in t_df.groupby('change_status'):
+        if status == 'Unchanged':
+            continue
         sns.distplot(
             c_df['lineage_bias'],
-            color=COLOR_PALETTES['change_status'][status],
             label=status,
-            hist=False,
-            rug=True,
-            rug_kws={'alpha': 0.2}
+            hist=True,
+            bins=20,
+            hist_kws={
+                "histtype": "step",
+                "linewidth": 2,
+                "alpha": .9,
+            },
+            rug=False,
+            kde=False,
+            color=COLOR_PALETTES['change_status'][status],
         )
     plt.xlabel('Lineage Bias Distribution')
-    plt.ylabel('')
+    plt.ylabel('Clone Count')
     plt.legend(title='Lineage Bias Change Type').remove()
     fname = fname_prefix + '_at_' + timepoint_col[0] + str(time) \
         + '_' + group \
@@ -4365,6 +4438,20 @@ def plot_clone_count_swarm(
         save_format: str = 'png'
     ) -> None:
 
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+
+        )
     threshold_df = filter_cell_type_threshold(
         clonal_abundance_df,
         thresholds, 
@@ -4374,6 +4461,39 @@ def plot_clone_count_swarm(
     clone_counts = count_clones(threshold_df, timepoint_col)
 
     for cell_type, c_df in clone_counts.groupby(['cell_type']):
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\nPerforming T-Test vs Groups for ' + cell_type.title()
+        )
+        times = c_df[timepoint_col].unique()
+        for timepoint, t_df in c_df.groupby(timepoint_col):
+            emold = t_df[t_df.group == 'aging_phenotype'].code
+            dmold = t_df[t_df.group == 'no_change'].code
+
+            stat, p_value = stats.ttest_ind(
+                emold,
+                dmold
+            )
+            context: str = timepoint_col.title() + ' ' + str(int(timepoint))
+            print_p_value(context, p_value)
+
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\nPerforming T-Test vs Time Points for ' + cell_type.title()
+        )
+        for (t1, t2) in combinations(times, 2):
+            t1_df = c_df[c_df[timepoint_col] == t1].code
+            t2_df = c_df[c_df[timepoint_col] == t2].code
+
+            stat, p_value = stats.ttest_ind(
+                t1_df,
+                t2_df, 
+            )
+            context: str = timepoint_col.title() + ' ' + str(t1) \
+                + ' vs ' + str(t2)
+            print_p_value(context, p_value)
+
+
         plt.figure(figsize=(6,5))
         if line:
             ax = sns.lineplot(
@@ -4397,15 +4517,18 @@ def plot_clone_count_swarm(
                 x=timepoint_col,
                 y='code',
                 hue='group',
+                hue_order=['aging_phenotype', 'no_change'],
                 size=7,
                 palette=COLOR_PALETTES['group'],
                 dodge=True,
                 data=c_df,
+                zorder=0,
             )
             sns.boxplot(
                 x=timepoint_col,
                 y='code',
                 hue='group',
+                hue_order=['aging_phenotype', 'no_change'],
                 palette=COLOR_PALETTES['group'],
                 showbox=False,
                 whiskerprops={
@@ -4414,6 +4537,7 @@ def plot_clone_count_swarm(
                 showcaps=False,
                 ax=ax,
                 data=c_df,
+                fliersize=0,
             )
             desc = 'swarm'
         plt.title(
