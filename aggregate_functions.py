@@ -10,6 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from intersection.intersection import intersection
+from data_types import timepoint_type
 
 UNIQUE_CODE_COLS = ['code', 'mouse_id']
   
@@ -184,6 +185,23 @@ def filter_lineage_bias_anytime(
     )
     return anytime_thresh_df
 
+def get_clones_at_timepoint(
+        input_df: pd.DataFrame,
+        timepoint_col: str,
+        timepoint: timepoint_type
+    ) -> pd.DataFrame:
+    if timepoint == 'last':
+        filt_df = find_last_clones(
+            input_df,
+            timepoint_col
+        )
+    elif timepoint == 'first':
+        tp = input_df[timepoint_col].min()
+        filt_df = input_df[input_df[timepoint_col] == tp]
+    else:
+        filt_df = input_df[input_df[timepoint_col] == int(timepoint)]
+    return filt_df
+
 def filter_biased_clones_at_timepoint(
         lineage_bias_df: pd.DataFrame,
         bias_cutoff: float,
@@ -226,6 +244,9 @@ def filter_biased_clones_at_timepoint(
                 m_df[m_df[timepoint_col] == tp]
             )
         filt_df = temp_df
+    elif timepoint == 'first':
+        tp = filt_df[timepoint_col].min()
+        filt_df = filt_df[filt_df[timepoint_col] == tp]
     else:
         filt_df = filt_df[filt_df[timepoint_col] == int(timepoint)]
     passing_clones = filt_df[['mouse_id', 'code']]
