@@ -188,7 +188,7 @@ def filter_lineage_bias_anytime(
 def get_clones_at_timepoint(
         input_df: pd.DataFrame,
         timepoint_col: str,
-        timepoint: timepoint_type
+        timepoint: Any
     ) -> pd.DataFrame:
     if timepoint == 'last':
         filt_df = find_last_clones(
@@ -459,6 +459,7 @@ def find_top_percentile_threshold(input_df: pd.DataFrame, percentile: float, cel
 
 
 def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_percent-engraftment_100818_long.csv',
+                                       timepoint_col = 'month',
                                        thresholds: List[float] = [0.0, 0.01, 0.02, 0.2, 0.5],
                                        outdir: str = '/home/sakre/Data/clone_counts_long',
                                        analyzed_cell_types: List[str] = ['gr', 'b'],
@@ -468,7 +469,7 @@ def export_wide_formatted_clone_counts(input_file: pd.DataFrame = 'Ania_M_all_pe
     input_df = pd.read_csv(input_file)
     for threshold in thresholds:
         filter_df = filter_threshold(input_df, threshold, analyzed_cell_types)
-        clone_counts = count_clones(filter_df)
+        clone_counts = count_clones(filter_df, timepoint_col)
         wide_counts = long_to_wide_data(clone_counts, 'code')
         columns = wide_counts.columns.tolist()
         columns.insert(0, columns.pop(columns.index('mouse_id')))

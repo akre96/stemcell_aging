@@ -1271,7 +1271,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
-                by_day=args.by_day,
+                timepoint_col=timepoint_col
             )
 
         if args.plot_rest:
@@ -1544,6 +1544,7 @@ def main():
         group = 'no_change'
         plot_lineage_bias_violin(
             filt_df,
+            timepoint_col,
             group=group,
             save=args.save,
             save_path=save_path,
@@ -1553,6 +1554,7 @@ def main():
         group = 'aging_phenotype'
         plot_lineage_bias_violin(
             filt_df,
+            timepoint_col,
             group=group,
             save=args.save,
             save_path=save_path,
@@ -1656,6 +1658,7 @@ def main():
             _, thresholds = calculate_thresholds_sum_abundance(
                 input_df,
                 abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
                 analyzed_cell_types=['gr','b'],
             )
         if args.cache:
@@ -1943,18 +1946,22 @@ def main():
                                                                  analyzed_cell_types=[cell_type],
         )
         plot_lineage_average(filt_lineage_bias_gr_df,
+                             clonal_abundance_df=present_clones_df,
                              title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['gr'], 2)) + '% WBC abundance in GR at Month ' + str(month),
                              save=args.save,
-                             month=month,
+                             timepoint=month,
+                             timepoint_col=timepoint,
                              save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/gr',
                              save_format='png',
                              percentile=percentile
                             )
         plot_lineage_average(filt_lineage_bias_b_df,
+                             clonal_abundance_df=present_clones_df,
                              title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['b'], 2)) + '% WBC abundance in b at Month ' + str(month),
+                             timepoint=month,
+                             timepoint_col=timepoint,
                              save=args.save,
                              save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
-                             month=month,
                              save_format='png',
                              percentile=percentile
                             )
@@ -2013,6 +2020,7 @@ def main():
 
         filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(
             input_df=input_df,
+            timepoint_col=timepoint_col,
             lineage_bias_df=lineage_bias_df,
             thresholds=dominant_thresholds,
             lineage_bias=True,
@@ -2020,6 +2028,7 @@ def main():
         )
         filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(
             input_df=input_df,
+            timepoint_col=timepoint_col,
             lineage_bias_df=lineage_bias_df,
             thresholds=dominant_thresholds,
             lineage_bias=True,
@@ -2046,6 +2055,7 @@ def main():
     if graph_type == 'lineage_bias_line':
         threshold = 1
         filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df,
+                                                                 timepoint_col=timepoint_col,
                                                                  lineage_bias_df=lineage_bias_df,
                                                                  thresholds={'any': threshold},
                                                                  lineage_bias=True,
