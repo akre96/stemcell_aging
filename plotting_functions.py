@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
-from colour import Color
+from colour import Color, hex2rgb
 from colorama import init, Fore, Back, Style
 from pyvenn import venn
 from aggregate_functions import filter_threshold, count_clones, \
@@ -31,11 +31,12 @@ from aggregate_functions import filter_threshold, count_clones, \
     calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
     add_average_abundance_to_lineage_bias, abundant_clone_survival,\
     not_survived_bias_by_time_change, mark_changed, filter_bias_change_timepoint, \
-    find_enriched_clones_at_time, create_clonal_survival_df, calculate_bias_change_cutoff, \
+    find_enriched_clones_at_time, create_lineage_bias_survival_df, calculate_bias_change_cutoff, \
     find_last_clones, add_bias_category, find_last_clones_in_mouse, \
     filter_lineage_bias_thresholds, filter_lymphoid_exhausted_at_time, \
     calculate_survival_perc, filter_first_last_by_mouse, MAP_LINEAGE_BIAS_CATEGORY_SHORT, \
-    MAP_LINEAGE_BIAS_CATEGORY, get_clones_at_timepoint
+    MAP_LINEAGE_BIAS_CATEGORY, get_clones_at_timepoint, abundance_to_long_by_cell_type, \
+    add_exhaustion_labels
 from data_types import timepoint_type, y_col_type
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
@@ -3452,7 +3453,7 @@ def plot_not_survived_abundance(
         save_path: str = './output',
         save_format: str = 'png',
     ):
-    survival_df = create_clonal_survival_df(
+    survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
         timepoint_col
     )
@@ -3594,7 +3595,7 @@ def plot_not_survived_count_box(
         }
 
         )
-    labeled_df = create_clonal_survival_df(
+    labeled_df = create_lineage_bias_survival_df(
         lineage_bias_df,
         timepoint_col
     )
@@ -3971,7 +3972,7 @@ def plot_perc_survival_bias(
         y_label = 'Percent of Exhausted Clones Within Category'
         fname_prefix += 'perc_survive_bias_'
 
-    survival_df = create_clonal_survival_df(
+    survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
         timepoint_col
     )
@@ -4674,11 +4675,10 @@ def plot_not_survived_abundance_at_time(
         save_path: str = './output',
         save_format: str = 'png',
     ):
-    survival_df = create_clonal_survival_df(
+    survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
         timepoint_col
     )
-    end_at_14m = lineage_bias_df[lineage_bias_df.month == 14]
     print(
         Fore.CYAN + Style.BRIGHT 
         + '\nPerforming Independent T-Test of Exhausted vs. Survived'
@@ -5084,7 +5084,7 @@ def plot_perc_survival_bias_heatmap(
         y_label = 'Percent of Exhausted Clones Within Category'
         fname_prefix += 'perc_survive_bias_heatmap_'
 
-    survival_df = create_clonal_survival_df(
+    survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
         timepoint_col
     )
@@ -5355,4 +5355,209 @@ def plot_dist_bias_at_time_vs_group(
         + timepoint_col + '_' + str(timepoint) \
         + '_' + str(bins) + '-bins' \
         + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def hsc_to_ct_compare(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[str, float],
+        abundance_cutoff: float,
+        invert: bool,
+        cell_type: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 6,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+    clonal_abundance_df = find_last_clones_in_mouse(
+        clonal_abundance_df,
+        timepoint_col,
+    )
+    cell_type_wide_df = abundance_to_long_by_cell_type(clonal_abundance_df, timepoint_col)
+    desc_addon = ''
+
+    # Invert means normalize to hsc abundance
+    if invert:
+        cell_type_wide_df[cell_type+'_percent_engraftment'] = cell_type_wide_df[cell_type+'_percent_engraftment']/cell_type_wide_df['hsc_percent_engraftment'] 
+        desc_addon='_invert'
+
+    fig, ax = plt.subplots(figsize=(7,5))
+    ax.set_xscale('linear')
+    ax.set_yscale('linear')
+
+    # Scatter plot each mouse data
+    for mouse_id, m_df in cell_type_wide_df.groupby('mouse_id'):
+        plt.loglog(
+            m_df['hsc_percent_engraftment'],
+            m_df[cell_type+'_percent_engraftment'],
+            'o',
+            markeredgecolor='white',
+            markeredgewidth=.5,
+            color=COLOR_PALETTES['mouse_id'][mouse_id]
+        )
+    y_min, y_max = plt.ylim()
+    x_min, x_max = plt.xlim()
+
+    # Linear (log/log) regression
+    no_na_df = cell_type_wide_df[['mouse_id', 'code', 'hsc_percent_engraftment', cell_type+'_percent_engraftment']].dropna(axis='index')
+    no_na_zero_df = no_na_df[
+        (no_na_df['hsc_percent_engraftment'] > 0) & \
+        (no_na_df[cell_type+'_percent_engraftment'] > 0)
+    ]
+    slope, intercept, r_value, p_value, std_err = stats.linregress(
+        x=np.log(no_na_zero_df['hsc_percent_engraftment']),
+        y=np.log(no_na_zero_df[cell_type+'_percent_engraftment']),
+    )
+    r_squared = r_value**2
+    print(Fore.CYAN + Style.BRIGHT + 'Log(' + cell_type + ') vs Log(hsc):')
+    print(Fore.CYAN + " r-squared:"  + str(r_squared))
+    print_p_value('', p_value)
+    reg_y = [np.exp(np.log(x) * slope + intercept) for x in no_na_zero_df['hsc_percent_engraftment']]
+    plt.plot(no_na_zero_df['hsc_percent_engraftment'], reg_y, color='#e74c3c')
+
+    # Plot addons: titles, vlines, hlines
+    plt.vlines(thresholds['hsc'], y_min, y_max)
+    plt.hlines(thresholds[cell_type], x_min, x_max)
+    plt.ylabel(cell_type.title() + ' Cell Abundance (%WBC)')
+    plt.xlabel('HSC Abundance')
+
+    plt.title(
+        cell_type.title() + ' vs HSC: '
+    )
+    plt.suptitle(
+        'P-Value: ' + str(p_value)
+        + ' R-Squared: ' + str(round(r_squared, 4))
+    )
+    fname = save_path + os.sep \
+        + 'hsc_abundance_relation_' \
+        + cell_type + '_' \
+        + 'a' + str(abundance_cutoff).replace('.','-') \
+        + desc_addon \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def hsc_blood_prod_over_time(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 5,
+            'axes.linewidth': 3,
+            'axes.labelsize': 10,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 15,
+            'ytick.labelsize': 15,
+            'figure.titlesize': 'small',
+        }
+    )
+    hsc_df = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].rename(columns={'percent_engraftment': 'hsc_percent_engraftment'})
+    not_hsc_df = clonal_abundance_df[clonal_abundance_df.cell_type != 'hsc']
+    with_hsc_data_df = not_hsc_df.merge(
+        hsc_df[['code','mouse_id', 'hsc_percent_engraftment']],
+        on=['code', 'mouse_id'],
+        how='inner',
+        validate='m:1'
+    )
+    with_hsc_data_df = with_hsc_data_df[['mouse_id', 'group', 'code', timepoint_col, 'cell_type', 'hsc_percent_engraftment', 'percent_engraftment']].dropna(axis='index')
+    g = sns.FacetGrid(
+        with_hsc_data_df,
+        col=timepoint_col,
+        row='cell_type',
+        hue='mouse_id',
+        palette=COLOR_PALETTES['mouse_id'],
+    )
+
+    kws={
+        "markeredgecolor":'white',
+        "marker": 'o',
+        'lw': 0,
+    }
+    g.map(
+        plt.loglog,
+        'hsc_percent_engraftment',
+        'percent_engraftment',
+        **kws
+    )
+    fname = save_path + os.sep \
+        + 'hsc_blood_prod_over_time' \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def exhaust_persist_hsc_abund(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        save: bool,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 3,
+            'lines.markeredgecolor': 'white',
+            'axes.linewidth': 3,
+            'axes.labelsize': 25,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 22,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+    )
+    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].rename(columns={'percent_engraftment':'HSC Abundance'})
+    without_hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type.isin(['gr','b'])]
+    exhaustion_df = create_lineage_bias_survival_df(
+        lineage_bias_df,
+        timepoint_col,
+    )
+    exhaust_with_hsc_df = exhaustion_df.merge(
+        hsc_data[['code', 'mouse_id', 'HSC Abundance']],
+        on=['code', 'mouse_id'],
+        how='inner',
+        validate='m:1'
+    )
+
+    plt.figure(figsize=(7,5))
+    plt.yscale('log')
+    ax = sns.violinplot(
+        x='survived',
+        y='HSC Abundance',
+        order=['Exhausted', 'Survived'],
+        data=exhaust_with_hsc_df,
+        color='white',
+        cut=0,
+    )
+    sns.swarmplot(
+        x='survived',
+        y='HSC Abundance',
+        order=['Exhausted', 'Survived'],
+        data=exhaust_with_hsc_df,
+        hue='mouse_id',
+        palette=COLOR_PALETTES['mouse_id'],
+        ax=ax,
+    )
+    plt.legend().remove()
+    fname = save_path + os.sep + 'exhaust_persist_hsc_abund.' + save_format
     save_plot(fname, save, save_format)

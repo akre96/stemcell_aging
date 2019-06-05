@@ -100,6 +100,7 @@ def find_last_clones_in_mouse(
         validate='1:m'
     )
     return last_clones_with_data
+
 def find_last_clones(
         input_df: pd.DataFrame,
         timepoint_col: str,
@@ -819,6 +820,12 @@ def calculate_thresholds_sum_abundance(
     for cell_type in analyzed_cell_types:
         first_day = input_df[timepoint_col].min()
         month_4_cell_df = input_df.loc[(input_df[timepoint_col] == first_day) & (input_df.cell_type == cell_type)]
+        # USE LAST IF HSC DATA
+        if cell_type == 'hsc':
+            month_4_cell_df = find_last_clones_in_mouse(
+                input_df,
+                timepoint_col
+            )
 
         contributions = percentile_sum_engraftment(month_4_cell_df, cell_type)
         percentile, _ = find_intersect(
@@ -1378,7 +1385,7 @@ def add_avg_abundance_until_timepoint(
         output_df = output_df.append(sort_df)
     return output_df
 
-def create_clonal_survival_df(
+def create_lineage_bias_survival_df(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
     ) -> pd.DataFrame:
@@ -1456,7 +1463,7 @@ def calculate_survival_perc(
          survived and exhausted at each timepoint
     
     Arguments:
-        clonal_survival_df {pd.DataFrame} -- output from create_clonal_survival_df()
+        clonal_survival_df {pd.DataFrame} -- output from create_lineage_bias_survival_df()
     
     Returns:
         pd.DataFrame
@@ -1492,7 +1499,7 @@ def filter_lymphoid_exhausted_at_time(
         timepoint_col: str,
         timepoint: int,
     ) -> pd.DataFrame:
-    survival_df = create_clonal_survival_df(
+    survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
         timepoint_col
     )
@@ -1532,27 +1539,27 @@ def filter_first_last_by_mouse(
     return out_df
 
 def exhausted_clones_without_MPPs(
-        lineage_bias_df: pd.DataFrame,
+        input_df: pd.DataFrame,
         timepoint_col: str,
     ):
     if timepoint_col != 'month':
         raise ValueError('Current Method Only Available for Time Course Data')
     
     with_time_labels_df = filter_first_last_by_mouse(
-        lineage_bias_df,
+        input_df,
         timepoint_col,
         include_middle=True,
     )
     exhaustion_df = pd.DataFrame()
     for _, g_df in with_time_labels_df.groupby(['code','mouse_id','group']):
-        if len(g_df)< 2:
+        if g_df[timepoint_col].nunique() < 2:
             continue
 
         # Only append clones with both month 4 and 9
         if not g_df[(g_df[timepoint_col] == 9)].empty:
             if not g_df[(g_df[timepoint_col] == 4)].empty:
                 # If clone has the last timepoint for a mouse,
-                if len(g_df) > 2 and not g_df[g_df.mouse_time_desc.isin(['Last'])].empty:
+                if g_df[timepoint_col].nunique() > 2 and not g_df[g_df.mouse_time_desc.isin(['Last'])].empty:
                     temp_df = g_df.assign(exhausted=False, survived='Survived')
                 else:
                     temp_df = g_df.assign(exhausted=True, survived='Exhausted')
@@ -1564,3 +1571,57 @@ def exhausted_clones_without_MPPs(
     return exhaustion_df
 
 
+def abundance_to_long_by_cell_type(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    cell_types = clonal_abundance_df['cell_type'].unique()
+    cell_type = cell_types[0]
+
+    temp_df = pd.DataFrame()
+    c_df = clonal_abundance_df[clonal_abundance_df.cell_type == cell_type]
+    c_df = c_df.rename(columns={'percent_engraftment': cell_type + '_percent_engraftment'})
+    temp_df = temp_df.append(c_df, ignore_index=True)
+
+    for cell_type in cell_types[1:]:
+        c_df = clonal_abundance_df[clonal_abundance_df.cell_type == cell_type]
+        c_df = c_df.rename(columns={'percent_engraftment': cell_type + '_percent_engraftment'})
+        temp_df = temp_df.merge(
+            c_df[['mouse_id', 'code', timepoint_col, cell_type + '_percent_engraftment']],
+            on=['mouse_id', 'code', timepoint_col],
+            validate='1:1',
+            how='left'
+        )
+
+    return temp_df
+
+
+def add_exhaustion_labels(
+        input_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+
+    if timepoint_col == 'month':
+        input_df = exhausted_clones_without_MPPs(
+            input_df,
+            timepoint_col
+        )
+    with_labels_df = add_time_difference(
+        input_df,
+        timepoint_col
+    )
+
+    with_labels_df = with_labels_df.assign(
+        isLast=lambda x: x.total_time_change == x.time_change
+    )
+    if timepoint_col != 'month':
+        survived = pd.DataFrame()
+        not_survived = with_labels_df[with_labels_df.isLast].assign(
+            survived='Exhausted'
+        )
+        survived = with_labels_df[~with_labels_df.isLast].assign(
+            survived='Survived'
+        )
+        survival_df = survived.append(not_survived)
+        return survival_df
+    return with_labels_df

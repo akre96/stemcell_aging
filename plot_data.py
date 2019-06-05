@@ -62,7 +62,8 @@ from plotting_functions import plot_max_engraftment, \
     plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time, \
     plot_contribution_by_bias_cat, plot_clone_count_bar_first_last, \
     plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap, \
-    plot_hsc_pie_mouse, plot_dist_bias_at_time_vs_group
+    plot_hsc_pie_mouse, plot_dist_bias_at_time_vs_group, hsc_to_ct_compare, \
+    hsc_blood_prod_over_time, exhaust_persist_hsc_abund
      
 
 
@@ -264,6 +265,64 @@ def main():
             save_format='png'
         )
 
+    if graph_type in ['exhaust_persist_hsc_abund']:
+        save_path = args.output_dir + os.sep + 'exhaust_persist_hsc_abund' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+        exhaust_persist_hsc_abund(
+            lineage_bias_df,
+            present_clones_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+    if graph_type in ['hsc_blood_prod_over_time']:
+        save_path = args.output_dir + os.sep + 'hsc_blood_prod_over_time'
+
+        hsc_blood_prod_over_time(
+            present_clones_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
+    if graph_type in ['hsc_to_ct_compare']:
+        save_path = args.output_dir + os.sep + 'hsc_to_ct_compare'
+
+        abundance_cutoff = .01
+        thresholds = {'gr': 0.01, 'b': 0.01, 'hsc': 0.01}
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=['gr', 'b', 'hsc']
+            )
+        hsc_to_ct_compare(
+            present_clones_df,
+            timepoint_col,
+            thresholds,
+            abundance_cutoff=abundance_cutoff,
+            invert=args.invert,
+            cell_type='gr',
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+        hsc_to_ct_compare(
+            present_clones_df,
+            timepoint_col,
+            thresholds,
+            abundance_cutoff=abundance_cutoff,
+            invert=args.invert,
+            cell_type='b',
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['hsc_mouse_pie']:
         save_path = args.output_dir + os.sep + 'hsc_mouse_pie'
         plot_hsc_pie_mouse(
