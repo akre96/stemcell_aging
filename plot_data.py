@@ -308,6 +308,7 @@ def main():
             abundance_cutoff=abundance_cutoff,
             invert=args.invert,
             cell_type='gr',
+            by_mouse=args.by_mouse,
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -318,6 +319,7 @@ def main():
             thresholds,
             abundance_cutoff=abundance_cutoff,
             invert=args.invert,
+            by_mouse=args.by_mouse,
             cell_type='b',
             save=args.save,
             save_path=save_path,

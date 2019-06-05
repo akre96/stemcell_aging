@@ -5363,6 +5363,7 @@ def hsc_to_ct_compare(
         thresholds: Dict[str, float],
         abundance_cutoff: float,
         invert: bool,
+        by_mouse: bool,
         cell_type: str,
         save: bool = False,
         save_path: str = './output',
@@ -5399,7 +5400,26 @@ def hsc_to_ct_compare(
     ax.set_yscale('linear')
 
     # Scatter plot each mouse data
-    for mouse_id, m_df in cell_type_wide_df.groupby('mouse_id'):
+    for [mouse_id, group], m_df in cell_type_wide_df.groupby(['mouse_id', 'group']):
+        if by_mouse:
+            no_na_df = m_df[['mouse_id', 'code', 'hsc_percent_engraftment', cell_type+'_percent_engraftment']].dropna(axis='index')
+            no_na_zero_df = no_na_df[
+                (no_na_df['hsc_percent_engraftment'] > 0) & \
+                (no_na_df[cell_type+'_percent_engraftment'] > 0)
+            ]
+            try:
+                slope, intercept, r_value, p_value, std_err = stats.linregress(
+                    x=np.log(no_na_zero_df['hsc_percent_engraftment']),
+                    y=np.log(no_na_zero_df[cell_type+'_percent_engraftment']),
+                )
+                r_squared = r_value**2
+                print(Fore.CYAN + Style.BRIGHT + mouse_id + ' Log(' + cell_type + ') vs Log(hsc):')
+                print(Fore.CYAN + " r-squared:"  + str(r_squared))
+                print_p_value('', p_value)
+            except ValueError:
+                continue
+            fig, ax = plt.subplots(figsize=(7,5))
+
         plt.loglog(
             m_df['hsc_percent_engraftment'],
             m_df[cell_type+'_percent_engraftment'],
@@ -5408,46 +5428,75 @@ def hsc_to_ct_compare(
             markeredgewidth=.5,
             color=COLOR_PALETTES['mouse_id'][mouse_id]
         )
-    y_min, y_max = plt.ylim()
-    x_min, x_max = plt.xlim()
+        if by_mouse:
+            y_min, y_max = plt.ylim()
+            x_min, x_max = plt.xlim()
+            reg_y = [np.exp(np.log(x) * slope + intercept) for x in no_na_zero_df['hsc_percent_engraftment']]
+            plt.plot(no_na_zero_df['hsc_percent_engraftment'], reg_y, color=COLOR_PALETTES['mouse_id'][mouse_id])
+            # Plot addons: titles, vlines, hlines
+            plt.vlines(thresholds['hsc'], y_min, y_max)
+            plt.hlines(thresholds[cell_type], x_min, x_max)
+            plt.ylabel(cell_type.title() + ' Cell Abundance (%WBC)')
+            plt.xlabel('HSC Abundance')
 
-    # Linear (log/log) regression
-    no_na_df = cell_type_wide_df[['mouse_id', 'code', 'hsc_percent_engraftment', cell_type+'_percent_engraftment']].dropna(axis='index')
-    no_na_zero_df = no_na_df[
-        (no_na_df['hsc_percent_engraftment'] > 0) & \
-        (no_na_df[cell_type+'_percent_engraftment'] > 0)
-    ]
-    slope, intercept, r_value, p_value, std_err = stats.linregress(
-        x=np.log(no_na_zero_df['hsc_percent_engraftment']),
-        y=np.log(no_na_zero_df[cell_type+'_percent_engraftment']),
-    )
-    r_squared = r_value**2
-    print(Fore.CYAN + Style.BRIGHT + 'Log(' + cell_type + ') vs Log(hsc):')
-    print(Fore.CYAN + " r-squared:"  + str(r_squared))
-    print_p_value('', p_value)
-    reg_y = [np.exp(np.log(x) * slope + intercept) for x in no_na_zero_df['hsc_percent_engraftment']]
-    plt.plot(no_na_zero_df['hsc_percent_engraftment'], reg_y, color='#e74c3c')
+            plt.title(
+                cell_type.title() + ' vs HSC: '
+            )
+            plt.suptitle(
+                'P-Value: ' + str(p_value)
+                + ' R-Squared: ' + str(round(r_squared, 4))
+            )
+            fname = save_path + os.sep \
+                + group + '_' \
+                + mouse_id + '_' \
+                + 'hsc_abundance_relation_' \
+                + cell_type + '_' \
+                + 'a' + str(abundance_cutoff).replace('.','-') \
+                + desc_addon \
+                + '.' + save_format
+            save_plot(fname, save, save_format)
 
-    # Plot addons: titles, vlines, hlines
-    plt.vlines(thresholds['hsc'], y_min, y_max)
-    plt.hlines(thresholds[cell_type], x_min, x_max)
-    plt.ylabel(cell_type.title() + ' Cell Abundance (%WBC)')
-    plt.xlabel('HSC Abundance')
+    if not by_mouse:
+        y_min, y_max = plt.ylim()
+        x_min, x_max = plt.xlim()
 
-    plt.title(
-        cell_type.title() + ' vs HSC: '
-    )
-    plt.suptitle(
-        'P-Value: ' + str(p_value)
-        + ' R-Squared: ' + str(round(r_squared, 4))
-    )
-    fname = save_path + os.sep \
-        + 'hsc_abundance_relation_' \
-        + cell_type + '_' \
-        + 'a' + str(abundance_cutoff).replace('.','-') \
-        + desc_addon \
-        + '.' + save_format
-    save_plot(fname, save, save_format)
+        # Linear (log/log) regression
+        no_na_df = cell_type_wide_df[['mouse_id', 'code', 'hsc_percent_engraftment', cell_type+'_percent_engraftment']].dropna(axis='index')
+        no_na_zero_df = no_na_df[
+            (no_na_df['hsc_percent_engraftment'] > 0) & \
+            (no_na_df[cell_type+'_percent_engraftment'] > 0)
+        ]
+        slope, intercept, r_value, p_value, std_err = stats.linregress(
+            x=np.log(no_na_zero_df['hsc_percent_engraftment']),
+            y=np.log(no_na_zero_df[cell_type+'_percent_engraftment']),
+        )
+        r_squared = r_value**2
+        print(Fore.CYAN + Style.BRIGHT + 'Log(' + cell_type + ') vs Log(hsc):')
+        print(Fore.CYAN + " r-squared:"  + str(r_squared))
+        print_p_value('', p_value)
+        reg_y = [np.exp(np.log(x) * slope + intercept) for x in no_na_zero_df['hsc_percent_engraftment']]
+        plt.plot(no_na_zero_df['hsc_percent_engraftment'], reg_y, color='#e74c3c')
+
+        # Plot addons: titles, vlines, hlines
+        plt.vlines(thresholds['hsc'], y_min, y_max)
+        plt.hlines(thresholds[cell_type], x_min, x_max)
+        plt.ylabel(cell_type.title() + ' Cell Abundance (%WBC)')
+        plt.xlabel('HSC Abundance')
+
+        plt.title(
+            cell_type.title() + ' vs HSC: '
+        )
+        plt.suptitle(
+            'P-Value: ' + str(p_value)
+            + ' R-Squared: ' + str(round(r_squared, 4))
+        )
+        fname = save_path + os.sep \
+            + 'hsc_abundance_relation_' \
+            + cell_type + '_' \
+            + 'a' + str(abundance_cutoff).replace('.','-') \
+            + desc_addon \
+            + '.' + save_format
+        save_plot(fname, save, save_format)
 
 def hsc_blood_prod_over_time(
         clonal_abundance_df: pd.DataFrame,
@@ -5538,6 +5587,20 @@ def exhaust_persist_hsc_abund(
         how='inner',
         validate='m:1'
     )
+
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Rank Sum Test of HSC Abundance in Exhausted vs. Survived'
+    )
+
+    t_s = exhaust_with_hsc_df[exhaust_with_hsc_df['survived'] == 'Survived']
+    t_e = exhaust_with_hsc_df[exhaust_with_hsc_df['survived'] == 'Exhausted']
+    stat, p_value = stats.ranksums(
+        t_e['HSC Abundance'],
+        t_s['HSC Abundance'],
+    )
+    context: str = ''
+    print_p_value(context, p_value)
 
     plt.figure(figsize=(7,5))
     plt.yscale('log')
