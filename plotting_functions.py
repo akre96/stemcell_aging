@@ -11,6 +11,10 @@ import json
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+from sklearn.svm import LinearSVC
+from sklearn.cluster import KMeans
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -36,7 +40,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     filter_lineage_bias_thresholds, filter_lymphoid_exhausted_at_time, \
     calculate_survival_perc, filter_first_last_by_mouse, MAP_LINEAGE_BIAS_CATEGORY_SHORT, \
     MAP_LINEAGE_BIAS_CATEGORY, get_clones_at_timepoint, abundance_to_long_by_cell_type, \
-    add_exhaustion_labels
+    add_exhaustion_labels, mark_outliers
 from data_types import timepoint_type, y_col_type
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
@@ -5388,11 +5392,13 @@ def hsc_to_ct_compare(
         timepoint_col,
     )
     cell_type_wide_df = abundance_to_long_by_cell_type(clonal_abundance_df, timepoint_col)
+    x_col = 'hsc_percent_engraftment'
+    y_col = cell_type+'_percent_engraftment'
     desc_addon = ''
 
     # Invert means normalize to hsc abundance
     if invert:
-        cell_type_wide_df[cell_type+'_percent_engraftment'] = cell_type_wide_df[cell_type+'_percent_engraftment']/cell_type_wide_df['hsc_percent_engraftment'] 
+        cell_type_wide_df[y_col] = cell_type_wide_df[y_col]/cell_type_wide_df[x_col] 
         desc_addon='_invert'
 
     fig, ax = plt.subplots(figsize=(7,5))
@@ -5402,15 +5408,15 @@ def hsc_to_ct_compare(
     # Scatter plot each mouse data
     for [mouse_id, group], m_df in cell_type_wide_df.groupby(['mouse_id', 'group']):
         if by_mouse:
-            no_na_df = m_df[['mouse_id', 'code', 'hsc_percent_engraftment', cell_type+'_percent_engraftment']].dropna(axis='index')
+            no_na_df = m_df[['mouse_id', 'code', x_col, y_col]].dropna(axis='index')
             no_na_zero_df = no_na_df[
-                (no_na_df['hsc_percent_engraftment'] > 0) & \
-                (no_na_df[cell_type+'_percent_engraftment'] > 0)
+                (no_na_df[x_col] > 0) & \
+                (no_na_df[y_col] > 0)
             ]
             try:
                 slope, intercept, r_value, p_value, std_err = stats.linregress(
-                    x=np.log(no_na_zero_df['hsc_percent_engraftment']),
-                    y=np.log(no_na_zero_df[cell_type+'_percent_engraftment']),
+                    x=np.log(no_na_zero_df[x_col]),
+                    y=np.log(no_na_zero_df[y_col]),
                 )
                 r_squared = r_value**2
                 print(Fore.CYAN + Style.BRIGHT + mouse_id + ' Log(' + cell_type + ') vs Log(hsc):')
@@ -5421,8 +5427,8 @@ def hsc_to_ct_compare(
             fig, ax = plt.subplots(figsize=(7,5))
 
         plt.loglog(
-            m_df['hsc_percent_engraftment'],
-            m_df[cell_type+'_percent_engraftment'],
+            m_df[x_col],
+            m_df[y_col],
             'o',
             markeredgecolor='white',
             markeredgewidth=.5,
@@ -5432,7 +5438,7 @@ def hsc_to_ct_compare(
             y_min, y_max = plt.ylim()
             x_min, x_max = plt.xlim()
             reg_y = [np.exp(np.log(x) * slope + intercept) for x in no_na_zero_df['hsc_percent_engraftment']]
-            plt.plot(no_na_zero_df['hsc_percent_engraftment'], reg_y, color=COLOR_PALETTES['mouse_id'][mouse_id])
+            plt.plot(no_na_zero_df[x_col], reg_y, color=COLOR_PALETTES['mouse_id'][mouse_id])
             # Plot addons: titles, vlines, hlines
             plt.vlines(thresholds['hsc'], y_min, y_max)
             plt.hlines(thresholds[cell_type], x_min, x_max)
@@ -5461,11 +5467,12 @@ def hsc_to_ct_compare(
         x_min, x_max = plt.xlim()
 
         # Linear (log/log) regression
-        no_na_df = cell_type_wide_df[['mouse_id', 'code', 'hsc_percent_engraftment', cell_type+'_percent_engraftment']].dropna(axis='index')
+        no_na_df = cell_type_wide_df[['mouse_id', 'code', x_col, y_col]].dropna(axis='index')
         no_na_zero_df = no_na_df[
-            (no_na_df['hsc_percent_engraftment'] > 0) & \
-            (no_na_df[cell_type+'_percent_engraftment'] > 0)
+            (no_na_df[x_col] > 0) & \
+            (no_na_df[y_col] > 0)
         ]
+        ## Regression using scipy
         slope, intercept, r_value, p_value, std_err = stats.linregress(
             x=np.log(no_na_zero_df['hsc_percent_engraftment']),
             y=np.log(no_na_zero_df[cell_type+'_percent_engraftment']),
@@ -5475,7 +5482,8 @@ def hsc_to_ct_compare(
         print(Fore.CYAN + " r-squared:"  + str(r_squared))
         print_p_value('', p_value)
         reg_y = [np.exp(np.log(x) * slope + intercept) for x in no_na_zero_df['hsc_percent_engraftment']]
-        plt.plot(no_na_zero_df['hsc_percent_engraftment'], reg_y, color='#e74c3c')
+
+        plt.plot(no_na_zero_df[x_col], reg_y, color='#e74c3c')
 
         # Plot addons: titles, vlines, hlines
         plt.vlines(thresholds['hsc'], y_min, y_max)
@@ -5624,3 +5632,218 @@ def exhaust_persist_hsc_abund(
     plt.legend().remove()
     fname = save_path + os.sep + 'exhaust_persist_hsc_abund.' + save_format
     save_plot(fname, save, save_format)
+
+def hsc_to_ct_compare_outlier(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[str, float],
+        abundance_cutoff: float,
+        invert: bool,
+        by_mouse: bool,
+        cell_type: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 6,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+    clonal_abundance_df = find_last_clones_in_mouse(
+        clonal_abundance_df,
+        timepoint_col,
+    )
+    cell_type_wide_df = abundance_to_long_by_cell_type(clonal_abundance_df, timepoint_col)
+    x_col = 'hsc_percent_engraftment'
+    y_col = cell_type+'_percent_engraftment'
+    desc_addon = ''
+
+    # Invert means normalize to hsc abundance
+    if invert:
+        cell_type_wide_df[y_col] = cell_type_wide_df[y_col]/cell_type_wide_df[x_col] 
+        desc_addon='_invert'
+    
+    clean_data_df = cell_type_wide_df[[
+        'code',
+        'mouse_id',
+        'group',
+        timepoint_col,
+        x_col,
+        y_col,
+    ]].dropna(axis='index')
+
+    # Linear (log/log) regression
+    formula = 'np.log1p('+y_col+') ~ np.log1p('+x_col+')' 
+    model = ols(formula, data=clean_data_df)
+    res = model.fit()
+    params = res.params
+    reg_y = res.predict(clean_data_df[x_col], transform=True)
+    outlier_res = res.outlier_test()
+    print(res.summary())
+    print(outlier_res)
+
+    fig, ax = plt.subplots(figsize=(7,5))
+    ax.set_xscale('linear')
+    ax.set_yscale('linear')
+
+    # Scatter plot each mouse data
+    outlier_marked_df = mark_outliers(clean_data_df, outlier_res)
+    outliers = outlier_marked_df[outlier_marked_df.outlier]
+    not_outliers = outlier_marked_df[~outlier_marked_df.outlier]
+
+
+    plt.loglog(
+        not_outliers[x_col],
+        not_outliers[y_col],
+        'bo',
+        markeredgecolor='white',
+        markeredgewidth=.5,
+    )
+    plt.loglog(
+        outliers[x_col],
+        outliers[y_col],
+        'ro',
+        markeredgecolor='white',
+        markeredgewidth=.5,
+    )
+
+    y_min, y_max = plt.ylim()
+    x_min, x_max = plt.xlim()
+    reg_y = [(np.expm1(np.log1p(x) * params[1]) + params[0]) for x in clean_data_df[x_col]]
+
+
+    plt.loglog(clean_data_df[x_col], reg_y, 'o', color='#e74c3c')
+
+    # Plot addons: titles, vlines, hlines
+    plt.vlines(thresholds['hsc'], y_min, y_max)
+    plt.hlines(thresholds[cell_type], x_min, x_max)
+    plt.ylabel(cell_type.title() + ' Cell Abundance (%WBC)')
+    plt.xlabel('HSC Abundance')
+
+    plt.title(
+        formula
+    )
+    fname = save_path + os.sep \
+        + 'hsc_abundance_relation_outliers' \
+        + cell_type + '_' \
+        + 'a' + str(abundance_cutoff).replace('.','-') \
+        + desc_addon \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+
+def hsc_to_ct_compare_svm(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[str, float],
+        abundance_cutoff: float,
+        invert: bool,
+        by_mouse: bool,
+        cell_type: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 6,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+    clonal_abundance_df = find_last_clones_in_mouse(
+        clonal_abundance_df,
+        timepoint_col,
+    )
+    cell_type_wide_df = abundance_to_long_by_cell_type(clonal_abundance_df, timepoint_col)
+    x_col = 'hsc_percent_engraftment'
+    y_col = cell_type+'_percent_engraftment'
+    desc_addon = ''
+
+    # Invert means normalize to hsc abundance
+    if invert:
+        cell_type_wide_df[y_col] = cell_type_wide_df[y_col]/cell_type_wide_df[x_col] 
+        desc_addon='_invert'
+    
+    clean_data_df = cell_type_wide_df[[
+        'code',
+        'mouse_id',
+        'group',
+        timepoint_col,
+        x_col,
+        y_col,
+    ]].dropna(axis='index')
+
+    # KMeans Cluster
+    kmeans = KMeans(n_clusters=2, random_state=0).fit(
+        np.log1p(clean_data_df[[x_col, y_col]])
+    )
+    clean_data_df['label'] = kmeans.labels_
+
+    # Support Vector Machine Boundary Finder
+    clf = LinearSVC(random_state=0)
+    clf.fit(
+        np.log1p(clean_data_df[[x_col, y_col]]),
+        clean_data_df['label']
+    )
+    print(clf.coef_, clf.intercept_)
+    fig, ax = plt.subplots(figsize=(7,5))
+    ax.set_xscale('linear')
+    ax.set_yscale('linear')
+
+
+    for _, l_df in clean_data_df.groupby('label'):
+        plt.loglog(
+            l_df[x_col],
+            l_df[y_col],
+            'o',
+            markeredgecolor='white',
+            markeredgewidth=.5,
+        )
+
+
+    y_min, y_max = plt.ylim()
+    x_min, x_max = plt.xlim()
+
+    x_vals = np.geomspace(x_min/10, x_max/50, 100000)
+    reg_y = [(np.expm1(np.log1p(x) * clf.coef_[0][0]) + clf.intercept_[0]) for x in x_vals]
+
+    plt.loglog(
+        x_vals,
+        reg_y,
+        'x',
+        color='#e74c3c',
+        markersize=2
+    )
+
+    # Plot addons: titles, vlines, hlines
+    plt.vlines(thresholds['hsc'], y_min, y_max)
+    plt.hlines(thresholds[cell_type], x_min, x_max)
+    plt.ylabel(cell_type.title() + ' Cell Abundance (%WBC)')
+    plt.xlabel('HSC Abundance')
+    plt.title(cell_type.title())
+    fname = save_path + os.sep \
+        + 'hsc_abundance_relation_svm' \
+        + cell_type + '_' \
+        + 'a' + str(abundance_cutoff).replace('.','-') \
+        + desc_addon \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+

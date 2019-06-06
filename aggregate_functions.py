@@ -1625,3 +1625,10 @@ def add_exhaustion_labels(
         survival_df = survived.append(not_survived)
         return survival_df
     return with_labels_df
+
+def mark_outliers(input_df: pd.DataFrame, outlier_df: pd.DataFrame):
+    outlier_mask = outlier_df['unadj_p'] < 0.05
+    temp_df = input_df[outlier_mask].assign(outlier=True)
+    temp_df = temp_df.append(input_df[~outlier_mask].assign(outlier=False), ignore_index=True)
+    print(temp_df.columns)
+    return temp_df

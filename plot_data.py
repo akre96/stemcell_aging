@@ -63,7 +63,9 @@ from plotting_functions import plot_max_engraftment, \
     plot_contribution_by_bias_cat, plot_clone_count_bar_first_last, \
     plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap, \
     plot_hsc_pie_mouse, plot_dist_bias_at_time_vs_group, hsc_to_ct_compare, \
-    hsc_blood_prod_over_time, exhaust_persist_hsc_abund
+    hsc_blood_prod_over_time, exhaust_persist_hsc_abund, hsc_to_ct_compare_outlier, \
+    hsc_to_ct_compare_svm
+
      
 
 
@@ -248,6 +250,33 @@ def main():
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
+    if graph_type in ['hsc_to_ct_compare_svm']:
+        save_path = args.output_dir + os.sep + 'hsc_to_ct_compare'
+
+        abundance_cutoff = .01
+        thresholds = {'gr': 0.01, 'b': 0.01, 'hsc': 0.01}
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=['gr', 'b', 'hsc']
+            )
+        for cell_type in ['gr', 'b']:
+            hsc_to_ct_compare_svm(
+                present_clones_df,
+                timepoint_col,
+                thresholds,
+                abundance_cutoff=abundance_cutoff,
+                invert=args.invert,
+                cell_type=cell_type,
+                by_mouse=args.by_mouse,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
     if graph_type in ['dist_bias_time_vs_group']:
         save_path = args.output_dir + os.sep + 'dist_bias_time_vs_group'
         bins = 20
@@ -286,6 +315,34 @@ def main():
             save_path=save_path,
             save_format='png'
         )
+
+    if graph_type in ['hsc_to_ct_compare_outlier']:
+        save_path = args.output_dir + os.sep + 'hsc_to_ct_compare'
+
+        abundance_cutoff = .01
+        thresholds = {'gr': 0.01, 'b': 0.01, 'hsc': 0.01}
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=['gr', 'b', 'hsc']
+            )
+        for cell_type in ['gr', 'b']:
+            hsc_to_ct_compare_outlier(
+                present_clones_df,
+                timepoint_col,
+                thresholds,
+                abundance_cutoff=abundance_cutoff,
+                invert=args.invert,
+                cell_type=cell_type,
+                by_mouse=args.by_mouse,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
 
     if graph_type in ['hsc_to_ct_compare']:
         save_path = args.output_dir + os.sep + 'hsc_to_ct_compare'
