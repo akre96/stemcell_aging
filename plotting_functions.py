@@ -5251,12 +5251,17 @@ def plot_dist_bias_at_time_vs_group(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         timepoint: timepoint_type,
+        cell_type: str,
         bins: int,
         change_type: str = None,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    y_col = cell_type + '_percent_engraftment'
+    if cell_type == 'sum':
+        y_col = 'sum_abundance'
+        lineage_bias_df[y_col] = lineage_bias_df['b_percent_engraftment'] + lineage_bias_df['gr_percent_engraftment']
     sns.set_context(
         'paper',
         rc={
@@ -5277,30 +5282,31 @@ def plot_dist_bias_at_time_vs_group(
     dodged_center_points = center_points + dodge_amount
 
     desc_addon = ''
-    if change_type.lower() == 'changed':
-        desc_addon = 'changed_clones_'
-        bias_change_df = get_bias_change(
-            lineage_bias_df,
-            timepoint_col,
-        )
-        lineage_bias_df = mark_changed(
-            lineage_bias_df,
-            bias_change_df,
-            min_time_difference=1,
-        )
-        lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] != 'Unchanged']
-    elif change_type.lower() == 'unchanged':
-        desc_addon = 'unchanged_clones_'
-        bias_change_df = get_bias_change(
-            lineage_bias_df,
-            timepoint_col,
-        )
-        lineage_bias_df = mark_changed(
-            lineage_bias_df,
-            bias_change_df,
-            min_time_difference=1,
-        )
-        lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] == 'Unchanged']
+    if change_type is not None:
+        if change_type.lower() == 'changed':
+            desc_addon = 'changed_clones_'
+            bias_change_df = get_bias_change(
+                lineage_bias_df,
+                timepoint_col,
+            )
+            lineage_bias_df = mark_changed(
+                lineage_bias_df,
+                bias_change_df,
+                min_time_difference=1,
+            )
+            lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] != 'Unchanged']
+        elif change_type.lower() == 'unchanged':
+            desc_addon = 'unchanged_clones_'
+            bias_change_df = get_bias_change(
+                lineage_bias_df,
+                timepoint_col,
+            )
+            lineage_bias_df = mark_changed(
+                lineage_bias_df,
+                bias_change_df,
+                min_time_difference=1,
+            )
+            lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] == 'Unchanged']
 
     if timepoint_col == 'gen':
         lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
@@ -5314,7 +5320,7 @@ def plot_dist_bias_at_time_vs_group(
 
     hist_df = pd.DataFrame()
     for (mouse_id, group), m_df in lineage_bias_at_time_df.groupby(['mouse_id', 'group']):
-        m_hist, t_bins = np.histogram(m_df.lineage_bias, bins=bin_edges)
+        m_hist, t_bins = np.histogram(m_df.lineage_bias, bins=bin_edges, weights=m_df[y_col])
 
         if not np.array_equal(t_bins, bin_edges):
             raise ValueError('Bins from numpy histogram, and input not same')
@@ -5347,7 +5353,7 @@ def plot_dist_bias_at_time_vs_group(
         err_style='bars',
         palette=COLOR_PALETTES['group']
     )
-    plt.ylabel('Clone Count')
+    plt.ylabel(cell_type.title() + ' Abundance (%WBC)')
     plt.xlabel('Lineage Bias')
     plt.suptitle(desc_addon.replace('_', ' ').title())
     plt.title('Lineage Bias at ' + str(timepoint).title() + ' ' + timepoint_col.title())
@@ -5358,6 +5364,7 @@ def plot_dist_bias_at_time_vs_group(
         + desc_addon \
         + timepoint_col + '_' + str(timepoint) \
         + '_' + str(bins) + '-bins' \
+        + '_' + cell_type \
         + '.' + save_format
     save_plot(fname, save, save_format)
 
@@ -5847,3 +5854,78 @@ def hsc_to_ct_compare_svm(
         + '.' + save_format
     save_plot(fname, save, save_format)
 
+
+def heatmap_correlation_hsc_ct(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        by_mouse: bool,
+        group: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ):
+    if group != 'all':
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.group == group]
+
+    hsc_df = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].rename(columns={'percent_engraftment': 'hsc_percent_engraftment'})
+    not_hsc_df = clonal_abundance_df[clonal_abundance_df.cell_type != 'hsc']
+    with_hsc_data_df = not_hsc_df.merge(
+        hsc_df[['code','mouse_id', 'hsc_percent_engraftment']],
+        on=['code', 'mouse_id'],
+        how='inner',
+        validate='m:1'
+    )
+    with_hsc_data_df = with_hsc_data_df[['mouse_id', 'group', 'code', timepoint_col, 'cell_type', 'hsc_percent_engraftment', 'percent_engraftment']].dropna(axis='index')
+    pearson_df = pd.DataFrame()
+    for (cell_type, mouse_id, timepoint), t_df in with_hsc_data_df.groupby(['cell_type', 'mouse_id', timepoint_col]):
+        pearson_r, p_value = stats.pearsonr(
+            t_df['percent_engraftment'],
+            t_df['hsc_percent_engraftment']
+        )
+        p_data = {
+            'mouse_id': [mouse_id],
+            'cell_type': [cell_type],
+            timepoint_col: [timepoint],
+            'pearson_r': [pearson_r],
+            'p_value': [p_value],
+        }
+        pearson_df = pearson_df.append(pd.DataFrame.from_dict(p_data))
+
+    desc_addon = 'avg'
+    if by_mouse:
+        desc_addon = 'by-mouse'
+        fig, axes = plt.subplots(figsize=(7, 7), nrows=2, ncols=1)
+        i = 0
+        for cell_type, data in pearson_df.groupby('cell_type'):
+            if data[timepoint_col].nunique() <= 2:
+                continue
+            pivotted = data.pivot_table(
+                values='pearson_r',
+                index='mouse_id',
+                columns=timepoint_col,
+            )
+            sns.heatmap(
+                pivotted,
+                ax=axes[i]
+            )
+            axes[i].set_ylabel(cell_type.title())
+            i += 1
+        
+    else:
+        pivotted = pearson_df.pivot_table(
+            values='pearson_r',
+            index='cell_type',
+            columns=timepoint_col,
+            aggfunc=np.mean,
+        )
+        sns.heatmap(
+            pivotted,
+        )
+    
+    fname = save_path + os.sep \
+        + 'hsc_blood_over_time_heatmap_' \
+        + group + '_' \
+        + desc_addon \
+        + '.' + save_format
+
+    save_plot(fname, save, save_format)

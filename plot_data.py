@@ -64,7 +64,7 @@ from plotting_functions import plot_max_engraftment, \
     plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap, \
     plot_hsc_pie_mouse, plot_dist_bias_at_time_vs_group, hsc_to_ct_compare, \
     hsc_blood_prod_over_time, exhaust_persist_hsc_abund, hsc_to_ct_compare_outlier, \
-    hsc_to_ct_compare_svm
+    hsc_to_ct_compare_svm, heatmap_correlation_hsc_ct
 
      
 
@@ -283,16 +283,18 @@ def main():
         if options != 'default':
             bins = int(options)
 
-        plot_dist_bias_at_time_vs_group(
-            lineage_bias_df,
-            timepoint_col,
-            bins=bins,
-            change_type=args.change_type,
-            timepoint=args.timepoint,
-            save=args.save,
-            save_path=save_path,
-            save_format='png'
-        )
+        for cell_type in ['gr', 'b', 'sum']:
+            plot_dist_bias_at_time_vs_group(
+                lineage_bias_df,
+                timepoint_col,
+                bins=bins,
+                cell_type=cell_type,
+                change_type=args.change_type,
+                timepoint=args.timepoint,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
 
     if graph_type in ['exhaust_persist_hsc_abund']:
         save_path = args.output_dir + os.sep + 'exhaust_persist_hsc_abund' \
@@ -305,6 +307,18 @@ def main():
             save_path=save_path,
             save_format='png'
         )
+    if graph_type in ['hsc_blood_heatmap_over_time']:
+        save_path = args.output_dir + os.sep + 'hsc_blood_prod_over_time'
+        heatmap_correlation_hsc_ct(
+            present_clones_df,
+            timepoint_col,
+            by_mouse=args.by_mouse,
+            group=args.group,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
     if graph_type in ['hsc_blood_prod_over_time']:
         save_path = args.output_dir + os.sep + 'hsc_blood_prod_over_time'
 
