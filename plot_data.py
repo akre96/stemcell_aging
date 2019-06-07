@@ -32,39 +32,7 @@ from aggregate_functions import filter_threshold, \
     calculate_thresholds_sum_abundance, filter_lineage_bias_threshold, \
     across_gen_bias_change, day_to_month, \
     day_to_gen, calculate_bias_change
-from plotting_functions import plot_max_engraftment, \
-    plot_clone_count_by_thresholds, venn_barcode_in_time, \
-    plot_clone_enriched_at_time, plot_counts_at_percentile, \
-    plot_lineage_bias_abundance_3d, plot_lineage_bias_line, \
-    clustermap_clone_abundance, plot_bias_change_hist, \
-    plot_max_engraftment_by_group, plot_bias_change_cutoff, \
-    plot_max_engraftment_by_mouse, plot_lineage_bias_violin, \
-    plot_lineage_average, plot_contributions, plot_weighted_bias_hist, \
-    plot_change_contributions, plot_change_contributions_by_group, \
-    plot_counts_at_abundance, plot_average_abundance, \
-    swamplot_abundance_cutoff, plot_bias_change_between_gen, \
-    plot_bias_change_across_gens, plot_bias_change_time_kdes, \
-    plot_abundance_change, plot_bias_change_rest, \
-    plot_rest_vs_tracked, plot_extreme_bias_abundance, \
-    plot_extreme_bias_time, plot_bias_dist_at_time, \
-    plot_stable_clones, plot_bias_dist_mean_abund, \
-    plot_abund_swarm_box, plot_bias_dist_mean_abund_group_vs, \
-    plot_bias_change_mean_scatter, plot_dist_bias_over_time, \
-    plot_dist_bias_at_time, plot_bias_first_last, \
-    plot_abundant_clone_survival, plot_not_survived_by_bias, \
-    plot_not_survived_count_mouse, plot_not_survived_abundance, \
-    plot_not_survived_count_box, plot_hsc_abund_bias_at_last, \
-    plot_change_marked, plot_stable_abund_time_clones, \
-    plot_perc_survival_bias, plot_bias_dist_by_change, \
-    plot_abundance_by_change, plot_bias_dist_contribution_over_time, \
-    plot_n_most_abundant, plot_clone_count_swarm, \
-    plot_swarm_violin_first_last_bias, \
-    plot_not_survived_abundance_at_time, plot_exhausted_lymphoid_at_time, \
-    plot_contribution_by_bias_cat, plot_clone_count_bar_first_last, \
-    plot_clone_count_swarm_vs_cell_type, plot_perc_survival_bias_heatmap, \
-    plot_hsc_pie_mouse, plot_dist_bias_at_time_vs_group, hsc_to_ct_compare, \
-    hsc_blood_prod_over_time, exhaust_persist_hsc_abund, hsc_to_ct_compare_outlier, \
-    hsc_to_ct_compare_svm, heatmap_correlation_hsc_ct
+from plotting_functions import *
 
      
 
@@ -250,11 +218,27 @@ def main():
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
+    if graph_type in ['exhausted_clone_hsc_abund']:
+        save_path = args.output_dir + os.sep + 'exhausted_clone_hsc_abund'
+        exhausted_clone_hsc_abund(
+            lineage_bias_df,
+            present_clones_df,
+            timepoint_col,
+            group=args.group,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['hsc_to_ct_compare_svm']:
         save_path = args.output_dir + os.sep + 'hsc_to_ct_compare'
 
         abundance_cutoff = .01
         thresholds = {'gr': 0.01, 'b': 0.01, 'hsc': 0.01}
+
+        if options != 'default':
+            n_clusters = int(options)
+        else:
+            n_clusters = 2
 
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
@@ -271,6 +255,7 @@ def main():
                 thresholds,
                 abundance_cutoff=abundance_cutoff,
                 invert=args.invert,
+                n_clusters=n_clusters,
                 cell_type=cell_type,
                 by_mouse=args.by_mouse,
                 save=args.save,
@@ -314,6 +299,7 @@ def main():
             timepoint_col,
             by_mouse=args.by_mouse,
             group=args.group,
+            by_group=args.by_group,
             save=args.save,
             save_path=save_path,
             save_format='png'

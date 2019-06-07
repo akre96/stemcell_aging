@@ -5324,6 +5324,8 @@ def plot_dist_bias_at_time_vs_group(
 
         if not np.array_equal(t_bins, bin_edges):
             raise ValueError('Bins from numpy histogram, and input not same')
+
+        # Slight x-axis shift to no_change group allowign for visibility of lines/error bars
         if group == 'no_change':
             m_row = pd.DataFrame.from_dict(
                 {
@@ -5757,6 +5759,7 @@ def hsc_to_ct_compare_svm(
         invert: bool,
         by_mouse: bool,
         cell_type: str,
+        n_clusters: int = 2,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -5799,7 +5802,7 @@ def hsc_to_ct_compare_svm(
     ]].dropna(axis='index')
 
     # KMeans Cluster
-    kmeans = KMeans(n_clusters=2, random_state=0).fit(
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(
         np.log1p(clean_data_df[[x_col, y_col]])
     )
     clean_data_df['label'] = kmeans.labels_
@@ -5829,16 +5832,17 @@ def hsc_to_ct_compare_svm(
     y_min, y_max = plt.ylim()
     x_min, x_max = plt.xlim()
 
-    x_vals = np.geomspace(x_min/10, x_max/50, 100000)
-    reg_y = [(np.expm1(np.log1p(x) * clf.coef_[0][0]) + clf.intercept_[0]) for x in x_vals]
+    if n_clusters == 2:
+        x_vals = np.geomspace(x_min/10, x_max/50, 100000)
+        reg_y = [(np.expm1(np.log1p(x) * clf.coef_[0][0]) + clf.intercept_[0]) for x in x_vals]
 
-    plt.loglog(
-        x_vals,
-        reg_y,
-        'x',
-        color='#e74c3c',
-        markersize=2
-    )
+        plt.loglog(
+            x_vals,
+            reg_y,
+            'x',
+            color='#e74c3c',
+            markersize=2
+        )
 
     # Plot addons: titles, vlines, hlines
     plt.vlines(thresholds['hsc'], y_min, y_max)
@@ -5850,6 +5854,7 @@ def hsc_to_ct_compare_svm(
         + 'hsc_abundance_relation_svm' \
         + cell_type + '_' \
         + 'a' + str(abundance_cutoff).replace('.','-') \
+        + '_' + str(n_clusters) + 'clusters' \
         + desc_addon \
         + '.' + save_format
     save_plot(fname, save, save_format)
@@ -5860,6 +5865,7 @@ def heatmap_correlation_hsc_ct(
         timepoint_col: str,
         by_mouse: bool,
         group: str,
+        by_group: bool,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -5877,7 +5883,7 @@ def heatmap_correlation_hsc_ct(
     )
     with_hsc_data_df = with_hsc_data_df[['mouse_id', 'group', 'code', timepoint_col, 'cell_type', 'hsc_percent_engraftment', 'percent_engraftment']].dropna(axis='index')
     pearson_df = pd.DataFrame()
-    for (cell_type, mouse_id, timepoint), t_df in with_hsc_data_df.groupby(['cell_type', 'mouse_id', timepoint_col]):
+    for (cell_type, mouse_id, g, timepoint), t_df in with_hsc_data_df.groupby(['cell_type', 'mouse_id', 'group', timepoint_col]):
         pearson_r, p_value = stats.pearsonr(
             t_df['percent_engraftment'],
             t_df['hsc_percent_engraftment']
@@ -5888,12 +5894,18 @@ def heatmap_correlation_hsc_ct(
             timepoint_col: [timepoint],
             'pearson_r': [pearson_r],
             'p_value': [p_value],
+            'group': [g]
         }
         pearson_df = pearson_df.append(pd.DataFrame.from_dict(p_data))
 
     desc_addon = 'avg'
     if by_mouse:
         desc_addon = 'by-mouse'
+        index_col = 'mouse_id'
+    elif by_group:
+        desc_addon = 'by-group'
+        index_col = 'group'
+    if by_mouse or by_group:
         fig, axes = plt.subplots(figsize=(7, 7), nrows=2, ncols=1)
         i = 0
         for cell_type, data in pearson_df.groupby('cell_type'):
@@ -5901,8 +5913,9 @@ def heatmap_correlation_hsc_ct(
                 continue
             pivotted = data.pivot_table(
                 values='pearson_r',
-                index='mouse_id',
+                index=index_col,
                 columns=timepoint_col,
+                aggfunc=np.mean,
             )
             sns.heatmap(
                 pivotted,
@@ -5910,6 +5923,7 @@ def heatmap_correlation_hsc_ct(
             )
             axes[i].set_ylabel(cell_type.title())
             i += 1
+
         
     else:
         pivotted = pearson_df.pivot_table(
@@ -5928,4 +5942,122 @@ def heatmap_correlation_hsc_ct(
         + desc_addon \
         + '.' + save_format
 
+    save_plot(fname, save, save_format)
+
+def exhausted_clone_hsc_abund(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        group: str,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    if group != 'all':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
+
+    survival_df = create_lineage_bias_survival_df(
+        lineage_bias_df,
+        timepoint_col
+    )
+    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']\
+        .rename(columns={'percent_engraftment': 'hsc_percent_engraftment'})
+    total_hsc_per_mouse = pd.DataFrame(
+        hsc_data.groupby(['mouse_id']).hsc_percent_engraftment.sum()
+    ).reset_index().rename(
+        columns={'hsc_percent_engraftment': 'hsc_total_abundance'}
+    )
+    hsc_data = hsc_data.merge(
+        total_hsc_per_mouse,
+        validate='m:1'
+    )
+    hsc_data = hsc_data.assign(
+        perc_tracked_hsc=lambda x: 100 * x.hsc_percent_engraftment/x.hsc_total_abundance
+    )
+
+
+    
+    survival_with_hsc_df = survival_df.merge(
+        hsc_data[['mouse_id', 'code', 'perc_tracked_hsc']],
+        on=['mouse_id', 'code'],
+        how='inner',
+        validate='m:1'
+    )
+    survival_sum_per_mouse = pd.DataFrame(
+        survival_with_hsc_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])['perc_tracked_hsc'].sum()
+    ).reset_index()
+
+    sns.set_context(
+        'paper',
+        font_scale=2.0,
+        rc={
+            'lines.linewidth': 1.5,
+            'axes.linewidth': 4,
+            'axes.labelsize': 25,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 28,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+
+        )
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Rank Sum Test of Exhausted vs. Survived'
+    )
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\n  - Group: ' + group.replace('_', ' ').title()
+    )
+    fig, ax = plt.subplots(figsize=(9,6))
+    # T-Test on interesting result
+
+    for time_change, t_df in survival_with_hsc_df.groupby('time_change'):
+        t_s = t_df[t_df['survived'] == 'Survived']
+        t_e = t_df[t_df['survived'] == 'Exhausted']
+        stat, p_value = stats.ranksums(
+            t_e.perc_tracked_hsc,
+            t_s.perc_tracked_hsc,
+        )
+        context: str = timepoint_col.title() + ' ' + str(int(time_change))
+        print_p_value(context, p_value)
+        
+
+    ax = sns.boxplot(
+        x=timepoint_col,
+        y='perc_tracked_hsc',
+        hue='survived',
+        data=survival_sum_per_mouse,
+        hue_order=['Exhausted', 'Survived'],
+        showbox=True,
+        whiskerprops={
+            "alpha": 1
+        },
+        color='white',
+        showcaps=False,
+        fliersize=0,
+    )
+    sns.swarmplot(
+        x=timepoint_col,
+        y='perc_tracked_hsc',
+        hue='survived',
+        hue_order=['Exhausted', 'Survived'],
+        data=survival_sum_per_mouse,
+        dodge=True,
+        size=8,
+    )
+    plt.xlabel(
+        'End Point (' + timepoint_col.title() + ')'
+    )
+    plt.legend().remove()
+    plt.ylabel('% Clonal Abundance In Final HSC Pool')
+    plt.suptitle(
+        'Exhausted Clone Abundance'
+    )
+    plt.title('Group: ' + group.replace('_', ' ').title())
+    fname = save_path + os.sep \
+        + 'exhausted_clone_hsc_abund' \
+        + '_' + group \
+        + '.' + save_format
     save_plot(fname, save, save_format)
