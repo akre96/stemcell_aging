@@ -316,33 +316,6 @@ def main():
             save_format='png'
         )
 
-    if graph_type in ['hsc_to_ct_compare_pyod']:
-        save_path = args.output_dir + os.sep + 'hsc_to_ct_compare'
-
-        abundance_cutoff = .01
-        thresholds = {'gr': 0.01, 'b': 0.01, 'hsc': 0.01}
-
-        if args.abundance_cutoff:
-            abundance_cutoff = args.abundance_cutoff
-            _, thresholds = calculate_thresholds_sum_abundance(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                timepoint_col=timepoint_col,
-                analyzed_cell_types=['gr', 'b', 'hsc']
-            )
-        for cell_type in ['gr', 'b']:
-            hsc_to_ct_compare_pyod(
-                present_clones_df,
-                timepoint_col,
-                thresholds,
-                abundance_cutoff=abundance_cutoff,
-                invert=args.invert,
-                cell_type=cell_type,
-                by_mouse=args.by_mouse,
-                save=args.save,
-                save_path=save_path,
-                save_format='png'
-            )
     if graph_type in ['hsc_to_ct_compare_outlier']:
         save_path = args.output_dir + os.sep + 'hsc_to_ct_compare'
 

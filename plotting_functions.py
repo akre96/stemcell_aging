@@ -20,14 +20,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
-from pyod.models.abod import ABOD
-from pyod.models.knn import KNN
-from pyod.models.loci import LOCI 
-from pyod.models.cblof import CBLOF
-from pyod.models.hbos import HBOS
-from pyod.models.iforest import IForest
-from pyod.models.lof import LOF
-from pyod.models.mcd import MCD
 from colour import Color, hex2rgb
 from colorama import init, Fore, Back, Style
 from pyvenn import venn
@@ -6070,89 +6062,4 @@ def exhausted_clone_hsc_abund(
         + '.' + save_format
     save_plot(fname, save, save_format)
 
-def hsc_to_ct_compare_pyod(
-        clonal_abundance_df: pd.DataFrame,
-        timepoint_col: str,
-        thresholds: Dict[str, float],
-        abundance_cutoff: float,
-        invert: bool,
-        by_mouse: bool,
-        cell_type: str,
-        save: bool = False,
-        save_path: str = './output',
-        save_format: str = 'png'
-    ):
-    sns.set_context(
-        'paper',
-        rc={
-            'lines.linewidth': 3,
-            'lines.markersize': 6,
-            'axes.linewidth': 4,
-            'axes.labelsize': 24,
-            'xtick.major.width': 5,
-            'ytick.major.width': 5,
-            'xtick.labelsize': 24,
-            'ytick.labelsize': 24,
-            'figure.titlesize': 'small',
-        }
-    )
-    clonal_abundance_df = find_last_clones_in_mouse(
-        clonal_abundance_df,
-        timepoint_col,
-    )
-    cell_type_wide_df = abundance_to_long_by_cell_type(clonal_abundance_df, timepoint_col)
-    x_col = 'hsc_percent_engraftment'
-    y_col = cell_type+'_percent_engraftment'
-    desc_addon = ''
-
-    fig, ax = plt.subplots(figsize=(7,5))
-
-    # Invert means normalize to hsc abundance
-    if invert:
-        cell_type_wide_df[y_col] = cell_type_wide_df[y_col]/cell_type_wide_df[x_col] 
-        desc_addon='_invert'
-    
-    clean_data_df = cell_type_wide_df[[
-        'code',
-        'mouse_id',
-        'group',
-        timepoint_col,
-        x_col,
-        y_col,
-    ]].dropna(axis='index')
-
-    clf = CBLOF(n_clusters=200, contamination=0.05)
-    #clf.fit(np.log1p(clean_data_df[[x_col, y_col]]))
-    clf.fit(clean_data_df[[x_col, y_col]])
-    clean_data_df['label'] =  clf.labels_
-
-    for _, l_df in clean_data_df.groupby('label'):
-        plt.loglog(
-            l_df[x_col],
-            l_df[y_col],
-            'o',
-            markeredgecolor='white',
-            markeredgewidth=.5,
-        )
-
-
-
-
-    y_min, y_max = plt.ylim()
-    x_min, x_max = plt.xlim()
-
-
-    # Plot addons: titles, vlines, hlines
-    plt.vlines(thresholds['hsc'], y_min, y_max)
-    plt.hlines(thresholds[cell_type], x_min, x_max)
-    plt.ylabel(cell_type.title() + ' Cell Abundance (%WBC)')
-    plt.xlabel('HSC Abundance')
-    plt.title(cell_type.title())
-    fname = save_path + os.sep \
-        + 'hsc_abundance_relation_pyod' \
-        + cell_type + '_' \
-        + 'a' + str(abundance_cutoff).replace('.','-') \
-        + desc_addon \
-        + '.' + save_format
-    save_plot(fname, save, save_format)
 
