@@ -1106,6 +1106,16 @@ def plot_change_contributions(
     Returns:
         None -- plt.show() to view plot
     """
+    sns.set(
+        style="whitegrid",
+        font_scale=2.0,
+        rc={
+            'xtick.labelsize': 22,
+            'ytick.labelsize': 22,
+            'axes.titlesize': 'xx-small',
+            'figure.titlesize' : 'x-small'
+        }
+    )
 
 
     if timepoint_col == 'gen':
@@ -1116,114 +1126,134 @@ def plot_change_contributions(
         timepoint_col=timepoint_col,
         percent_of_total=percent_of_total
     )
+    changed_sum_df = changed_sum_df[changed_sum_df.cell_type.isin(['gr', 'b'])]
 
-    for cell_type, cell_df in changed_sum_df.groupby('cell_type'):
-        first_last_df = filter_first_last_by_mouse(cell_df, timepoint_col)
-        last_time_per_mouse_df = first_last_df[first_last_df.mouse_time_desc == 'Last']
-        first_time_per_mouse_df = first_last_df[first_last_df.mouse_time_desc == 'First']
+    first_last_df = filter_first_last_by_mouse(changed_sum_df, timepoint_col)
+    last_time_per_mouse_df = first_last_df[first_last_df.mouse_time_desc == 'Last']
+    first_time_per_mouse_df = first_last_df[first_last_df.mouse_time_desc == 'First']
 
-        last_time_per_mouse_df = last_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
-        first_time_per_mouse_df = first_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
-        last_time_per_mouse_df = last_time_per_mouse_df.assign(total=100)
-        first_time_per_mouse_df = first_time_per_mouse_df.assign(total=100)
+    last_time_per_mouse_df = last_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
+    first_time_per_mouse_df = first_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
+    last_time_per_mouse_df = last_time_per_mouse_df.assign(total=100)
+    first_time_per_mouse_df = first_time_per_mouse_df.assign(total=100)
 
-        sns.set(
-            style="whitegrid",
-            font_scale=2.0,
-            rc={
-                'xtick.labelsize': 22,
-                'ytick.labelsize': 22,
-                'axes.titlesize': 'xx-small',
-                'figure.titlesize' : 'x-small'
-            }
+
+    for group, g_df in last_time_per_mouse_df.groupby('group'):
+        temp_df = pd.DataFrame()
+        for (m, cell_type), m_df in g_df.groupby(['mouse_id', 'cell_type']):
+            lymph = m_df[m_df.change_type == 'Lymphoid']
+            if lymph.empty:
+                temp_row = pd.DataFrame()
+                temp_row['mouse_id'] = [m]
+                temp_row['cell_type'] = [cell_type]
+                temp_row['change_type'] = 'Lymphoid'
+                temp_row['total'] = 100
+                temp_row['percent_engraftment'] = 0
+                lymph = temp_row
+                g_df = g_df.append(temp_row)
+
+            myl = m_df[m_df.change_type == 'Myeloid']
+            if myl.empty:
+                temp_row = pd.DataFrame()
+                temp_row['mouse_id'] = [m]
+                temp_row['cell_type'] = [cell_type]
+                temp_row['change_type'] = 'Myeloid'
+                temp_row['percent_engraftment'] = 0
+                temp_row['total'] = 100
+                myl = temp_row
+                g_df = g_df.append(temp_row)
+
+            pd.options.mode.chained_assignment = None
+            g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid') & (g_df.cell_type == cell_type)].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
+            temp_df['mouse_id'] = [m]
+            pd.options.mode.chained_assignment = 'warn'
+
+        plt.figure(figsize=(7,10))
+        print(y_col_to_title(group) + ' Mice: ' + str(g_df.mouse_id.nunique()))
+        ax = sns.barplot(
+            x='total',
+            y='mouse_id',
+            hue='cell_type',
+            hue_order=['gr', 'b'],
+            data=g_df,
+            palette=[COLOR_PALETTES['change_type']['Unchanged']]*2,
+            saturation=1,
+            #label="Unchanged"
         )
+        sns.barplot(
+            x='percent_engraftment',
+            y='mouse_id',
+            hue='cell_type',
+            hue_order=['gr', 'b'],
+            data=g_df[g_df.change_type == 'Myeloid'],
+            palette=[COLOR_PALETTES['change_type']['Myeloid']]*2,
+            saturation=1,
+            #label='Myeloid',
+            ax=ax,
+        )
+        sns.barplot(
+            x='percent_engraftment',
+            y='mouse_id',
+            hue='cell_type',
+            hue_order=['gr', 'b'],
+            data=g_df[g_df.change_type == 'Lymphoid'],
+            palette=[COLOR_PALETTES['change_type']['Lymphoid']]*2,
+            saturation=1,
+            #label='Lymphoid',
+            ax=ax,
+        )
+        plt.xlabel('Contribution of Changed Cells')
+        plt.ylabel('')
+        plt.suptitle(' Cumulative Abundance of Clones by Bias Change')
+        plt.title('Group: ' + group.replace('_', ' ').title() + ' - Last Time Point')
+        plt.gca().legend(title='Change Direction', loc='lower right').remove()
+        sns.despine(left=True, bottom=True)
 
-        print('\nPlotting ' + cell_type.title())
-        for group, g_df in last_time_per_mouse_df.groupby('group'):
-            print(g_df[['mouse_id', 'percent_engraftment', timepoint_col, 'mouse_time_desc', 'change_status']])
-            for m, m_df in g_df.groupby('mouse_id'):
-                lymph = m_df[m_df.change_type == 'Lymphoid']
-                myl = m_df[m_df.change_type == 'Myeloid']
-                pd.options.mode.chained_assignment = None
-                g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid')].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
-                pd.options.mode.chained_assignment = 'warn'
+        fname = save_path + os.sep + 'percent_contribution_changed_' + '_' + group + '.' + save_format
+        save_plot(fname, save, save_format)
 
-            print(y_col_to_title(group) + ' Mice: ' + str(g_df.mouse_id.nunique()))
-            plt.figure()
-            ax = sns.barplot(
-                x='total',
-                y='mouse_id',
-                data=g_df,
-                color=COLOR_PALETTES['change_type']['Unchanged'],
-                label="Unchanged"
-            )
-            sns.barplot(
-                x='percent_engraftment',
-                y='mouse_id',
-                data=g_df[g_df.change_type == 'Myeloid'],
-                color=COLOR_PALETTES['change_type']['Myeloid'],
-                label='Myeloid',
-                ax=ax,
-            )
-            sns.barplot(
-                x='percent_engraftment',
-                y='mouse_id',
-                data=g_df[g_df.change_type == 'Lymphoid'],
-                color=COLOR_PALETTES['change_type']['Lymphoid'],
-                label='Lymphoid',
-                ax=ax,
-            )
-            plt.xlabel('Contribution of Changed Cells')
-            plt.ylabel('')
-            plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
-            plt.title('Group: ' + group.replace('_', ' ').title() + ' - Last Time Point')
-            plt.gca().legend(title='Change Direction', loc='lower right').remove()
-            sns.despine(left=True, bottom=True)
+# Uncomment below to enable first_time_per mouse plotting
+    #for group, g_df in first_time_per_mouse_df.groupby('group'):
+        #for m, m_df in g_df.groupby('mouse_id'):
+            #lymph = m_df[m_df.change_type == 'Lymphoid']
+            #myl = m_df[m_df.change_type == 'Myeloid']
+            #pd.options.mode.chained_assignment = None
+            #g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid')].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
+            #pd.options.mode.chained_assignment = 'warn'
 
-            fname = save_path + os.sep + 'percent_contribution_changed_' + cell_type + '_' + group + '.' + save_format
-            save_plot(fname, save, save_format)
+        #plt.figure()
+        #ax = sns.barplot(
+            #x='total',
+            #y='mouse_id',
+            #data=g_df,
+            #color=COLOR_PALETTES['change_type']['Unchanged'],
+            #label='Unchanged'
+        #)
+        #sns.barplot(
+            #x='percent_engraftment',
+            #y='mouse_id',
+            #data=g_df[g_df.change_type == 'Myeloid'],
+            #color=COLOR_PALETTES['change_type']['Myeloid'],
+            #ax=ax,
+            #label='Myeloid'
+        #)
+        #sns.barplot(
+            #x='percent_engraftment',
+            #y='mouse_id',
+            #data=g_df[g_df.change_type == 'Lymphoid'],
+            #color=COLOR_PALETTES['change_type']['Lymphoid'],
+            #ax=ax,
+            #label='Lymphoid'
+        #)
+        #plt.xlabel('Contribution of Changed Cells')
+        #plt.ylabel('')
+        #plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
+        #plt.title('Group: ' + group.replace('_', ' ').title() + ' - First Time Point')
+        #plt.gca().legend(title='Change Direction', loc='lower right').remove()
+        #sns.despine(left=True, bottom=True)
 
-        for group, g_df in first_time_per_mouse_df.groupby('group'):
-            for m, m_df in g_df.groupby('mouse_id'):
-                lymph = m_df[m_df.change_type == 'Lymphoid']
-                myl = m_df[m_df.change_type == 'Myeloid']
-                pd.options.mode.chained_assignment = None
-                g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid')].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
-                pd.options.mode.chained_assignment = 'warn'
-
-            plt.figure()
-            ax = sns.barplot(
-                x='total',
-                y='mouse_id',
-                data=g_df,
-                color=COLOR_PALETTES['change_type']['Unchanged'],
-                label='Unchanged'
-            )
-            sns.barplot(
-                x='percent_engraftment',
-                y='mouse_id',
-                data=g_df[g_df.change_type == 'Myeloid'],
-                color=COLOR_PALETTES['change_type']['Myeloid'],
-                ax=ax,
-                label='Myeloid'
-            )
-            sns.barplot(
-                x='percent_engraftment',
-                y='mouse_id',
-                data=g_df[g_df.change_type == 'Lymphoid'],
-                color=COLOR_PALETTES['change_type']['Lymphoid'],
-                ax=ax,
-                label='Lymphoid'
-            )
-            plt.xlabel('Contribution of Changed Cells')
-            plt.ylabel('')
-            plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
-            plt.title('Group: ' + group.replace('_', ' ').title() + ' - First Time Point')
-            plt.gca().legend(title='Change Direction', loc='lower right').remove()
-            sns.despine(left=True, bottom=True)
-
-            fname = save_path + os.sep + 'percent_contribution_changed_init' + cell_type + '_' + group + '.' + save_format
-            save_plot(fname, save, save_format)
+        #fname = save_path + os.sep + 'percent_contribution_changed_init' + cell_type + '_' + group + '.' + save_format
+        #save_plot(fname, save, save_format)
 
 def plot_change_contributions_by_group(
         changed_marked_df: pd.DataFrame,
@@ -2164,6 +2194,21 @@ def plot_bias_change_cutoff(
         save_format {str} --  What file format to save plot (default: {'png'})
     """
 
+    sns.set_context(
+        'paper',
+        font_scale=2,
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 6,
+            'axes.linewidth': 3,
+            'axes.labelsize': 20,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 20,
+            'ytick.labelsize': 20,
+            'figure.titlesize': 'small',
+        }
+    )
 
 
     if cached_change is not None:
