@@ -311,6 +311,7 @@ def main():
         hsc_blood_prod_over_time(
             present_clones_df,
             timepoint_col,
+            group=args.group,
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -358,30 +359,20 @@ def main():
                 timepoint_col=timepoint_col,
                 analyzed_cell_types=['gr', 'b', 'hsc']
             )
-        hsc_to_ct_compare(
-            present_clones_df,
-            timepoint_col,
-            thresholds,
-            abundance_cutoff=abundance_cutoff,
-            invert=args.invert,
-            cell_type='gr',
-            by_mouse=args.by_mouse,
-            save=args.save,
-            save_path=save_path,
-            save_format='png'
-        )
-        hsc_to_ct_compare(
-            present_clones_df,
-            timepoint_col,
-            thresholds,
-            abundance_cutoff=abundance_cutoff,
-            invert=args.invert,
-            by_mouse=args.by_mouse,
-            cell_type='b',
-            save=args.save,
-            save_path=save_path,
-            save_format='png'
-        )
+        for cell_type in ['gr', 'b']:
+            hsc_to_ct_compare(
+                present_clones_df,
+                timepoint_col,
+                thresholds,
+                by_group=args.by_group,
+                abundance_cutoff=abundance_cutoff,
+                invert=args.invert,
+                cell_type=cell_type,
+                by_mouse=args.by_mouse,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
     if graph_type in ['hsc_mouse_pie']:
         save_path = args.output_dir + os.sep + 'hsc_mouse_pie'
         plot_hsc_pie_mouse(

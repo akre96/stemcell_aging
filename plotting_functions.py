@@ -2510,6 +2510,14 @@ def plot_extreme_bias_time(
             plot_title = 'Balanced' \
                 + ' At ' \
                 + timepoint_col.title() + ' ' + str(timepoint)
+            
+            # Remove Clones with only 2 time points for balanced clone graph
+            biased_at_time_df['uid'] = biased_at_time_df['mouse_id'].str.cat(biased_at_time_df['code'], sep='')
+            by_clone_group = biased_at_time_df.groupby('uid').aggregate(np.count_nonzero)
+            more_than_2_timepoints = by_clone_group[by_clone_group[timepoint_col] > 2].index
+            biased_at_time_df = biased_at_time_df[
+                biased_at_time_df['uid'].isin(more_than_2_timepoints)
+            ]
     else:
         plot_title = 'Bias beyond ' \
             + str(round(bias_cutoff, 2)) + ' at ' \
@@ -5377,6 +5385,7 @@ def hsc_to_ct_compare(
         abundance_cutoff: float,
         invert: bool,
         by_mouse: bool,
+        by_group: bool,
         cell_type: str,
         save: bool = False,
         save_path: str = './output',
@@ -5416,6 +5425,13 @@ def hsc_to_ct_compare(
 
     # Scatter plot each mouse data
     for [mouse_id, group], m_df in cell_type_wide_df.groupby(['mouse_id', 'group']):
+        if by_group:
+            desc_addon += '_by_group'
+            palette_col = 'group'
+            color_val_id = group
+        else:
+            palette_col = 'mouse_id'
+            color_val_id = mouse_id
         if by_mouse:
             no_na_df = m_df[['mouse_id', 'code', x_col, y_col]].dropna(axis='index')
             no_na_zero_df = no_na_df[
@@ -5441,7 +5457,8 @@ def hsc_to_ct_compare(
             'o',
             markeredgecolor='white',
             markeredgewidth=.5,
-            color=COLOR_PALETTES['mouse_id'][mouse_id]
+            alpha=0.8,
+            color=COLOR_PALETTES[palette_col][color_val_id]
         )
         if by_mouse:
             y_min, y_max = plt.ylim()
@@ -5474,13 +5491,24 @@ def hsc_to_ct_compare(
     if not by_mouse:
         y_min, y_max = plt.ylim()
         x_min, x_max = plt.xlim()
-
         # Linear (log/log) regression
-        no_na_df = cell_type_wide_df[['mouse_id', 'code', x_col, y_col]].dropna(axis='index')
+        no_na_df = cell_type_wide_df[['mouse_id', 'group', 'code', x_col, y_col]].dropna(axis='index')
         no_na_zero_df = no_na_df[
             (no_na_df[x_col] > 0) & \
             (no_na_df[y_col] > 0)
         ]
+        if by_group:
+            for group, g_df in no_na_zero_df.groupby('group'):
+                slope, intercept, r_value, p_value, std_err = stats.linregress(
+                    x=np.log(g_df[x_col]),
+                    y=np.log(g_df[y_col]),
+                )
+                r_squared = r_value**2
+                print(Fore.CYAN + Style.BRIGHT + y_col_to_title(group) + ' Log(' + cell_type + ') vs Log(hsc):')
+                print(Fore.CYAN + " r-squared:"  + str(r_squared))
+                print_p_value('', p_value)
+                reg_y = [np.exp(np.log(x) * slope + intercept) for x in g_df['hsc_percent_engraftment']]
+                plt.plot(g_df[x_col], reg_y, color=COLOR_PALETTES['group'][group])
         ## Regression using scipy
         slope, intercept, r_value, p_value, std_err = stats.linregress(
             x=np.log(no_na_zero_df['hsc_percent_engraftment']),
@@ -5518,6 +5546,7 @@ def hsc_to_ct_compare(
 def hsc_blood_prod_over_time(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
+        group: str,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -5536,6 +5565,9 @@ def hsc_blood_prod_over_time(
             'figure.titlesize': 'small',
         }
     )
+    if group != 'all':
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.group == group]
+
     hsc_df = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].rename(columns={'percent_engraftment': 'hsc_percent_engraftment'})
     not_hsc_df = clonal_abundance_df[clonal_abundance_df.cell_type != 'hsc']
     with_hsc_data_df = not_hsc_df.merge(
@@ -5565,6 +5597,7 @@ def hsc_blood_prod_over_time(
         **kws
     )
     fname = save_path + os.sep \
+        + group + '_' \
         + 'hsc_blood_prod_over_time' \
         + '.' + save_format
     save_plot(fname, save, save_format)
@@ -5870,6 +5903,20 @@ def heatmap_correlation_hsc_ct(
         save_path: str = './output',
         save_format: str = 'png'
     ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 6,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
     if group != 'all':
         clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.group == group]
 
@@ -5902,12 +5949,6 @@ def heatmap_correlation_hsc_ct(
     if by_mouse:
         desc_addon = 'by-mouse'
         index_col = 'mouse_id'
-    elif by_group:
-        desc_addon = 'by-group'
-        index_col = 'group'
-    if by_mouse or by_group:
-        fig, axes = plt.subplots(figsize=(7, 7), nrows=2, ncols=1)
-        i = 0
         for cell_type, data in pearson_df.groupby('cell_type'):
             if data[timepoint_col].nunique() <= 2:
                 continue
@@ -5923,6 +5964,19 @@ def heatmap_correlation_hsc_ct(
             )
             axes[i].set_ylabel(cell_type.title())
             i += 1
+    elif by_group:
+        desc_addon = 'by-group'
+        index_col = 'group'
+        plt.figure(figsize=(10,7))
+        i = 0
+        pivotted = pearson_df.pivot_table(
+            values='pearson_r',
+            index=['cell_type', index_col],
+            columns=timepoint_col
+        )
+        sns.heatmap(
+            pivotted,
+        )
 
         
     else:
