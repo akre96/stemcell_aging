@@ -40,7 +40,7 @@ from aggregate_functions import filter_threshold, count_clones, \
     filter_lineage_bias_thresholds, filter_lymphoid_exhausted_at_time, \
     calculate_survival_perc, filter_first_last_by_mouse, MAP_LINEAGE_BIAS_CATEGORY_SHORT, \
     MAP_LINEAGE_BIAS_CATEGORY, get_clones_at_timepoint, abundance_to_long_by_cell_type, \
-    add_exhaustion_labels, mark_outliers
+    add_exhaustion_labels, mark_outliers, get_hsc_abundance_perc_per_mouse
 from data_types import timepoint_type, y_col_type
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
@@ -1029,7 +1029,7 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
 def plot_contributions(
         contributions_df: pd.DataFrame,
         cell_type: str,
-        by_day: bool = False,
+        timepoint_col: str,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -1052,34 +1052,55 @@ def plot_contributions(
         None -- plt.show() to view plot
     """
 
+    sns.set_context(
+        'paper',
+        font_scale=2,
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 25,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 28,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
 
-    plt.figure()
+        )
+
+
+    plt.figure(figsize=(8,8))
+    if timepoint_col == 'gen':
+        contributions_df = contributions_df[contributions_df[timepoint_col] != 8.5]
+
+    timepoints = np.sort(contributions_df[timepoint_col].unique()).tolist()
+    timepoints = [str(int(t)) for t in timepoints]
+
+    contributions_df[timepoint_col] = contributions_df[timepoint_col].astype(int)
+
+    first_timepoint_cont_df = contributions_df[contributions_df[timepoint_col] == contributions_df[timepoint_col].min()]
+    exp_x, exp_y = find_intersect(first_timepoint_cont_df, 50)
+
+    contributions_df[timepoint_col] = contributions_df[timepoint_col].astype(str)
     plot = sns.lineplot(
         x='percentile',
         y='percent_sum_abundance',
-        hue='time_str',
-        data=contributions_df.sort_values(by='day'),
-        palette=sns.color_palette(COLOR_PALETTES['time_point'], n_colors=contributions_df.time_str.nunique())
+        hue=timepoint_col,
+        hue_order=timepoints,
+        data=contributions_df,
+        palette=COLOR_PALETTES[timepoint_col]
     )
-    plt.xlabel('Percentile by Clone Abundance')
-    plt.ylabel('Percent of Tracked Clone ' + cell_type + ' Population')
+    legend = plt.legend()
+    legend.texts[0].set_text(timepoint_col.title())
+    plt.xlabel('Percentile by Abundance')
+    plt.ylabel('% ' + cell_type.title() + ' Abundance')
     plt.title('Cumulative Abundance at Percentiles for ' + cell_type)
 
-    if by_day:
-        m4_cont_df = contributions_df.loc[contributions_df.day == contributions_df.day.min()]
-        print('min day: ' + str(contributions_df.day.min()))
-    else:
-        m4_cont_df = contributions_df.loc[contributions_df.month == 4]
 
-    exp_x, exp_y = find_intersect(m4_cont_df, 50)
     plt.vlines(exp_x, -5, exp_y + 5, linestyles='dashed')
     plt.hlines(exp_y, 0, exp_x + 5, linestyles='dashed')
-    plt.text(25, 52, 'Expanded Clones: (' + str(round(exp_x, 2)) + ', ' + str(round(exp_y, 2)) + ')')
+    plt.text(5, 52, 'Expanded Clones: (' + str(round(exp_x, 2)) + ', ' + str(round(exp_y, 2)) + ')')
 
-    dom_x, dom_y = find_intersect(m4_cont_df, 80)
-    plt.vlines(dom_x, -5, dom_y + 5, linestyles=(0, (1, 1)))
-    plt.hlines(dom_y, 0, dom_x + 5, linestyles=(0, (1, 1)))
-    plt.text(30, 80, 'Dominant Clones: (' + str(round(dom_x, 2)) + ', ' + str(round(dom_y, 2)) + ')')
 
     fname = save_path + os.sep + 'percentile_abundance_contribution_' + cell_type + '.' + save_format
     save_plot(fname, save, save_format)
@@ -1087,6 +1108,7 @@ def plot_contributions(
 def plot_change_contributions(
         changed_marked_df: pd.DataFrame,
         timepoint_col: str,
+        timepoint: Any,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -1127,18 +1149,18 @@ def plot_change_contributions(
         percent_of_total=percent_of_total
     )
     changed_sum_df = changed_sum_df[changed_sum_df.cell_type.isin(['gr', 'b'])]
-
-    first_last_df = filter_first_last_by_mouse(changed_sum_df, timepoint_col)
-    last_time_per_mouse_df = first_last_df[first_last_df.mouse_time_desc == 'Last']
-    first_time_per_mouse_df = first_last_df[first_last_df.mouse_time_desc == 'First']
-
-    last_time_per_mouse_df = last_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
-    first_time_per_mouse_df = first_time_per_mouse_df.sort_values(by='percent_engraftment', ascending=False)
-    last_time_per_mouse_df = last_time_per_mouse_df.assign(total=100)
-    first_time_per_mouse_df = first_time_per_mouse_df.assign(total=100)
+    timepoint_df = get_clones_at_timepoint(
+        changed_sum_df,
+        timepoint_col,
+        timepoint
+    )
 
 
-    for group, g_df in last_time_per_mouse_df.groupby('group'):
+    timepoint_df = timepoint_df.assign(total=100)
+    timepoint_df = timepoint_df.sort_values(by='percent_engraftment', ascending=False)
+
+
+    for group, g_df in timepoint_df.groupby('group'):
         temp_df = pd.DataFrame()
         for (m, cell_type), m_df in g_df.groupby(['mouse_id', 'cell_type']):
             lymph = m_df[m_df.change_type == 'Lymphoid']
@@ -1151,6 +1173,9 @@ def plot_change_contributions(
                 temp_row['percent_engraftment'] = 0
                 lymph = temp_row
                 g_df = g_df.append(temp_row)
+            elif len(lymph) > 1:
+                print('Lymph > 1')
+                print(m, cell_type, len(lymph))
 
             myl = m_df[m_df.change_type == 'Myeloid']
             if myl.empty:
@@ -1162,9 +1187,16 @@ def plot_change_contributions(
                 temp_row['total'] = 100
                 myl = temp_row
                 g_df = g_df.append(temp_row)
+            elif len(myl) > 1:
+                print('Myeloid > 1')
+                print(m, cell_type, len(myl))
 
             pd.options.mode.chained_assignment = None
-            g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid') & (g_df.cell_type == cell_type)].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
+            g_df[
+                (g_df.mouse_id == m) &\
+                (g_df.change_type == 'Myeloid') &\
+                (g_df.cell_type == cell_type)
+            ].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
             temp_df['mouse_id'] = [m]
             pd.options.mode.chained_assignment = 'warn'
 
@@ -1205,11 +1237,14 @@ def plot_change_contributions(
         plt.xlabel('Contribution of Changed Cells')
         plt.ylabel('')
         plt.suptitle(' Cumulative Abundance of Clones by Bias Change')
-        plt.title('Group: ' + group.replace('_', ' ').title() + ' - Last Time Point')
+        plt.title('Group: ' + group.replace('_', ' ').title() + ' ' + timepoint_col.title() + ' ' + str(timepoint))
         plt.gca().legend(title='Change Direction', loc='lower right').remove()
         sns.despine(left=True, bottom=True)
 
-        fname = save_path + os.sep + 'percent_contribution_changed_' + '_' + group + '.' + save_format
+        fname = save_path + os.sep + 'percent_contribution_changed_' \
+            + '_' + group \
+            + '_' + timepoint_col[0] + '-' + str(timepoint) \
+            + '.' + save_format
         save_plot(fname, save, save_format)
 
 # Uncomment below to enable first_time_per mouse plotting
@@ -5054,6 +5089,20 @@ def plot_clone_count_swarm_vs_cell_type(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    sns.set_context(
+        'paper',
+        font_scale=2,
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 3,
+            'axes.labelsize': 25,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 22,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+    )
 
     if timepoint_col == 'gen':
         clonal_abundance_df = clonal_abundance_df[clonal_abundance_df[timepoint_col] != 8.5]
@@ -5066,7 +5115,7 @@ def plot_clone_count_swarm_vs_cell_type(
         
     clone_counts = count_clones(threshold_df, timepoint_col)
 
-    plt.figure(figsize=(8,5))
+    plt.figure(figsize=(10,6))
     ax = sns.boxplot(
         x=timepoint_col,
         y='code',
@@ -5078,9 +5127,10 @@ def plot_clone_count_swarm_vs_cell_type(
             "alpha": 0
         },
         showcaps=False,
+        fliersize=0,
         data=clone_counts,
     )
-    sns.swarmplot(
+    sns.stripplot(
         x=timepoint_col,
         y='code',
         hue='cell_type',
@@ -5090,6 +5140,9 @@ def plot_clone_count_swarm_vs_cell_type(
         dodge=True,
         ax=ax,
         data=clone_counts,
+        linewidth=.8,
+        alpha=0.8,
+        zorder=0,
     )
     if abundance_cutoff < 0.011:
         plt.title(
@@ -5102,7 +5155,21 @@ def plot_clone_count_swarm_vs_cell_type(
         )
     plt.xlabel(timepoint_col.title())
     plt.ylabel('Number of Clones')
-    plt.legend().remove()
+    #plt.legend().remove()
+    ax = plt.gca()
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                    box.width, box.height * 0.9])
+
+    # Put a legend below current axis
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(
+        handles[3:],
+        labels[3:],
+        loc='upper center',
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=3
+        )
     fname = save_path + os.sep \
         + 'clone_count_cell_vs' \
         + '_a' + str(abundance_cutoff).replace('.', '-') \
@@ -5672,50 +5739,63 @@ def exhaust_persist_hsc_abund(
     )
     hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].rename(columns={'percent_engraftment':'HSC Abundance'})
     without_hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type.isin(['gr','b'])]
-    exhaustion_df = create_lineage_bias_survival_df(
+    survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
-        timepoint_col,
+        timepoint_col
     )
-    exhaust_with_hsc_df = exhaustion_df.merge(
-        hsc_data[['code', 'mouse_id', 'HSC Abundance']],
-        on=['code', 'mouse_id'],
+    survival_df = get_clones_at_timepoint(
+        survival_df,
+        timepoint_col,
+        timepoint='first'
+    )
+    hsc_data = get_hsc_abundance_perc_per_mouse(clonal_abundance_df)
+
+
+    
+    survival_with_hsc_df = survival_df.merge(
+        hsc_data[['mouse_id', 'code', 'perc_tracked_hsc']],
+        on=['mouse_id', 'code'],
         how='inner',
         validate='m:1'
     )
+    survival_sum_per_mouse = pd.DataFrame(
+        survival_with_hsc_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])['perc_tracked_hsc'].sum()
+    ).reset_index()
+    survival_sum_per_mouse = survival_sum_per_mouse[['mouse_id', 'group', 'survived', 'perc_tracked_hsc']].drop_duplicates()
 
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Rank Sum Test of HSC Abundance in Exhausted vs. Survived'
+        + '\nPerforming T-Test of HSC Abundance in Exhausted vs. Survived'
     )
 
-    t_s = exhaust_with_hsc_df[exhaust_with_hsc_df['survived'] == 'Survived']
-    t_e = exhaust_with_hsc_df[exhaust_with_hsc_df['survived'] == 'Exhausted']
-    stat, p_value = stats.ranksums(
-        t_e['HSC Abundance'],
-        t_s['HSC Abundance'],
+    t_s = survival_sum_per_mouse[survival_sum_per_mouse['survived'] == 'Survived']
+    t_e = survival_sum_per_mouse[survival_sum_per_mouse['survived'] == 'Exhausted']
+    stat, p_value = stats.ttest_ind(
+        t_e['perc_tracked_hsc'],
+        t_s['perc_tracked_hsc'],
     )
     context: str = ''
     print_p_value(context, p_value)
 
     plt.figure(figsize=(7,5))
-    plt.yscale('log')
-    ax = sns.violinplot(
+    ax = sns.boxplot(
         x='survived',
-        y='HSC Abundance',
+        y='perc_tracked_hsc',
         order=['Exhausted', 'Survived'],
-        data=exhaust_with_hsc_df,
+        data=survival_sum_per_mouse,
         color='white',
-        cut=0,
     )
     sns.swarmplot(
         x='survived',
-        y='HSC Abundance',
+        y='perc_tracked_hsc',
         order=['Exhausted', 'Survived'],
-        data=exhaust_with_hsc_df,
+        data=survival_sum_per_mouse,
         hue='mouse_id',
         palette=COLOR_PALETTES['mouse_id'],
         ax=ax,
+        size=10,
     )
+    plt.ylabel('% Abundance in Final HSC Pool')
     plt.legend().remove()
     fname = save_path + os.sep + 'exhaust_persist_hsc_abund.' + save_format
     save_plot(fname, save, save_format)
@@ -5974,6 +6054,9 @@ def heatmap_correlation_hsc_ct(
         validate='m:1'
     )
     with_hsc_data_df = with_hsc_data_df[['mouse_id', 'group', 'code', timepoint_col, 'cell_type', 'hsc_percent_engraftment', 'percent_engraftment']].dropna(axis='index')
+    if timepoint_col == 'gen':
+        with_hsc_data_df = with_hsc_data_df[with_hsc_data_df[timepoint_col] != 8.5]
+        with_hsc_data_df[timepoint_col] = with_hsc_data_df[timepoint_col].astype(int)
     pearson_df = pd.DataFrame()
     for (cell_type, mouse_id, g, timepoint), t_df in with_hsc_data_df.groupby(['cell_type', 'mouse_id', 'group', timepoint_col]):
         pearson_r, p_value = stats.pearsonr(
@@ -6019,8 +6102,14 @@ def heatmap_correlation_hsc_ct(
             index=['cell_type', index_col],
             columns=timepoint_col
         )
+        index_order = [
+            ('gr', 'aging_phenotype'),
+            ('gr', 'no_change'),
+            ('b', 'aging_phenotype'),
+            ('b', 'no_change'),
+        ]
         sns.heatmap(
-            pivotted,
+            pivotted.reindex(index_order),
         )
 
         
@@ -6059,20 +6148,7 @@ def exhausted_clone_hsc_abund(
         lineage_bias_df,
         timepoint_col
     )
-    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']\
-        .rename(columns={'percent_engraftment': 'hsc_percent_engraftment'})
-    total_hsc_per_mouse = pd.DataFrame(
-        hsc_data.groupby(['mouse_id']).hsc_percent_engraftment.sum()
-    ).reset_index().rename(
-        columns={'hsc_percent_engraftment': 'hsc_total_abundance'}
-    )
-    hsc_data = hsc_data.merge(
-        total_hsc_per_mouse,
-        validate='m:1'
-    )
-    hsc_data = hsc_data.assign(
-        perc_tracked_hsc=lambda x: 100 * x.hsc_percent_engraftment/x.hsc_total_abundance
-    )
+    hsc_data = get_hsc_abundance_perc_per_mouse(clonal_abundance_df)
 
 
     
@@ -6085,6 +6161,9 @@ def exhausted_clone_hsc_abund(
     survival_sum_per_mouse = pd.DataFrame(
         survival_with_hsc_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])['perc_tracked_hsc'].sum()
     ).reset_index()
+    if timepoint_col == 'gen':
+        survival_sum_per_mouse = survival_sum_per_mouse[survival_sum_per_mouse[timepoint_col] != 8.5]
+        survival_sum_per_mouse['gen'] = survival_sum_per_mouse.gen.astype(int)
 
     sns.set_context(
         'paper',
@@ -6103,7 +6182,7 @@ def exhausted_clone_hsc_abund(
         )
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Rank Sum Test of Exhausted vs. Survived'
+        + '\nPerforming Paired T-Test of Exhausted vs. Survived'
     )
     print(
         Fore.CYAN + Style.BRIGHT 
@@ -6112,14 +6191,35 @@ def exhausted_clone_hsc_abund(
     fig, ax = plt.subplots(figsize=(9,6))
     # T-Test on interesting result
 
-    for time_change, t_df in survival_with_hsc_df.groupby('time_change'):
-        t_s = t_df[t_df['survived'] == 'Survived']
-        t_e = t_df[t_df['survived'] == 'Exhausted']
-        stat, p_value = stats.ranksums(
-            t_e.perc_tracked_hsc,
-            t_s.perc_tracked_hsc,
+    for time, t_df in survival_sum_per_mouse.groupby(timepoint_col):
+        t_s = []
+        t_e = []
+        for m, m_df in t_df.groupby('mouse_id'):
+            m_s = [0]
+            m_e = [0]
+
+            m_t_s_df = m_df[m_df['survived'] == 'Survived']
+            if not m_t_s_df.empty:
+                m_s = m_t_s_df.perc_tracked_hsc.values
+
+            m_t_e_df = m_df[m_df['survived'] == 'Exhausted']
+            if not m_t_e_df.empty:
+                m_e = m_t_e_df.perc_tracked_hsc.values
+
+            if (len(m_e) > 1) or (len(m_s) > 1):
+                print('\n Mouse: ' + m + ' Time: ' +str(time))
+                print(m_e)
+                print(m_s)
+
+            t_s.append(m_s[0])
+            t_e.append(m_e[0])
+            
+                
+        stat, p_value = stats.ttest_rel(
+            t_e,
+            t_s,
         )
-        context: str = timepoint_col.title() + ' ' + str(int(time_change))
+        context: str = timepoint_col.title() + ' ' + str(int(time))
         print_p_value(context, p_value)
         
 

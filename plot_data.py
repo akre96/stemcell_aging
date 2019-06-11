@@ -1606,10 +1606,15 @@ def main():
             change_marked_df.to_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv', index=False)
         group = args.group
         percent_of_total = False
+        timepoint = 'last'
+        if args.timepoint:
+            timepoint = args.timepoint
+
         print('Change Cutoff:')
         print(change_marked_df.change_cutoff.unique())
         plot_change_contributions(change_marked_df,
             timepoint_col=timepoint_col,
+            timepoint=timepoint,
             save=args.save,
             save_path=save_path,
             save_format='png',
@@ -1617,30 +1622,25 @@ def main():
 
     if graph_type in ['sum_abundance']:
         save_path = args.output_dir + os.sep + 'abundance_at_percentile'
-        num_points = 100
-        cell_type = 'gr'
-        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points, by_day=args.by_day)
-        if args.by_day:
-            time_point_col = 'day'
-        else:
-            time_point_col = 'month'
-        plot_contributions(contributions,
-            cell_type=cell_type,
-            save=args.save,
-            save_path=save_path,
-            save_format='png',
-            by_day=args.by_day
-        )
+        num_points = 200
+        
+        for cell_type in ['gr', 'b', 'hsc']:
+            contributions = percentile_sum_engraftment(
+                present_clones_df,
+                timepoint_col=timepoint_col,
+                cell_type=cell_type,
+                num_points=num_points,
+            )
+            plot_contributions(
+                contributions,
+                cell_type=cell_type,
+                timepoint_col=timepoint_col,
+                save=args.save,
+                save_path=save_path,
+                save_format='png',
 
-        cell_type = 'b'
-        contributions = percentile_sum_engraftment(present_clones_df, cell_type=cell_type, num_points=num_points, by_day=args.by_day)
-        plot_contributions(contributions,
-            cell_type=cell_type,
-            save=args.save,
-            save_path=save_path,
-            save_format='png',
-            by_day=args.by_day
-        )
+            )
+
 
     if graph_type in ['range_bias_month']:
         save_path = args.output_dir + os.sep + 'Lineage_Bias_Line_Plot'
