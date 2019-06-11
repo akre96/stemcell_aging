@@ -105,15 +105,26 @@ def find_last_clones(
         input_df: pd.DataFrame,
         timepoint_col: str,
     ) -> pd.DataFrame:
-    last_clones = pd.DataFrame(
-        input_df.groupby(['code', 'mouse_id'])[timepoint_col].max()
-        ).reset_index()
-    last_clones_with_data = last_clones.merge(
-        input_df,
-        how='inner',
-        on=['code', 'mouse_id', timepoint_col],
-        validate='1:1'
-    )
+    if 'code' in input_df.columns:
+        last_clones = pd.DataFrame(
+            input_df.groupby(['code', 'mouse_id'])[timepoint_col].max()
+            ).reset_index()
+        last_clones_with_data = last_clones.merge(
+            input_df,
+            how='inner',
+            on=['code', 'mouse_id', timepoint_col],
+            validate='1:1'
+        )
+    else:
+        last_clones = pd.DataFrame(
+            input_df.groupby(['mouse_id'])[timepoint_col].max()
+            ).reset_index()
+        last_clones_with_data = last_clones.merge(
+            input_df,
+            how='inner',
+            on=['mouse_id', timepoint_col],
+            validate='1:m'
+        )
     return last_clones_with_data
 
 def filter_clones_threshold_anytime(
@@ -581,7 +592,7 @@ def find_clones_bias_range_at_time(
     filt_df = filt_df[['code', 'mouse_id']]
     return lineage_bias_df.merge(filt_df, on=['code', 'mouse_id'])
 
-def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_points: int = 400, by_day: bool = False) -> pd.DataFrame:
+def percentile_sum_engraftment(input_df: pd.DataFrame, timepoint_col: str, cell_type: str, num_points: int = 400) -> pd.DataFrame:
     """ Create dataframe sum of abundance due to clones below percentile ranked by clonal abundance
     
     Arguments:
@@ -595,13 +606,10 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_point
         pd.DataFrame -- Percentile vs Cumulative Abundance Dataframe
     """
 
-    if by_day:
-        time_col = 'day'
-    else:
-        time_col = 'month'
+    time_col = timepoint_col
     percentile_range = np.linspace(0, 100, num_points)
     cell_type_df = input_df.loc[input_df.cell_type == cell_type]
-    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', 'month', 'day', 'time_str', 'cell_type', 'quantile']
+    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', time_col, 'time_str', 'cell_type']
     contribution_df = pd.DataFrame(columns=contribution_df_cols)
     for percentile in percentile_range:
         for time_point in cell_type_df[time_col].unique():
@@ -611,10 +619,11 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, cell_type: str, num_point
             contribution_row.cell_type = [cell_type]
             contribution_row.quantile = [time_df.quantile(percentile/100)]
             contribution_row.time_str = [time_col.title() + ': ' + str(time_point)]
-            contribution_row.month = [round(time_df.day.min()/30)]
-            contribution_row.day = [time_df.day.min()]
+            contribution_row[time_col] = [time_point]
             contribution_row.total_abundance = [time_df.percent_engraftment.sum()]
-            sum_top = time_df.loc[time_df.percent_engraftment <= time_df.quantile(percentile/100).percent_engraftment].percent_engraftment.sum()
+            sum_top = time_df.loc[
+                time_df.percent_engraftment <= time_df.quantile(percentile/100).percent_engraftment
+            ].percent_engraftment.sum()
             contribution_row['percent_sum_abundance'] = 100*(sum_top)/time_df.percent_engraftment.sum()
             contribution_df = contribution_df.append(contribution_row, ignore_index=True)
     return contribution_df.reset_index()
@@ -1632,3 +1641,27 @@ def mark_outliers(input_df: pd.DataFrame, outlier_df: pd.DataFrame):
     temp_df = temp_df.append(input_df[~outlier_mask].assign(outlier=False), ignore_index=True)
     print(temp_df.columns)
     return temp_df
+
+def get_hsc_abundance_perc_per_mouse(
+        clonal_abundance_df: pd.DataFrame,
+    ):
+    if clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].empty:
+        raise ValueError('Input DF Has No HSC Data')
+    
+    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']\
+        .rename(columns={'percent_engraftment': 'hsc_percent_engraftment'})
+    total_hsc_per_mouse = pd.DataFrame(
+        hsc_data.groupby(['mouse_id']).hsc_percent_engraftment.sum()
+    ).reset_index().rename(
+        columns={'hsc_percent_engraftment': 'hsc_total_abundance'}
+    )
+    hsc_data = hsc_data.merge(
+        total_hsc_per_mouse,
+        validate='m:1'
+    )
+    hsc_data = hsc_data.assign(
+        perc_tracked_hsc=lambda x: 100 * x.hsc_percent_engraftment/x.hsc_total_abundance
+    )
+    return hsc_data
+
+
