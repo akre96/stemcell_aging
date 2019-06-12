@@ -1247,49 +1247,6 @@ def plot_change_contributions(
             + '.' + save_format
         save_plot(fname, save, save_format)
 
-# Uncomment below to enable first_time_per mouse plotting
-    #for group, g_df in first_time_per_mouse_df.groupby('group'):
-        #for m, m_df in g_df.groupby('mouse_id'):
-            #lymph = m_df[m_df.change_type == 'Lymphoid']
-            #myl = m_df[m_df.change_type == 'Myeloid']
-            #pd.options.mode.chained_assignment = None
-            #g_df[(g_df.mouse_id == m) & (g_df.change_type == 'Myeloid')].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
-            #pd.options.mode.chained_assignment = 'warn'
-
-        #plt.figure()
-        #ax = sns.barplot(
-            #x='total',
-            #y='mouse_id',
-            #data=g_df,
-            #color=COLOR_PALETTES['change_type']['Unchanged'],
-            #label='Unchanged'
-        #)
-        #sns.barplot(
-            #x='percent_engraftment',
-            #y='mouse_id',
-            #data=g_df[g_df.change_type == 'Myeloid'],
-            #color=COLOR_PALETTES['change_type']['Myeloid'],
-            #ax=ax,
-            #label='Myeloid'
-        #)
-        #sns.barplot(
-            #x='percent_engraftment',
-            #y='mouse_id',
-            #data=g_df[g_df.change_type == 'Lymphoid'],
-            #color=COLOR_PALETTES['change_type']['Lymphoid'],
-            #ax=ax,
-            #label='Lymphoid'
-        #)
-        #plt.xlabel('Contribution of Changed Cells')
-        #plt.ylabel('')
-        #plt.suptitle(cell_type.title() + ' Cumulative Abundance of Clones by Bias Change')
-        #plt.title('Group: ' + group.replace('_', ' ').title() + ' - First Time Point')
-        #plt.gca().legend(title='Change Direction', loc='lower right').remove()
-        #sns.despine(left=True, bottom=True)
-
-        #fname = save_path + os.sep + 'percent_contribution_changed_init' + cell_type + '_' + group + '.' + save_format
-        #save_plot(fname, save, save_format)
-
 def plot_change_contributions_by_group(
         changed_marked_df: pd.DataFrame,
         cell_type: str,
@@ -6615,13 +6572,16 @@ def plot_hsc_abundance_by_change(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
         mtd: int,
+        by_clone: bool,
         by_group: bool,
         timepoint: Any = None,
-        sum: bool = False,
+        by_sum: bool = False,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
     ):
+    if by_sum and by_clone:
+        raise ValueError('Cannot both count clones and sum of percent engraftment')
     sns.set_context(
         'paper',
         font_scale=2.0,
@@ -6648,8 +6608,10 @@ def plot_hsc_abundance_by_change(
         min_time_difference=mtd,
         timepoint=timepoint
     )
-    desc_add = 'by_clone'
-    if sum:
+    desc_add = 'each_clone'
+    y_col = 'percent_engraftment'
+    y_desc = 'HSC Abundance (%HSC)'
+    if by_sum:
         change_marked_df = pd.DataFrame(
             change_marked_df.groupby([
                 'mouse_id',
@@ -6660,36 +6622,77 @@ def plot_hsc_abundance_by_change(
             ]).percent_engraftment.sum()
         ).reset_index()
         desc_add = 'sum'
+    elif by_clone:
+        change_marked_df = pd.DataFrame(
+            change_marked_df.groupby([
+                'mouse_id',
+                'group',
+                'cell_type',
+                'change_type',
+                timepoint_col,
+            ]).code.nunique()
+        ).reset_index()
+        desc_add = 'count'
+        y_col = 'code'
+        y_desc = '# Of Clones'
     hsc_data = change_marked_df[change_marked_df.cell_type == 'hsc']
 
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Independent T-Test Between Change Status '+ desc_add.title() + ' Abundance at each time point'
+        + '\nPerforming Tests On: '+ desc_add.title() 
     )
-    for (a, b) in combinations(['Unchanged', 'Myeloid', 'Lymphoid'],2):
-        a_vals = hsc_data[hsc_data['change_type'] == a]
-        b_vals = hsc_data[hsc_data['change_type'] == b]
-        stat, p_value = stats.ttest_ind(
-            a_vals['percent_engraftment'],
-            b_vals['percent_engraftment'],
+    show_ns = False
+    if by_sum or by_clone:
+        match_cols = ['mouse_id']
+        rel_ttest_group_time(
+            hsc_data,
+            match_cols=match_cols,
+            merge_type='outer',
+            fill_na=0,
+            test_col=y_col,
+            timepoint_col='change_type',
+            overall_context=y_desc,
+            show_ns=show_ns
         )
-        context: str =  a + ' vs ' + b
-        print_p_value(context, p_value, show_ns=True)
+        ind_ttest_group_time(
+            hsc_data,
+            y_col,
+            'change_type',
+            y_desc,
+            show_ns=show_ns
+        )
+    else:
+        ranksums_test_group_time(
+            hsc_data,
+            y_col,
+            'change_type',
+            'HSC Abundance',
+            show_ns=show_ns
+        )
 
     fig, ax = plt.subplots(figsize=(7,5))
     ax = plt.gca()
-    ax.set_yscale('log')
-    # TODO: CLEAN THIS UP -- COLORS NOT MATCHING NEED TO ADD SPLIT BY GROUP FUNC
-    if args.by_group:
+    if not by_clone:
+        ax.set_yscale('log')
+    if by_group:
         hue_col = 'group'
+        desc_add += '_by-group'
+        hue_order = ['aging_phenotype', 'no_change']
         palette = COLOR_PALETTES['group']
+        dodge = True
     else:
         hue_col = None
+        hue_order = None
+        palette = COLOR_PALETTES['change_type']
+        dodge = False
+
     sns.boxplot(
         x='change_type',
-        y='percent_engraftment',
+        y=y_col,
+        hue=hue_col,
+        hue_order=hue_order,
+        palette=palette,
         order=['Unchanged', 'Lymphoid', 'Myeloid'],
-        palette=COLOR_PALETTES['change_type'],
         data=hsc_data,
         ax=ax,
         showbox=False,
@@ -6698,20 +6701,24 @@ def plot_hsc_abundance_by_change(
         },
         showcaps=False,
         fliersize=0,
+        dodge=dodge,
     )
     sns.swarmplot(
         x='change_type',
-        y='percent_engraftment',
+        y=y_col,
+        hue=hue_col,
+        hue_order=hue_order,
+        palette=palette,
         order=['Unchanged', 'Lymphoid', 'Myeloid'],
-        palette=COLOR_PALETTES['change_type'],
         data=hsc_data,
         linewidth=1,
         ax=ax,
         zorder=0,
+        dodge=dodge,
     )
-    plt.ylabel('HSC Abundance (%HSC)')
+    plt.ylabel(y_desc)
     plt.xlabel('')
-
+    plt.legend().remove()
     fname_prefix = save_path + os.sep \
         + 'abundance_by_bias_change' \
         + 't' + str(timepoint) \
@@ -6720,3 +6727,204 @@ def plot_hsc_abundance_by_change(
         + '_' + desc_add \
         + '.' + save_format
     save_plot(fname, save, save_format)
+
+def ind_ttest_group_time(
+        data: pd.DataFrame,
+        test_col: str,
+        timepoint_col: str,
+        overall_context: str,
+        show_ns: bool,
+    ):
+    times = data[timepoint_col].unique()
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Independent T-Test on ' 
+        + overall_context
+        + ' between groups at each ' + y_col_to_title(timepoint_col)
+    )
+    for t1, t_df in data.groupby(timepoint_col):
+        _, p_value = stats.ttest_ind(
+            t_df[t_df.group == 'aging_phenotype'][test_col],
+            t_df[t_df.group == 'no_change'][test_col],
+        )
+        context: str = timepoint_col.title() + ' ' + str(t1) 
+        print_p_value(context, p_value, show_ns=show_ns)
+
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Independent T-Test on ' 
+        + overall_context
+        + ' per group between ' + y_col_to_title(timepoint_col) + 's'
+    )
+    for group, g_df in data.groupby('group'):
+        for (t1, t2) in combinations(times, 2):
+            t1_df = g_df[g_df[timepoint_col] == t1][test_col]
+            t2_df = g_df[g_df[timepoint_col] == t2][test_col]
+
+            stat, p_value = stats.ttest_ind(
+                t1_df,
+                t2_df, 
+            )
+            context: str = y_col_to_title(group) + ' ' \
+                + y_col_to_title(timepoint_col) + ' ' + str(t1) \
+                + ' vs ' + str(t2)
+            print_p_value(context, p_value, show_ns=show_ns)
+
+    group = 'all'
+    for (t1, t2) in combinations(times, 2):
+        t1_df = data[data[timepoint_col] == t1][test_col]
+        t2_df = data[data[timepoint_col] == t2][test_col]
+
+        stat, p_value = stats.ttest_ind(
+            t1_df,
+            t2_df, 
+        )
+        context: str = y_col_to_title(group) + ' ' \
+            + y_col_to_title(timepoint_col) + ' ' + str(t1) \
+            + ' vs ' + str(t2)
+        print_p_value(context, p_value, show_ns=show_ns)
+
+
+def rel_ttest_group_time(
+        data: pd.DataFrame,
+        match_cols:List[str],
+        merge_type: str,
+        fill_na: Any,
+        test_col: str,
+        timepoint_col: str,
+        overall_context: str,
+        show_ns: bool,
+    ):
+    times = data[timepoint_col].unique()
+    match_col_str = '-'.join(match_cols)
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Paired T-Test on ' 
+        + overall_context
+        + ' per group between ' + y_col_to_title(timepoint_col) + 's'
+    )
+    for group, g_df in data.groupby('group'):
+        for (t1, t2) in combinations(times, 2):
+            t1_df = g_df[g_df[timepoint_col] == t1]
+            t2_df = g_df[g_df[timepoint_col] == t2]
+
+            merged = t1_df.merge(
+                t2_df,
+                on=match_cols,
+                how=merge_type,
+                validate='1:1',
+                suffixes=['_1', '_2']
+            )
+            if fill_na is not None:
+                merged = merged.fillna(
+                    value=fill_na,
+                )
+
+            count = len(merged)
+            if count <= 1:
+                p_value = 1
+            else:
+                stat, p_value = stats.ttest_rel(
+                    merged[test_col + '_1'],
+                    merged[test_col + '_2'],
+                )
+            
+            context: str = y_col_to_title(group) + ' ' \
+                + y_col_to_title(timepoint_col) + ' ' + str(t1) \
+                + ' vs ' + str(t2) \
+                + ', n ' + match_col_str + ': ' + str(count)
+            print_p_value(context, p_value, show_ns=show_ns)
+
+    group = 'all'
+    for (t1, t2) in combinations(times, 2):
+        t1_df = data[data[timepoint_col] == t1]
+        t2_df = data[data[timepoint_col] == t2]
+
+        merged = t1_df.merge(
+            t2_df,
+            on=match_cols,
+            how='inner',
+            validate='1:1',
+            suffixes=['_1', '_2']
+        )
+        merged = t1_df.merge(
+            t2_df,
+            on=match_cols,
+            how=merge_type,
+            validate='1:1',
+            suffixes=['_1', '_2']
+        )
+        if fill_na is not None:
+            merged = merged.fillna(
+                value=fill_na,
+            )
+        count = len(merged)
+        if count <= 1:
+            p_value = 1
+        else:
+            stat, p_value = stats.ttest_rel(
+                merged[test_col + '_1'],
+                merged[test_col + '_2'],
+            )
+        
+        context: str = y_col_to_title(group) + ' ' \
+            + y_col_to_title(timepoint_col) + ' ' + str(t1) \
+            + ' vs ' + str(t2) \
+            + ', n ' + match_col_str + ': ' + str(count)
+        print_p_value(context, p_value, show_ns=show_ns)
+
+def ranksums_test_group_time(
+        data: pd.DataFrame,
+        test_col: str,
+        timepoint_col: str,
+        overall_context: str,
+        show_ns: bool,
+    ):
+    times = data[timepoint_col].unique()
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Rank-Sum T-Test on ' 
+        + overall_context
+        + ' between groups at each ' + y_col_to_title(timepoint_col)
+    )
+    for t1, t_df in data.groupby(timepoint_col):
+        _, p_value = stats.ranksums(
+            t_df[t_df.group == 'aging_phenotype'][test_col],
+            t_df[t_df.group == 'no_change'][test_col],
+        )
+        context: str = timepoint_col.title() + ' ' + str(t1) 
+        print_p_value(context, p_value, show_ns=show_ns)
+
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Rank Sum T-Test on ' 
+        + overall_context
+        + ' per group between ' + y_col_to_title(timepoint_col) + 's'
+    )
+    for group, g_df in data.groupby('group'):
+        for (t1, t2) in combinations(times, 2):
+            t1_df = g_df[g_df[timepoint_col] == t1][test_col]
+            t2_df = g_df[g_df[timepoint_col] == t2][test_col]
+
+            stat, p_value = stats.ranksums(
+                t1_df,
+                t2_df, 
+            )
+            context: str = y_col_to_title(group) + ' ' \
+                + y_col_to_title(timepoint_col) + ' ' + str(t1) \
+                + ' vs ' + str(t2)
+            print_p_value(context, p_value, show_ns=show_ns)
+
+    group = 'all'
+    for (t1, t2) in combinations(times, 2):
+        t1_df = data[data[timepoint_col] == t1][test_col]
+        t2_df = data[data[timepoint_col] == t2][test_col]
+
+        stat, p_value = stats.ranksums(
+            t1_df,
+            t2_df, 
+        )
+        context: str = y_col_to_title(group) + ' ' \
+            + y_col_to_title(timepoint_col) + ' ' + str(t1) \
+            + ' vs ' + str(t2)
+        print_p_value(context, p_value, show_ns=show_ns)

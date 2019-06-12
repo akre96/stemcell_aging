@@ -624,8 +624,10 @@ def main():
             present_clones_df,
             timepoint_col,
             mtd,
-            args.timepoint,
-            sum=args.sum,
+            by_group=args.by_group,
+            by_clone=args.by_clone,
+            timepoint=args.timepoint,
+            by_sum=args.sum,
             save=args.save,
             save_path=save_path
         )
