@@ -836,7 +836,7 @@ def calculate_thresholds_sum_abundance(
                 timepoint_col
             )
 
-        contributions = percentile_sum_engraftment(month_4_cell_df, cell_type)
+        contributions = percentile_sum_engraftment(month_4_cell_df, timepoint_col, cell_type=cell_type)
         percentile, _ = find_intersect(
             data=contributions,
             y=abundance_cutoff,
