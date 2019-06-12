@@ -1,4 +1,8 @@
 {
+    "survived": {
+        "Exhausted": "white",
+        "Survived": "gray"
+    },
     "cell_type": {
         "gr" : "#FBCC04",
         "b" : "#416bfc",
