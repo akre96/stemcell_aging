@@ -218,6 +218,47 @@ def main():
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
+    if graph_type in ['dist_bias_time_vs_group_facet_grid']:
+        save_path = args.output_dir + os.sep + 'dist_bias_time_vs_group'
+        bins = 20
+        if options != 'default':
+            bins = int(options)
+
+        plot_dist_bias_at_time_vs_group_facet_grid(
+            lineage_bias_df,
+            timepoint_col,
+            bins=bins,
+            change_type=args.change_type,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+    if graph_type in ['expanded_abundance_per_mouse']:
+        save_path = args.output_dir + os.sep + 'expanded_abundance_per_mouse'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        abundance_cutoff = 0.0
+        thresholds = {'gr': 0.0, 'b': 0.0, 'hsc': 0.0}
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=['gr', 'b', 'hsc']
+            )
+        plot_expanded_abundance_per_mouse(
+            present_clones_df,
+            timepoint_col,
+            abundance_cutoff,
+            thresholds,
+            save=args.save,
+            save_path=save_path
+        )
+
     if graph_type in ['exhausted_clone_hsc_abund']:
         save_path = args.output_dir + os.sep + 'exhausted_clone_hsc_abund'
         exhausted_clone_hsc_abund(
@@ -513,8 +554,8 @@ def main():
         if timepoint_col == 'gen':
             lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
 
-        abundance_cutoff = 0.01
-        thresholds = {'gr': 0.01, 'b': 0.01}
+        abundance_cutoff = 0.0
+        thresholds = {'gr': 0.0, 'b': 0.0}
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
@@ -527,6 +568,7 @@ def main():
             present_clones_df,
             timepoint_col,
             thresholds,
+            by_group=args.by_group,
             abundance_cutoff=abundance_cutoff,
             analyzed_cell_types=list(thresholds.keys()),
             line=args.line,
@@ -566,6 +608,27 @@ def main():
                 save_path=save_path,
             )
 
+    if graph_type in ['hsc_abundance_by_change']:
+        save_path = args.output_dir + os.sep + 'hsc_abundance_by_change' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+
+        plot_hsc_abundance_by_change(
+            lineage_bias_df,
+            present_clones_df,
+            timepoint_col,
+            mtd,
+            args.timepoint,
+            sum=args.sum,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['abundance_by_change']:
         save_path = args.output_dir + os.sep + 'abundance_by_change' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
@@ -1447,12 +1510,13 @@ def main():
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col
             )
-        group = 'all'
-        if args.group:
-            group = args.group
+
+        if abundance_cutoff == 0:
+            print('\n ~~ Cutoff set to 0, due to number of clones plotting will take some time ~~ \n')
 
         cell_type = 'gr'
         for cell_type in ['gr', 'b']:
+            print('Plotting for ' + cell_type.title() + ' Cells')
             swamplot_abundance_cutoff(
                 present_clones_df,
                 abundance_cutoff=abundance_cutoff,
