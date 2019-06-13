@@ -1,7 +1,7 @@
 {
     "survived": {
-        "Exhausted": "white",
-        "Survived": "gray"
+        "Exhausted": "#e0e0e0",
+        "Survived": "#484848"
     },
     "cell_type": {
         "gr" : "#FBCC04",
