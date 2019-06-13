@@ -255,6 +255,7 @@ def main():
             timepoint_col,
             abundance_cutoff,
             thresholds,
+            by_sum=args.sum,
             save=args.save,
             save_path=save_path
         )
@@ -265,6 +266,7 @@ def main():
             lineage_bias_df,
             present_clones_df,
             timepoint_col,
+            by_sum=args.sum,
             group=args.group,
             save=args.save,
             save_path=save_path,
@@ -329,6 +331,8 @@ def main():
             lineage_bias_df,
             present_clones_df,
             timepoint_col,
+            by_sum=args.sum,
+            by_clone=args.by_clone,
             save=args.save,
             save_path=save_path,
             save_format='png'
