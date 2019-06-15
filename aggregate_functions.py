@@ -1665,3 +1665,29 @@ def get_hsc_abundance_perc_per_mouse(
     return hsc_data
 
 
+
+def get_clones_exist_first_and_last_per_mouse(
+        input_df: pd.DataFrame(),
+        timepoint_col: str,
+    ):
+    first_df = get_clones_at_timepoint(
+        input_df,
+        timepoint_col,
+        'first'
+    )
+    last_df = get_clones_at_timepoint(
+        input_df,
+        timepoint_col,
+        'last',
+    )
+    both_df = first_df.merge(
+        last_df[['mouse_id', 'code']].drop_duplicates(),
+        how='inner',
+        validate='m:1'
+    )
+    output_df = input_df.merge(
+        both_df[['mouse_id', 'code']].drop_duplicates(),
+        how='inner',
+        validate='m:1'
+    )
+    return output_df

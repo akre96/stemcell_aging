@@ -260,6 +260,62 @@ def main():
             save_path=save_path
         )
 
+    if graph_type in ['exhausted_clone_abund']:
+        save_path = args.output_dir + os.sep + 'exhausted_clone_abund'
+        if args.by_clone:
+            exhausted_clone_abund(
+                lineage_bias_df,
+                present_clones_df,
+                timepoint_col,
+                cell_type='any',
+                by_sum=args.sum,
+                by_count=args.by_clone,
+                group=args.group,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
+        else:
+            for cell_type in ['gr', 'b']:
+                exhausted_clone_abund(
+                    lineage_bias_df,
+                    present_clones_df,
+                    timepoint_col,
+                    cell_type=cell_type,
+                    by_sum=args.sum,
+                    by_count=args.by_clone,
+                    group=args.group,
+                    save=args.save,
+                    save_path=save_path,
+                    save_format='png'
+                )
+    if graph_type in ['exhaust_persist_abund']:
+        save_path = args.output_dir + os.sep + 'exhausted_persist_abund'
+        if args.by_clone:
+            exhaust_persist_abund(
+                lineage_bias_df,
+                present_clones_df,
+                timepoint_col,
+                cell_type='any',
+                by_sum=args.sum,
+                by_clone=args.by_clone,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
+        else:
+            for cell_type in ['gr', 'b']:
+                exhaust_persist_abund(
+                    lineage_bias_df,
+                    present_clones_df,
+                    timepoint_col,
+                    cell_type=cell_type,
+                    by_sum=args.sum,
+                    by_clone=args.by_clone,
+                    save=args.save,
+                    save_path=save_path,
+                    save_format='png'
+                )
     if graph_type in ['exhausted_clone_hsc_abund']:
         save_path = args.output_dir + os.sep + 'exhausted_clone_hsc_abund'
         exhausted_clone_hsc_abund(

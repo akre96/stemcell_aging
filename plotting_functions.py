@@ -23,24 +23,7 @@ import seaborn as sns
 from colour import Color, hex2rgb
 from colorama import init, Fore, Back, Style
 from pyvenn import venn
-from aggregate_functions import filter_threshold, count_clones, \
-    combine_enriched_clones_at_time, count_clones_at_percentile, \
-    filter_mice_with_n_timepoints, filter_cell_type_threshold, \
-    find_top_percentile_threshold, get_data_from_mice_missing_at_time, \
-    get_max_by_mouse_timepoint, sum_abundance_by_change, find_intersect, \
-    calculate_thresholds_sum_abundance, filter_lineage_bias_anytime, \
-    across_gen_bias_change, between_gen_bias_change, calculate_abundance_change, \
-    day_to_gen, calculate_bias_change, filter_biased_clones_at_timepoint, \
-    bias_clones_to_abundance, filter_stable_initially, \
-    calculate_first_last_bias_change_with_avg_data, add_first_last_to_lineage_bias, \
-    add_average_abundance_to_lineage_bias, abundant_clone_survival,\
-    not_survived_bias_by_time_change, mark_changed, filter_bias_change_timepoint, \
-    find_enriched_clones_at_time, create_lineage_bias_survival_df, calculate_bias_change_cutoff, \
-    find_last_clones, add_bias_category, find_last_clones_in_mouse, \
-    filter_lineage_bias_thresholds, filter_lymphoid_exhausted_at_time, \
-    calculate_survival_perc, filter_first_last_by_mouse, MAP_LINEAGE_BIAS_CATEGORY_SHORT, \
-    MAP_LINEAGE_BIAS_CATEGORY, get_clones_at_timepoint, abundance_to_long_by_cell_type, \
-    add_exhaustion_labels, mark_outliers, get_hsc_abundance_perc_per_mouse
+from aggregate_functions import *
 from data_types import timepoint_type, y_col_type
 from lineage_bias import get_bias_change, calc_bias
 from intersection.intersection import intersection
@@ -4042,6 +4025,22 @@ def plot_perc_survival_bias(
         save_path: str = './output',
         save_format: str = 'png',
     ):
+
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 3,
+            'lines.markeredgecolor': 'white',
+            'axes.linewidth': 3,
+            'axes.labelsize': 25,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 22,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+    )
     fname_prefix = save_path + os.sep
     if by_clone:
         y_col = 'exhausted_count'
@@ -4087,7 +4086,7 @@ def plot_perc_survival_bias(
             palette=palette,
             data=g_df,
             capsize=.05,
-            errwidth=.9,
+            errwidth=2,
             saturation=1
         )
         plt.legend(title='').remove()
@@ -5917,6 +5916,130 @@ def hsc_blood_prod_over_time(
         + '.' + save_format
     save_plot(fname, save, save_format)
 
+def exhaust_persist_abund(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        by_clone: bool,
+        by_sum: bool,
+        cell_type: str,
+        save: bool,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 3,
+            'lines.markeredgecolor': 'white',
+            'axes.linewidth': 3,
+            'axes.labelsize': 25,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 22,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+    )
+    survival_df = create_lineage_bias_survival_df(
+        lineage_bias_df,
+        timepoint_col
+    )
+    survival_df = get_clones_at_timepoint(
+        survival_df,
+        timepoint_col,
+        timepoint='first'
+    )
+    y_col = cell_type + '_percent_engraftment'
+    if by_sum:
+        y_desc = cell_type.title() + ' Accumulated Abundance (% WBC)'
+        filename_addon='sum'
+        survival_sum_per_mouse = pd.DataFrame(
+            survival_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])[y_col].sum()
+            )[y_col].unstack(
+                    fill_value=0
+                ).stack().reset_index(name=y_col)
+
+        survival_sum_per_mouse = survival_sum_per_mouse[['mouse_id', 'group', 'survived', y_col]].drop_duplicates()
+        survival_cell_df = survival_sum_per_mouse
+    elif by_clone:
+        filename_addon='count'
+        y_col = 'code'
+
+        # Account for 0 abundant clones that don't actually exist in HSC
+        survival_cell_df = pd.DataFrame(
+            survival_df.groupby(['mouse_id', 'group','survived']).code.nunique()
+            )[y_col].unstack(
+                fill_value=0
+                ).stack().reset_index(name=y_col)
+        y_desc = '# of Clones'
+    else:
+        y_desc = cell_type.title() + ' Average Abundance (% WBC)'
+        filename_addon='avg'
+        survival_cell_df = survival_df
+        survival_cell_df = pd.DataFrame(
+            survival_df.groupby(['mouse_id', 'group','survived'])[y_col].mean()
+            )[y_col].unstack(
+                fill_value=0
+                ).stack().reset_index(name=y_col)
+    
+
+
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Paired T-Test of ' + y_desc + ' in Exhausted vs. Survived'
+    )
+    merge_cols = ['mouse_id']
+    t_s = survival_cell_df[survival_cell_df['survived'] == 'Survived']
+    t_e = survival_cell_df[survival_cell_df['survived'] == 'Exhausted']
+    merged = t_s.merge(
+        t_e,
+        on=merge_cols,
+        how='outer',
+        suffixes=['_1', '_2'],
+        validate='1:1'
+    ).fillna(value=0)
+
+    stat, p_value = stats.ttest_rel(
+        merged[y_col+'_1'],
+        merged[y_col+'_2'],
+    )
+    context: str = ''
+    print_p_value(context, p_value, show_ns=True)
+
+    plt.figure(figsize=(7,5))
+    ax = sns.boxplot(
+        x='survived',
+        y=y_col,
+        order=['Exhausted', 'Survived'],
+        data=survival_cell_df,
+        color='white',
+        fliersize=0
+    )
+    if not by_clone:
+        ax.set(yscale='log')
+
+    for mouse_id, m_df in survival_cell_df.groupby('mouse_id'):
+        sns.stripplot(
+            x='survived',
+            y=y_col,
+            order=['Exhausted', 'Survived'],
+            data=m_df,
+            hue='survived',
+            palette=COLOR_PALETTES['survived'],
+            marker=MARKERS['mouse_id'][mouse_id],
+            linewidth=1,
+            ax=ax,
+            size=15,
+        )
+    plt.ylabel(y_desc)
+    plt.legend().remove()
+    fname = save_path + os.sep + 'exhaust_persist_cell_abund' \
+        + '_' + cell_type \
+        + '_' + filename_addon \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
 def exhaust_persist_hsc_abund(
         lineage_bias_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
@@ -5989,32 +6112,38 @@ def exhaust_persist_hsc_abund(
         y_desc = '# of HSC clones'
     else:
         filename_addon='avg'
-        survival_hsc_df = survival_with_hsc_df
+        survival_sum_per_mouse = pd.DataFrame(
+            survival_with_hsc_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])[y_col].mean()
+            )[y_col].unstack(
+                    fill_value=0
+                ).stack().reset_index(name=y_col)
+
+        survival_sum_per_mouse = survival_sum_per_mouse[['mouse_id', 'group', 'survived', y_col]].drop_duplicates()
+        survival_hsc_df = survival_sum_per_mouse
     
 
 
-    if by_clone or by_sum:
-        print(
-            Fore.CYAN + Style.BRIGHT 
-            + '\nPerforming Paired T-Test of ' + y_desc + ' in Exhausted vs. Survived'
-        )
-        merge_cols = ['mouse_id']
-        t_s = survival_hsc_df[survival_hsc_df['survived'] == 'Survived']
-        t_e = survival_hsc_df[survival_hsc_df['survived'] == 'Exhausted']
-        merged = t_s.merge(
-            t_e,
-            on=merge_cols,
-            how='outer',
-            suffixes=['_1', '_2'],
-            validate='1:1'
-        ).fillna(value=0)
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Paired T-Test of ' + y_desc + ' in Exhausted vs. Survived'
+    )
+    merge_cols = ['mouse_id']
+    t_s = survival_hsc_df[survival_hsc_df['survived'] == 'Survived']
+    t_e = survival_hsc_df[survival_hsc_df['survived'] == 'Exhausted']
+    merged = t_s.merge(
+        t_e,
+        on=merge_cols,
+        how='outer',
+        suffixes=['_1', '_2'],
+        validate='1:1'
+    ).fillna(value=0)
 
-        stat, p_value = stats.ttest_rel(
-            merged[y_col+'_1'],
-            merged[y_col+'_2'],
-        )
-        context: str = ''
-        print_p_value(context, p_value, show_ns=True)
+    stat, p_value = stats.ttest_rel(
+        merged[y_col+'_1'],
+        merged[y_col+'_2'],
+    )
+    context: str = ''
+    print_p_value(context, p_value, show_ns=True)
 
     plt.figure(figsize=(7,5))
     ax = sns.boxplot(
@@ -6024,30 +6153,18 @@ def exhaust_persist_hsc_abund(
         data=survival_hsc_df,
         color='white',
     )
-    if by_clone or by_sum:
-        for mouse_id, m_df in survival_hsc_df.groupby('mouse_id'):
-            sns.stripplot(
-                x='survived',
-                y=y_col,
-                order=['Exhausted', 'Survived'],
-                data=m_df,
-                hue='survived',
-                palette=COLOR_PALETTES['survived'],
-                marker=MARKERS['mouse_id'][mouse_id],
-                linewidth=1,
-                ax=ax,
-                size=15,
-            )
-    else:
-        sns.swarmplot(
+    for mouse_id, m_df in survival_hsc_df.groupby('mouse_id'):
+        sns.stripplot(
             x='survived',
             y=y_col,
             order=['Exhausted', 'Survived'],
-            data=survival_hsc_df,
-            hue='mouse_id',
-            palette=COLOR_PALETTES['mouse_id'],
+            data=m_df,
+            hue='survived',
+            palette=COLOR_PALETTES['survived'],
+            marker=MARKERS['mouse_id'][mouse_id],
+            linewidth=1,
             ax=ax,
-            size=10,
+            size=15,
         )
     plt.ylabel(y_desc)
     plt.legend().remove()
@@ -6388,6 +6505,166 @@ def heatmap_correlation_hsc_ct(
 
     save_plot(fname, save, save_format)
 
+def exhausted_clone_abund(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        cell_type: str,
+        group: str,
+        by_sum: bool,
+        by_count: bool,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+    ):
+    if group != 'all':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
+
+    survival_df = create_lineage_bias_survival_df(
+        lineage_bias_df,
+        timepoint_col
+    )
+
+
+    y_col = cell_type + '_percent_engraftment'
+    if by_sum:
+        desc = 'sum'
+        abundance_per_mouse = pd.DataFrame(
+            survival_df.groupby(
+            ['group', 'mouse_id', 'survived', timepoint_col]
+            )[y_col].sum()
+        ).reset_index()
+    elif by_count:
+        desc = 'count'
+        y_col = 'code'
+        abundance_per_mouse = pd.DataFrame(
+            survival_df.groupby(
+            ['group', 'mouse_id', 'survived', timepoint_col]
+            )['code'].nunique()
+        ).reset_index()
+    else:
+        desc = 'mean'
+        abundance_per_mouse = pd.DataFrame(
+            survival_df.groupby(
+            ['group', 'mouse_id', 'survived', timepoint_col]
+            )[y_col].mean()
+        ).reset_index()
+    if timepoint_col == 'gen':
+        abundance_per_mouse = abundance_per_mouse[abundance_per_mouse[timepoint_col] != 8.5]
+        abundance_per_mouse['gen'] = abundance_per_mouse.gen.astype(int)
+    else:
+        # Remove last time point
+        max_time = abundance_per_mouse[timepoint_col].max()
+        abundance_per_mouse = abundance_per_mouse[
+            abundance_per_mouse[timepoint_col] != max_time
+            ]
+
+    sns.set_context(
+        'paper',
+        font_scale=2.0,
+        rc={
+            'lines.linewidth': 1.5,
+            'axes.linewidth': 4,
+            'axes.labelsize': 25,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 28,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+
+        )
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Paired T-Test of Exhausted vs. Survived'
+    )
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\n  - Group: ' + group.replace('_', ' ').title()
+    )
+    fig, ax = plt.subplots(figsize=(9,6))
+    # T-Test on interesting result
+
+    for time, t_df in abundance_per_mouse.groupby(timepoint_col):
+        t_s = []
+        t_e = []
+        for m, m_df in t_df.groupby('mouse_id'):
+            m_s = [0]
+            m_e = [0]
+
+            m_t_s_df = m_df[m_df['survived'] == 'Survived']
+            if not m_t_s_df.empty:
+                m_s = m_t_s_df[y_col].values
+
+            m_t_e_df = m_df[m_df['survived'] == 'Exhausted']
+            if not m_t_e_df.empty:
+                m_e = m_t_e_df[y_col].values
+
+            if (len(m_e) > 1) or (len(m_s) > 1):
+                print('\n Mouse: ' + m + ' Time: ' +str(time))
+                print(m_e)
+                print(m_s)
+
+            t_s.append(m_s[0])
+            t_e.append(m_e[0])
+            
+                
+        stat, p_value = stats.ttest_rel(
+            t_e,
+            t_s,
+        )
+        context: str = cell_type.title() + ' ' + timepoint_col.title() + ' ' + str(int(time))
+        print_p_value(context, p_value)
+        
+
+    ax = sns.boxplot(
+        x=timepoint_col,
+        y=y_col,
+        hue='survived',
+        data=abundance_per_mouse,
+        hue_order=['Exhausted', 'Survived'],
+        showbox=True,
+        whiskerprops={
+            "alpha": 1
+        },
+        color='white',
+        showcaps=False,
+        fliersize=0,
+    )
+    if not by_count:
+        ax.set(yscale='log')
+        plt.ylabel('Abundance (% WBC)')
+    else:
+        plt.ylabel('# of Clones')
+    
+    times = abundance_per_mouse[timepoint_col].unique().tolist()
+    times.sort()
+    for mouse_id, m_df in abundance_per_mouse.groupby('mouse_id'):
+        sns.stripplot(
+            x=timepoint_col,
+            order=times,
+            y=y_col,
+            hue='survived',
+            hue_order=['Exhausted', 'Survived'],
+            palette=COLOR_PALETTES['survived'],
+            marker=MARKERS['mouse_id'][mouse_id],
+            data=m_df,
+            dodge=True,
+            size=10,
+            linewidth=1
+        )
+    plt.xlabel(
+        timepoint_col.title() 
+    )
+    plt.legend().remove()
+    plt.title('Group: ' + group.replace('_', ' ').title())
+    fname = save_path + os.sep \
+        + 'exhausted_clone_abund-' \
+        + desc \
+        + '_' + cell_type \
+        + '_' + group \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
 def exhausted_clone_hsc_abund(
         lineage_bias_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
@@ -6547,6 +6824,10 @@ def plot_dist_bias_at_time_vs_group_facet_grid(
         save_format: str = 'png'
     ) -> None:
     
+    lineage_bias_df = get_clones_exist_first_and_last_per_mouse(
+        lineage_bias_df,
+        timepoint_col
+    ) 
     y_cols =  ['count', 'gr_percent_engraftment', 'b_percent_engraftment']
     lineage_bias_df['count'] = 1
 
@@ -6675,6 +6956,8 @@ def plot_dist_bias_at_time_vs_group_facet_grid(
         "value",
         err_style='bars',
     ))
+    for ax in g.axes.flat:
+        ax.tick_params(axis='y', labelleft=True)
 
     fname = save_path + os.sep \
         + 'face_grid_lineage_bias_dist_' \
