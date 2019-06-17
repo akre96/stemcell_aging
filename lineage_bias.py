@@ -204,9 +204,6 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
             b_value = group[group.cell_type == 'b'].norm_percent_engraftment.values[0]
             b_engraftment = group[group.cell_type == 'b'].percent_engraftment.values[0]
 
-        if b_engraftment < 0.01 and gr_engraftment < 0.01:
-            continue
-
         new_row = pd.DataFrame(columns=lineage_bias_columns)
         new_row['has_null'] = [group.norm_percent_engraftment.isnull().values.any()]
         new_row['lineage_bias'] = [calc_bias(gr_value, b_value)]
