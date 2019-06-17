@@ -1391,6 +1391,8 @@ def add_avg_abundance_until_timepoint(
         sort_df = g_df.sort_values(by=timepoint_col).reset_index()
         for i in range(len(sort_df)):
             sort_df.loc[i, 'accum_abundance'] = sort_df.loc[:i, ['gr_percent_engraftment', 'b_percent_engraftment']].sum(axis=1).mean()
+            sort_df.loc[i, 'gr_avg_abundance'] = sort_df.loc[:i, ['gr_percent_engraftment']].sum(axis=1).mean()
+            sort_df.loc[i, 'b_avg_abundance'] = sort_df.loc[:i, ['b_percent_engraftment']].sum(axis=1).mean()
         output_df = output_df.append(sort_df)
     return output_df
 
@@ -1691,3 +1693,26 @@ def get_clones_exist_first_and_last_per_mouse(
         validate='m:1'
     )
     return output_df
+
+def filter_lineage_bias_n_timepoints_threshold(
+        lineage_bias_df: pd.DataFrame,
+        threshold: float,
+        n_timepoints: int,
+        timepoint_col:str,
+    ) -> pd.DataFrame:
+    filt_df = pd.DataFrame()
+    for _, group in lineage_bias_df.groupby(['mouse_id', 'code']):
+        if len(group) < n_timepoints:
+            continue
+        pass_thresh = group[
+            (group.gr_percent_engraftment > threshold) |\
+            (group.b_percent_engraftment > threshold)
+        ]
+        if pass_thresh[timepoint_col].nunique() < n_timepoints:
+            continue
+        else:
+            filt_df = filt_df.append(group)
+    return filt_df
+
+
+
