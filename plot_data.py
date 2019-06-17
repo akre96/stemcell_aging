@@ -118,7 +118,7 @@ def main():
     args = parser.parse_args()
     options = args.options
     input_df = pd.read_csv(args.input)
-    lineage_bias_df = pd.read_csv(args.lineage_bias)
+    raw_lineage_bias_df = pd.read_csv(args.lineage_bias)
     bias_change_df = pd.read_csv(args.bias_change)
 
     analysed_cell_types = ['gr', 'b']
@@ -164,10 +164,12 @@ def main():
     
     if args.filter_bias_abund:
         print(' - Lineage Bias Min Abundance set to: ' + str(args.filter_bias_abund))
-        lineage_bias_df = lineage_bias_df[
-            (lineage_bias_df.gr_percent_engraftment >= args.filter_bias_abund) \
-            | (lineage_bias_df.b_percent_engraftment >= args.filter_bias_abund)
+        lineage_bias_df = raw_lineage_bias_df[
+            (raw_lineage_bias_df.gr_percent_engraftment >= args.filter_bias_abund) \
+            | (raw_lineage_bias_df.b_percent_engraftment >= args.filter_bias_abund)
         ]
+    else:
+        lineage_bias_df = raw_lineage_bias_df
 
     if args.cache:
         print(' - Using Cached Data')
@@ -218,6 +220,16 @@ def main():
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
+    if graph_type in ['abundance_changed_group_grid']:
+        save_path = args.output_dir + os.sep + 'abundance_change-type_group_grid'
+
+        plot_abundance_changed_group_grid(
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['dist_bias_time_vs_group_facet_grid']:
         save_path = args.output_dir + os.sep + 'dist_bias_time_vs_group'
         bins = 20
@@ -299,6 +311,7 @@ def main():
                 cell_type='any',
                 by_sum=args.sum,
                 by_clone=args.by_clone,
+                by_group=args.by_group,
                 save=args.save,
                 save_path=save_path,
                 save_format='png'
@@ -312,6 +325,7 @@ def main():
                     cell_type=cell_type,
                     by_sum=args.sum,
                     by_clone=args.by_clone,
+                    by_group=args.by_group,
                     save=args.save,
                     save_path=save_path,
                     save_format='png'
@@ -389,6 +403,7 @@ def main():
             timepoint_col,
             by_sum=args.sum,
             by_clone=args.by_clone,
+            by_group=args.by_group,
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -1126,6 +1141,15 @@ def main():
             y_col = args.y_col
 
         if args.invert:
+            if timepoint_col == 'month':
+                print('Filtering with abundance > 0.01 at a minimum of 3 time points')
+                lineage_bias_df = filter_lineage_bias_n_timepoints_threshold(
+                    raw_lineage_bias_df,
+                    threshold=0.01,
+                    n_timepoints=3,
+                    timepoint_col=timepoint_col
+                )
+
             plot_extreme_bias_time(
                 lineage_bias_df,
                 present_clones_df,
