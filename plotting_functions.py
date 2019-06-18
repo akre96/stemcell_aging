@@ -26,6 +26,7 @@ from pyvenn import venn
 from aggregate_functions import *
 from data_types import timepoint_type, y_col_type
 from lineage_bias import get_bias_change, calc_bias
+import statistical_tests as stat_tests
 from intersection.intersection import intersection
 
 init(autoreset=True)
@@ -62,38 +63,6 @@ def save_plot(file_name: str, save: bool, save_format: str) -> None:
                     format=save_format,
                     bbox_inches='tight',
                 )
-
-def print_p_value(context: str, p_value: float, show_ns: bool = False):
-    """ Print P-Value, styke by significance
-    
-    Arguments:
-        context {str} -- What to print just before P-Value
-        p_value {float}
-    """
-    if p_value < 0.001:
-        print(
-            Fore.WHITE + Back.CYAN + Style.BRIGHT
-            + context
-            + ' P-Value: ' + str(p_value)
-        )
-    elif p_value < 0.01:
-        print(
-            Fore.CYAN + Style.BRIGHT
-            + context
-            + ' P-Value: ' + str(p_value)
-        )
-    elif p_value < 0.05:
-        print(
-            Fore.CYAN 
-            + context
-            + ' P-Value: ' + str(p_value)
-        )
-    elif show_ns:
-        print(
-            Fore.WHITE
-            + context
-            + ' P-Value: ' + str(p_value)
-        )
 
 def get_myeloid_to_lymphoid_colors(cats: List[str]) -> List[str]:
     myeloid_color = Color(COLOR_PALETTES['change_type']['Myeloid'])
@@ -1631,7 +1600,7 @@ def swamplot_abundance_cutoff(
                 context: str = timepoint_col.title() + ' ' + str(t1) \
                 + ' vs ' + str(t2) + ', ' + str(merged.code.nunique()) \
                 + ' ' + cell_type.title() + ' Clones'
-                print_p_value(context, p_value)
+                stat_tests.print_p_value(context, p_value)
                 
             plt.figure(figsize=(7, 5))
             plt.yscale('log')
@@ -1693,7 +1662,7 @@ def swamplot_abundance_cutoff(
             context: str = timepoint_col.title() + ' ' + str(t1) \
             + ' vs ' + str(t2) + ', ' + str(merged.code.nunique()) \
             + ' ' + cell_type.title() + ' Clones'
-            print_p_value(context, p_value)
+            stat_tests.print_p_value(context, p_value)
 
         plt.figure(figsize=(7, 5))
         plt.yscale('log')
@@ -3551,7 +3520,7 @@ def plot_not_survived_abundance(
                 t_s.accum_abundance,
             )
             context: str = timepoint_col.title() + ' ' + str(int(time_change))
-            print_p_value(context, p_value)
+            stat_tests.print_p_value(context, p_value)
             
 
         ax = sns.boxplot(
@@ -3593,7 +3562,7 @@ def plot_not_survived_abundance(
             t_s.accum_abundance,
         )
         context: str = timepoint_col.title() + ' ' + str(int(time_change))
-        print_p_value(context, p_value)
+        stat_tests.print_p_value(context, p_value)
         
 
     ax = sns.boxplot(
@@ -3799,7 +3768,7 @@ def plot_hsc_abund_bias_at_last(
                 non_vals.percent_engraftment,
             )
             context: str = cat
-            print_p_value(context, p_value)
+            stat_tests.print_p_value(context, p_value)
 
         fname = save_path + os.sep \
             + 'abund_hsc_biased_at_last_by-group' \
@@ -3833,7 +3802,7 @@ def plot_hsc_abund_bias_at_last(
                 b_vals.percent_engraftment,
             )
             context: str = a + ' vs ' + b
-            print_p_value(context, p_value)
+            stat_tests.print_p_value(context, p_value)
 
         fname = save_path + os.sep \
             + 'abund_hsc_biased_at_last' \
@@ -4305,7 +4274,7 @@ def plot_abundance_by_change(
                     b_vals['percent_engraftment'],
                 )
                 context: str = str(timepoint) + ' - ' + a + ' vs ' + b
-                print_p_value(context, p_value)
+                stat_tests.print_p_value(context, p_value)
 
     group = 'all'
     for cell_type, c_df in change_marked_df.groupby(['cell_type']):
@@ -4323,7 +4292,7 @@ def plot_abundance_by_change(
                     b_vals['percent_engraftment'],
                 )
                 context: str = str(timepoint) + ' - ' + a + ' vs ' + b
-                print_p_value(context, p_value)
+                stat_tests.print_p_value(context, p_value)
         plt.figure(figsize=(10,9))
         plt.title(
             cell_type.title() + ' '
@@ -4481,7 +4450,7 @@ def plot_n_most_abundant(
                 t_df[t_df.group == 'no_change']['percent_engraftment'],
             )
             context: str = timepoint_col.title() + ' ' + str(t1) 
-            print_p_value(context, p_value, show_ns=False)
+            stat_tests.print_p_value(context, p_value, show_ns=False)
 
         print(
             Fore.CYAN + Style.BRIGHT 
@@ -4501,7 +4470,7 @@ def plot_n_most_abundant(
                 context: str = y_col_to_title(group) + ' ' \
                     + timepoint_col.title() + ' ' + str(t1) \
                     + ' vs ' + str(t2)
-                print_p_value(context, p_value)
+                stat_tests.print_p_value(context, p_value)
 
         plt.figure(figsize=(7,5))
         ax = sns.boxplot(
@@ -4616,7 +4585,7 @@ def plot_expanded_abundance_per_mouse(
                 t_df[t_df.group == 'no_change']['percent_engraftment'],
             )
             context: str = timepoint_col.title() + ' ' + str(t1) 
-            print_p_value(context, p_value, show_ns=False)
+            stat_tests.print_p_value(context, p_value, show_ns=False)
 
         print(
             Fore.CYAN + Style.BRIGHT 
@@ -4636,7 +4605,7 @@ def plot_expanded_abundance_per_mouse(
                 context: str = y_col_to_title(group) + ' ' \
                     + timepoint_col.title() + ' ' + str(t1) \
                     + ' vs ' + str(t2)
-                print_p_value(context, p_value)
+                stat_tests.print_p_value(context, p_value)
 
         plt.figure(figsize=(7,5))
         ax = sns.boxplot(
@@ -4738,7 +4707,7 @@ def plot_clone_count_swarm(
                 dmold
             )
             context: str = timepoint_col.title() + ' ' + str(int(timepoint))
-            print_p_value(context, p_value)
+            stat_tests.print_p_value(context, p_value)
 
         print(
             Fore.CYAN + Style.BRIGHT 
@@ -4754,7 +4723,7 @@ def plot_clone_count_swarm(
             )
             context: str = timepoint_col.title() + ' ' + str(t1) \
                 + ' vs ' + str(t2)
-            print_p_value(context, p_value)
+            stat_tests.print_p_value(context, p_value)
 
 
         plt.figure(figsize=(6,5))
@@ -4991,7 +4960,7 @@ def plot_not_survived_abundance_at_time(
                     t_s[y_col],
                 )
                 context: str = timepoint_col.title() + ' ' + str(int(time_change))
-                print_p_value(context, p_value)
+                stat_tests.print_p_value(context, p_value)
                 
 
             ax = sns.boxplot(
@@ -5243,7 +5212,7 @@ def plot_clone_count_bar_first_last(
                 t_df[t_df.group == 'no_change']['code'],
             )
             context: str = timepoint_col.title() + ' ' + str(t1) 
-            print_p_value(context, p_value, show_ns=True)
+            stat_tests.print_p_value(context, p_value, show_ns=True)
 
         plt.figure(figsize=(6,5))
         ax = sns.barplot(
@@ -5760,7 +5729,7 @@ def hsc_to_ct_compare(
                 r_squared = r_value**2
                 print(Fore.CYAN + Style.BRIGHT + mouse_id + ' Log(' + cell_type + ') vs Log(hsc):')
                 print(Fore.CYAN + " r-squared:"  + str(r_squared))
-                print_p_value('', p_value)
+                stat_tests.print_p_value('', p_value)
             except ValueError:
                 continue
             fig, ax = plt.subplots(figsize=(7,5))
@@ -5820,7 +5789,7 @@ def hsc_to_ct_compare(
                 r_squared = r_value**2
                 print(Fore.CYAN + Style.BRIGHT + y_col_to_title(group) + ' Log(' + cell_type + ') vs Log(hsc):')
                 print(Fore.CYAN + " r-squared:"  + str(r_squared))
-                print_p_value('', p_value)
+                stat_tests.print_p_value('', p_value)
                 reg_y = [np.exp(np.log(x) * slope + intercept) for x in g_df['hsc_percent_engraftment']]
                 plt.plot(g_df[x_col], reg_y, color=COLOR_PALETTES['group'][group])
         ## Regression using scipy
@@ -5831,7 +5800,7 @@ def hsc_to_ct_compare(
         r_squared = r_value**2
         print(Fore.CYAN + Style.BRIGHT + 'Log(' + cell_type + ') vs Log(hsc):')
         print(Fore.CYAN + " r-squared:"  + str(r_squared))
-        print_p_value('', p_value)
+        stat_tests.print_p_value('', p_value)
         reg_y = [np.exp(np.log(x) * slope + intercept) for x in no_na_zero_df['hsc_percent_engraftment']]
 
         plt.plot(no_na_zero_df[x_col], reg_y, color='#e74c3c')
@@ -5990,7 +5959,7 @@ def exhaust_persist_abund(
     show_ns=True
     if by_clone or by_sum:
         match_cols = ['mouse_id']
-        rel_ttest_group_time(
+        stat_tests.rel_ttest_group_time(
             survival_cell_df,
             match_cols=match_cols,
             merge_type='outer',
@@ -6000,7 +5969,7 @@ def exhaust_persist_abund(
             overall_context=y_desc,
             show_ns=show_ns
         )
-        ind_ttest_group_time(
+        stat_tests.ind_ttest_group_time(
             survival_cell_df,
             y_col,
             'survived',
@@ -6009,7 +5978,7 @@ def exhaust_persist_abund(
         )
     else:
         markers=True
-        ranksums_test_group_time(
+        stat_tests.ranksums_test_group_time(
             survival_cell_df,
             y_col,
             'survived',
@@ -6095,6 +6064,7 @@ def exhaust_persist_hsc_abund(
         lineage_bias_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
+        min_hsc_per_mouse: pd.DataFrame,
         by_clone: bool,
         by_sum: bool,
         by_group: bool,
@@ -6117,7 +6087,6 @@ def exhaust_persist_hsc_abund(
             'figure.titlesize': 'small',
         }
     )
-    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].rename(columns={'percent_engraftment':'HSC Abundance'})
     without_hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type.isin(['gr','b'])]
     survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
@@ -6129,11 +6098,16 @@ def exhaust_persist_hsc_abund(
         timepoint='first'
     )
     hsc_data = get_hsc_abundance_perc_per_mouse(clonal_abundance_df)
+    if by_clone:
+        hsc_data = hsc_data.merge(
+            min_hsc_per_mouse,
+            validate='m:1'
+        )
 
 
     
     survival_with_hsc_df = survival_df.merge(
-        hsc_data[['mouse_id', 'code', 'perc_tracked_hsc']],
+        hsc_data[['mouse_id', 'code', 'hsc_percent_engraftment', 'perc_tracked_hsc', 'min_eng_hsc']],
         on=['mouse_id', 'code'],
         how='inner',
         validate='m:1'
@@ -6157,13 +6131,16 @@ def exhaust_persist_hsc_abund(
         y_col = 'code'
 
         # Account for 0 abundant clones that don't actually exist in HSC
-        survival_with_hsc_df = survival_with_hsc_df[survival_with_hsc_df.perc_tracked_hsc > 0]
+        survival_with_hsc_df = survival_with_hsc_df[survival_with_hsc_df.hsc_percent_engraftment >= survival_with_hsc_df.min_eng_hsc]
+
+
         survival_hsc_df = pd.DataFrame(
             survival_with_hsc_df.groupby(['mouse_id', 'group','survived']).code.nunique()
             )[y_col].unstack(
                 fill_value=0
                 ).stack().reset_index(name=y_col)
         y_desc = '# of HSC clones'
+        print(survival_hsc_df)
     else:
         filename_addon='avg'
         survival_hsc_df = survival_with_hsc_df
@@ -6708,7 +6685,7 @@ def exhausted_clone_abund(
             t_s,
         )
         context: str = cell_type.title() + ' ' + timepoint_col.title() + ' ' + str(int(time))
-        print_p_value(context, p_value)
+        stat_tests.print_p_value(context, p_value)
         
 
     ax = sns.boxplot(
@@ -6859,7 +6836,7 @@ def exhausted_clone_hsc_abund(
             t_s,
         )
         context: str = timepoint_col.title() + ' ' + str(int(time))
-        print_p_value(context, p_value)
+        stat_tests.print_p_value(context, p_value)
         
 
     ax = sns.boxplot(
@@ -7245,207 +7222,6 @@ def plot_hsc_abundance_by_change(
         + '.' + save_format
     save_plot(fname, save, save_format)
 
-def ind_ttest_group_time(
-        data: pd.DataFrame,
-        test_col: str,
-        timepoint_col: str,
-        overall_context: str,
-        show_ns: bool,
-    ):
-    times = data[timepoint_col].unique()
-    print(
-        Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Independent T-Test on ' 
-        + overall_context
-        + ' between groups at each ' + y_col_to_title(timepoint_col)
-    )
-    for t1, t_df in data.groupby(timepoint_col):
-        _, p_value = stats.ttest_ind(
-            t_df[t_df.group == 'aging_phenotype'][test_col],
-            t_df[t_df.group == 'no_change'][test_col],
-        )
-        context: str = timepoint_col.title() + ' ' + str(t1) 
-        print_p_value(context, p_value, show_ns=show_ns)
-
-    print(
-        Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Independent T-Test on ' 
-        + overall_context
-        + ' per group between ' + y_col_to_title(timepoint_col) + 's'
-    )
-    for group, g_df in data.groupby('group'):
-        for (t1, t2) in combinations(times, 2):
-            t1_df = g_df[g_df[timepoint_col] == t1][test_col]
-            t2_df = g_df[g_df[timepoint_col] == t2][test_col]
-
-            stat, p_value = stats.ttest_ind(
-                t1_df,
-                t2_df, 
-            )
-            context: str = y_col_to_title(group) + ' ' \
-                + y_col_to_title(timepoint_col) + ' ' + str(t1) \
-                + ' vs ' + str(t2)
-            print_p_value(context, p_value, show_ns=show_ns)
-
-    group = 'all'
-    for (t1, t2) in combinations(times, 2):
-        t1_df = data[data[timepoint_col] == t1][test_col]
-        t2_df = data[data[timepoint_col] == t2][test_col]
-
-        stat, p_value = stats.ttest_ind(
-            t1_df,
-            t2_df, 
-        )
-        context: str = y_col_to_title(group) + ' ' \
-            + y_col_to_title(timepoint_col) + ' ' + str(t1) \
-            + ' vs ' + str(t2)
-        print_p_value(context, p_value, show_ns=show_ns)
-
-
-def rel_ttest_group_time(
-        data: pd.DataFrame,
-        match_cols:List[str],
-        merge_type: str,
-        fill_na: Any,
-        test_col: str,
-        timepoint_col: str,
-        overall_context: str,
-        show_ns: bool,
-    ):
-    times = data[timepoint_col].unique()
-    match_col_str = '-'.join(match_cols)
-    print(
-        Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Paired T-Test on ' 
-        + overall_context
-        + ' per group between ' + y_col_to_title(timepoint_col) + 's'
-    )
-    for group, g_df in data.groupby('group'):
-        for (t1, t2) in combinations(times, 2):
-            t1_df = g_df[g_df[timepoint_col] == t1]
-            t2_df = g_df[g_df[timepoint_col] == t2]
-
-            merged = t1_df.merge(
-                t2_df,
-                on=match_cols,
-                how=merge_type,
-                validate='1:1',
-                suffixes=['_1', '_2']
-            )
-            if fill_na is not None:
-                merged = merged.fillna(
-                    value=fill_na,
-                )
-
-            count = len(merged)
-            if count <= 1:
-                p_value = 1
-            else:
-                stat, p_value = stats.ttest_rel(
-                    merged[test_col + '_1'],
-                    merged[test_col + '_2'],
-                )
-            
-            context: str = y_col_to_title(group) + ' ' \
-                + y_col_to_title(timepoint_col) + ' ' + str(t1) \
-                + ' vs ' + str(t2) \
-                + ', n ' + match_col_str + ': ' + str(count)
-            print_p_value(context, p_value, show_ns=show_ns)
-
-    group = 'all'
-    for (t1, t2) in combinations(times, 2):
-        t1_df = data[data[timepoint_col] == t1]
-        t2_df = data[data[timepoint_col] == t2]
-
-        merged = t1_df.merge(
-            t2_df,
-            on=match_cols,
-            how='inner',
-            validate='1:1',
-            suffixes=['_1', '_2']
-        )
-        merged = t1_df.merge(
-            t2_df,
-            on=match_cols,
-            how=merge_type,
-            validate='1:1',
-            suffixes=['_1', '_2']
-        )
-        if fill_na is not None:
-            merged = merged.fillna(
-                value=fill_na,
-            )
-        count = len(merged)
-        if count <= 1:
-            p_value = 1
-        else:
-            stat, p_value = stats.ttest_rel(
-                merged[test_col + '_1'],
-                merged[test_col + '_2'],
-            )
-        
-        context: str = y_col_to_title(group) + ' ' \
-            + y_col_to_title(timepoint_col) + ' ' + str(t1) \
-            + ' vs ' + str(t2) \
-            + ', n ' + match_col_str + ': ' + str(count)
-        print_p_value(context, p_value, show_ns=show_ns)
-
-def ranksums_test_group_time(
-        data: pd.DataFrame,
-        test_col: str,
-        timepoint_col: str,
-        overall_context: str,
-        show_ns: bool,
-    ):
-    times = data[timepoint_col].unique()
-    print(
-        Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Rank-Sum T-Test on ' 
-        + overall_context
-        + ' between groups at each ' + y_col_to_title(timepoint_col)
-    )
-    for t1, t_df in data.groupby(timepoint_col):
-        _, p_value = stats.ranksums(
-            t_df[t_df.group == 'aging_phenotype'][test_col],
-            t_df[t_df.group == 'no_change'][test_col],
-        )
-        context: str = timepoint_col.title() + ' ' + str(t1) 
-        print_p_value(context, p_value, show_ns=show_ns)
-
-    print(
-        Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Rank Sum T-Test on ' 
-        + overall_context
-        + ' per group between ' + y_col_to_title(timepoint_col) + 's'
-    )
-    for group, g_df in data.groupby('group'):
-        for (t1, t2) in combinations(times, 2):
-            t1_df = g_df[g_df[timepoint_col] == t1][test_col]
-            t2_df = g_df[g_df[timepoint_col] == t2][test_col]
-
-            stat, p_value = stats.ranksums(
-                t1_df,
-                t2_df, 
-            )
-            context: str = y_col_to_title(group) + ' ' \
-                + y_col_to_title(timepoint_col) + ' ' + str(t1) \
-                + ' vs ' + str(t2)
-            print_p_value(context, p_value, show_ns=show_ns)
-
-    group = 'all'
-    for (t1, t2) in combinations(times, 2):
-        t1_df = data[data[timepoint_col] == t1][test_col]
-        t2_df = data[data[timepoint_col] == t2][test_col]
-
-        stat, p_value = stats.ranksums(
-            t1_df,
-            t2_df, 
-        )
-        context: str = y_col_to_title(group) + ' ' \
-            + y_col_to_title(timepoint_col) + ' ' + str(t1) \
-            + ' vs ' + str(t2)
-        print_p_value(context, p_value, show_ns=show_ns)
-
 def plot_abundance_changed_group_grid(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
@@ -7453,6 +7229,21 @@ def plot_abundance_changed_group_grid(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
+    """ Plot a facet grid of Gr and B abundance between initial 
+    and last timepoint. One line per mouse
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame}
+        timepoint_col {str}
+    
+    Keyword Arguments:
+        save {bool}
+        save_path {str}
+        save_format {str}
+    
+    Returns:
+        None
+    """
     
     lineage_bias_df = get_clones_exist_first_and_last_per_mouse(
         lineage_bias_df,
@@ -7488,7 +7279,7 @@ def plot_abundance_changed_group_grid(
     if timepoint_col == 'gen':
         lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
 
-    lineage_bias_at_time_df = get_clones_at_timepoint(
+    lineage_bias_at_time_df = find_last_clones_in_mouse(
         lineage_bias_df,
         timepoint_col,
         'last'
@@ -7510,6 +7301,11 @@ def plot_abundance_changed_group_grid(
         id_vars=group_cols,
         value_vars=y_cols
     )
+    if not melt_df[melt_df['value'] == 0].empty:
+        zero_val = melt_df[melt_df['value'] != 0].value.min()/100
+        melt_df['value'] = melt_df['value'] + zero_val
+        print(Fore.YELLOW + 'Zero found, adding: ' + str(zero_val) + ' To All Values')
+
     melt_df['change_status'] = melt_df['change_status'].str[0]
     melt_df['group'] = melt_df['group'].str[0]
     melt_df['change-group'] = melt_df['change_status'].str.cat(melt_df['group'], sep='-')
@@ -7536,4 +7332,160 @@ def plot_abundance_changed_group_grid(
     fname = save_path + os.sep \
         + 'face_grid_abundance_change-type' \
        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def plot_abundance_change_changed_group_grid(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        by_mouse:bool,
+        by_clone: bool,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    """ Plot a scatter/stripplot of abundance change between first 
+    and last time point per mouse.
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame}
+        timepoint_col {str} 
+        by_mouse {bool} -- set to plot avg change per mouse
+        by_clone {bool} -- set to plot absolute difference instead of log2xChange
+    
+    Keyword Arguments:
+        save {bool} 
+        save_path {str}
+        save_format {str}
+    
+    Returns:
+        None
+    """
+    
+    lineage_bias_df = get_clones_exist_first_and_last_per_mouse(
+        lineage_bias_df,
+        timepoint_col
+    ) 
+    y_cols =  ['gr_abundance_diff', 'b_abundance_diff']
+    group_cols = ['mouse_id', 'group', 'change_status']
+
+    if by_mouse:
+        group_desc = 'by-mouse'
+    else:
+        group_desc = 'by-clone'
+
+    # NOTE By_Clone here is used as a flag for log2 fold vs linear change
+    if not by_clone:
+        math_desc = 'log2fc'
+    else:
+        math_desc = 'absolute_change'
+
+    sns.set_context(
+        'paper',
+        font_scale=1,
+        rc={
+            'lines.linewidth': 1,
+            'axes.linewidth': 3,
+            'axes.labelsize': 5,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 15,
+            'ytick.labelsize': 15,
+            'figure.titlesize': 'small',
+        }
+    )
+    bias_change_df = get_bias_change(
+        lineage_bias_df,
+        timepoint_col,
+    )
+    lineage_bias_df = mark_changed(
+        lineage_bias_df,
+        bias_change_df,
+        min_time_difference=1,
+    )
+
+    if timepoint_col == 'gen':
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+
+    if not by_clone:
+        zero_add_gr = lineage_bias_df[lineage_bias_df['gr_percent_engraftment'] != 0 ]['gr_percent_engraftment'].min()/100
+        zero_add_b = lineage_bias_df[lineage_bias_df['b_percent_engraftment'] != 0 ]['b_percent_engraftment'].min()/100
+        lineage_bias_df['gr_percent_engraftment'] = lineage_bias_df['gr_percent_engraftment'] + zero_add_gr
+        lineage_bias_df['b_percent_engraftment'] = lineage_bias_df['b_percent_engraftment'] + zero_add_b
+
+    lineage_bias_at_first_df = find_last_clones_in_mouse(
+        lineage_bias_df,
+        timepoint_col,
+    )
+    lineage_bias_at_last_df = get_clones_at_timepoint(
+        lineage_bias_df,
+        timepoint_col,
+        'first'
+    )
+    both_time_bias_df = lineage_bias_at_first_df.merge(
+        lineage_bias_at_last_df,
+        on=group_cols + ['code'],
+        suffixes=['_first', '_last'],
+        validate='1:1'
+    )
+
+    if not by_clone:
+        both_time_bias_df = both_time_bias_df.assign(
+            gr_abundance_diff=lambda x: np.log2(x.gr_percent_engraftment_last/x.gr_percent_engraftment_first),
+            b_abundance_diff=lambda x: np.log2(x.b_percent_engraftment_last/x.b_percent_engraftment_first),
+        )
+    else:
+        both_time_bias_df = both_time_bias_df.assign(
+            gr_abundance_diff=lambda x: x.gr_percent_engraftment_last - x.gr_percent_engraftment_first,
+            b_abundance_diff=lambda x: x.b_percent_engraftment_last - x.b_percent_engraftment_first,
+        )
+    
+
+    if by_mouse:
+        avg_abund_per_mouse = pd.DataFrame(both_time_bias_df.groupby(
+            group_cols
+            )[y_cols].mean()).reset_index()
+
+        melt_df = pd.melt(
+            avg_abund_per_mouse,
+            id_vars=group_cols,
+            value_vars=y_cols
+        )
+    else:
+        melt_df = pd.melt(
+            both_time_bias_df,
+            id_vars=['code'] + group_cols,
+            value_vars=y_cols
+        )
+    melt_df['change_status'] = melt_df['change_status'].str[0]
+    melt_df['group'] = melt_df['group'].str[0]
+    melt_df['change-group'] = melt_df['change_status'].str.cat(melt_df['group'], sep='-')
+    col_order = ['U-a', 'U-n', 'C-a', 'C-n']
+
+    g = sns.FacetGrid(
+        melt_df,
+        row='variable',
+        hue='mouse_id',
+        palette=COLOR_PALETTES['mouse_id'],
+        sharey='row',
+        aspect=3
+    )
+    g = (g.map(
+        sns.swarmplot,
+        "change-group",
+        "value",
+        order=col_order,
+        linewidth=1,
+        size=8,
+        alpha=0.8,
+    ).set(yscale='linear'))
+    for ax in g.axes.flat:
+        ax.tick_params(axis='y', labelleft=True)
+        ax.axhline(y=0, color='gray', linestyle='dashed', linewidth=2)
+
+    fname = save_path + os.sep \
+        + 'face_grid_abundance_change_change-type' \
+        + '_' + math_desc \
+        + '_' + group_desc \
+        + '.' + save_format
     save_plot(fname, save, save_format)
