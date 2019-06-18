@@ -9,13 +9,13 @@ python lineage_bias.py \
 """
 import argparse
 from typing import List
-import re
 import os
 from math import pi, sin, atan
 import pandas as pd
 from aggregate_functions import filter_threshold, \
     calculate_thresholds_sum_abundance, \
     filter_clones_threshold_anytime
+from parse_facs_data import parse_wbc_count_file
 
 def calc_angle(gr_value: float, b_value: float) -> float:
     """ Calculates angle towards myeloid bias
@@ -224,49 +224,6 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
 
     return lineage_bias_df
 
-def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b']) -> pd.DataFrame:
-    """ Parses white blood cell count file to format as dataframe
-
-    Arguments:
-        wbc_count_file_path {str} -- path to count file
-
-    Keyword Arguments:
-        analyzed_cell_types {List[str]} -- cell types to parse for (default: {['gr', 'b']})
-
-    Returns:
-        pd.DataFrame -- dataframe of mouse_id, cell_type, day, cell_count
-    """
-
-    count_data_raw = pd.read_csv(wbc_count_file_path, sep='\t')
-    parsed_counts = pd.DataFrame()
-    col_names = count_data_raw.columns
-    end_cols = [i for i, x in enumerate(col_names.tolist()) if x.find('Unnamed') != -1]
-    end_cols.append(len(col_names) - 2)
-    for i, end_col_index in enumerate(end_cols):
-        parsed_timepoint_data: pd.DataFrame = pd.DataFrame()
-        if i == 0:
-            start_index = 0
-        else:
-            start_index = end_cols[i-1] + 1
-        one_timepoint_data = count_data_raw[col_names[start_index:end_col_index]]
-        one_timepoint_cols = one_timepoint_data.columns
-        day = int(one_timepoint_data.columns[0][1:])
-        month = int(round(day/30))
-
-        for cell_type in analyzed_cell_types:
-            cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id','day','month','cell_type','cell_count'])
-            cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]].str.replace(" ", "")
-            cell_type_timepoint_data['day'] = day
-            cell_type_timepoint_data['month'] = month
-            cell_type_timepoint_data['cell_type'] = cell_type
-            cell_type_col = one_timepoint_cols[[re.match(cell_type.upper(), x.upper()) is not None for x in one_timepoint_cols]]
-            cell_type_timepoint_data['cell_count'] = one_timepoint_data[cell_type_col]
-            parsed_timepoint_data = parsed_timepoint_data.append(cell_type_timepoint_data, ignore_index=True)
-
-        no_nan_mouse_ids = parsed_timepoint_data[~parsed_timepoint_data.mouse_id.isnull()]
-        parsed_counts = parsed_counts.append(no_nan_mouse_ids, ignore_index=True)
-
-    return parsed_counts
 
 def calculate_baseline_counts(present_df: pd.DataFrame,
                               cell_counts_df: pd.DataFrame,
@@ -408,7 +365,6 @@ def main():
         )
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
     print('Done.\n')
-    norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
 
     print('Calculating lineage bias...')
     if args.abundance_cutoff:
