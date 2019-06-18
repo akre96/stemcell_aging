@@ -84,6 +84,8 @@ def main():
     parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default='~/Data/stemcell_aging/rest_of_clones')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
     parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default='/home/sakre/Data/stemcell_aging/OT_2.0_WBCs_051818-modified.txt')
+    parser.add_argument('--gfp', dest='gfp', help='Path to txt containing FACS GFP data', default='/home/sakre/Data/stemcell_aging/OT_2.0_GFP_051818.txt')
+    parser.add_argument('--donor', dest='donor', help='Path to txt containing FACS Donor Chimerism data', default='/home/sakre/Data/stemcell_aging/OT_2.0_donor_051818.txt')
     parser.add_argument('--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Data/stemcell_aging/lineage_bias/bias_change_t0-0_from-counts.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='/home/sakre/Data/stemcell_aging/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
@@ -123,8 +125,13 @@ def main():
 
     analysed_cell_types = ['gr', 'b']
     phenotypic_groups = ['aging_phenotype', 'no_change']
-    cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'b', 'wbc'])
+    cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'hsc', 'b', 'wbc'])
 
+    min_hsc_per_mouse = calc_min_hsc_per_mouse(
+        args.cell_count,
+        args.gfp,
+        args.donor
+        )
 
     if not input_df[~input_df.group.isin(phenotypic_groups)].empty:
         print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
@@ -220,6 +227,18 @@ def main():
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
+    if graph_type in ['abundance_change_changed_group_grid']:
+        save_path = args.output_dir + os.sep + 'abundance_change_change-type_group_grid'
+
+        plot_abundance_change_changed_group_grid(
+            lineage_bias_df,
+            timepoint_col,
+            by_clone=args.by_clone,
+            by_mouse=args.by_mouse,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['abundance_changed_group_grid']:
         save_path = args.output_dir + os.sep + 'abundance_change-type_group_grid'
 
@@ -401,6 +420,7 @@ def main():
             lineage_bias_df,
             present_clones_df,
             timepoint_col,
+            min_hsc_per_mouse,
             by_sum=args.sum,
             by_clone=args.by_clone,
             by_group=args.by_group,

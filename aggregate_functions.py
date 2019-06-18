@@ -9,8 +9,12 @@ import scipy.stats as stats
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from colorama import init, Fore, Back, Style
 from intersection.intersection import intersection
 from data_types import timepoint_type
+from parse_facs_data import parse_wbc_count_file
+
+init(autoreset=True)
 
 UNIQUE_CODE_COLS = ['code', 'mouse_id']
   
@@ -1714,5 +1718,50 @@ def filter_lineage_bias_n_timepoints_threshold(
             filt_df = filt_df.append(group)
     return filt_df
 
+def calc_min_hsc_per_mouse(
+        cell_count_file: str,
+        gfp_file: str,
+        donor_file: str
+    ):
 
+    cell_count_df = parse_wbc_count_file(cell_count_file, ['hsc', 'wbc'])
+
+    wbc_count_df = cell_count_df[cell_count_df.cell_type == 'wbc'].rename(columns={'cell_count': 'wbc_count'})
+    hsc_count_df = cell_count_df[cell_count_df.cell_type == 'hsc']
+    gfp_df = parse_wbc_count_file(gfp_file, ['hsc']).rename(columns={'cell_count':'gfp_perc'})
+    donor_df = parse_wbc_count_file(donor_file, ['hsc']).rename(columns={'cell_count':'donor_perc'})
+
+    facs_data = wbc_count_df
+
+    if hsc_count_df.empty:
+        print(Fore.YELLOW + 'Warning: No Cell Count Data for HSCs -- setting to 2000 HSC cells')
+        facs_data['cell_count'] = 2000
+    else:
+        facs_data = facs_data.merge(
+            hsc_count_df,
+            validate='1:1',
+        )
+
+
+    if gfp_df.empty:
+        print(Fore.YELLOW + 'Warning: No GFP Data for HSCs -- setting to 100 percent GFP')
+        facs_data['gfp_perc'] = 100
+    else:
+        facs_data = facs_data.merge(
+            gfp_df,
+            validate='1:1',
+        )
+
+    if donor_df.empty:
+        print( Fore.YELLOW + 'Warning: No Donor Chimerism Data for HSCs -- setting to 100 percent Donor Chimerism')
+        facs_data['donor_perc'] = 100
+    else:
+        facs_data = facs_data.merge(
+            donor_df,
+            validate='1:1'
+        )
+
+    # (GFP * DONOR)/ (100 * HSC_COUNT)
+    facs_data['min_eng_hsc'] = facs_data['gfp_perc'] * facs_data['donor_perc'] / (facs_data['cell_count'] * 100)
+    return facs_data[['mouse_id', 'min_eng_hsc']].drop_duplicates()
 
