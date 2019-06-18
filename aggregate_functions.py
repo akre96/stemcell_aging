@@ -1765,3 +1765,22 @@ def calc_min_hsc_per_mouse(
     facs_data['min_eng_hsc'] = facs_data['gfp_perc'] * facs_data['donor_perc'] / (facs_data['cell_count'] * 100)
     return facs_data[['mouse_id', 'min_eng_hsc']].drop_duplicates()
 
+def merge_hsc_min_abund(
+        input_df: pd.DataFrame,
+        min_hsc_per_mouse: pd.DataFrame,
+    ) -> pd.DataFrame:
+    """ Add minimum Abundance in 1 HSC data to input DF as new column
+    Column added is called 'min_eng_hsc' 
+
+    Arguments:
+        input_df {pd.DataFrame}
+        min_hsc_per_mouse {pd.DataFrame}
+    
+    Returns:
+        pd.DataFrame
+    """
+    return input_df.merge(
+        min_hsc_per_mouse,
+        how='inner',
+        validate='1:1'
+    )

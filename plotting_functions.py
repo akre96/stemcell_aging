@@ -30,9 +30,9 @@ import statistical_tests as stat_tests
 from intersection.intersection import intersection
 
 init(autoreset=True)
-COLOR_PALETTES = json.load(open('color_palettes.json', 'r'))
-MARKERS = json.load(open('markers.json', 'r'))
-LINE_STYLES = json.load(open('line_styles.json', 'r'))
+COLOR_PALETTES = json.load(open('lib/color_palettes.json', 'r'))
+MARKERS = json.load(open('lib/markers.json', 'r'))
+LINE_STYLES = json.load(open('lib/line_styles.json', 'r'))
 NEW_GROUP_NAME_MAP = {
     'aging_phenotype': 'E-MOLD',
     'no_change': 'D-MOLD'
@@ -7489,3 +7489,68 @@ def plot_abundance_change_changed_group_grid(
         + '_' + group_desc \
         + '.' + save_format
     save_plot(fname, save, save_format)
+
+def plot_hsc_and_blood_clone_count(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        min_hsc_per_mouse: pd.DataFrame,
+        exclude_timepoints: List[Any],
+        by_group: bool,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+    """ Plot a stripplot of HSC Clone count and Blood Clone count
+    
+    Arguments:
+        clonal_abundance_df {pd.DataFrame}
+        timepoint_col {str}
+        min_hsc_per_mouse {pd.DataFrame} -- DataFrame of minimum abundance in 1 real HSC per mouse
+        exclude_timepoints {List[Any]} -- List of time points to not use for clone counting
+        by_group {bool} -- split stripplot by group
+    
+    Keyword Arguments:
+        save {bool
+        save_path {str}
+        save_format {str}
+    
+    Returns:
+        None
+    """
+    sns.set_context(
+        'paper',
+        font_scale=1,
+        rc={
+            'lines.linewidth': 1,
+            'axes.linewidth': 3,
+            'axes.labelsize': 5,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 15,
+            'ytick.labelsize': 15,
+            'figure.titlesize': 'small',
+        }
+    )
+    with_min_df = merge_hsc_min_abund(
+        clonal_abundance_df,
+        min_hsc_per_mouse
+    )
+    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']
+    real_hsc_data = hsc_data[hsc_data['percent_engraftment'] > hsc_data['min_eng_hsc']]
+
+    blood_data = clonal_abundance_df[clonal_abundance_df.cell_type != 'hsc']
+    excluded_time_blood_data = blood_data[~blood_data[timepoint_col].isin(exclude_timepoints)]
+
+    hsc_counts = pd.DataFrame(
+        hsc_data.groupby(['group', 'mouse_id'])['code'].nunique()
+    ).reset_index().assign(sample_type='hsc')
+
+    blood_counts = pd.DataFrame(
+        excluded_time_blood_data.groupby(['group', 'mouse_id'])['code'].nunique()
+    ).reset_index().assign(sample_type='blood')
+
+    counts = hsc_counts.append(blood_counts, ignore_index=True)
+
+
+
+
