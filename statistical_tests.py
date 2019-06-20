@@ -41,6 +41,29 @@ def print_p_value(context: str, p_value: float, show_ns: bool = False):
             + ' P-Value: ' + str(p_value)
         )
 
+def ind_ttest_between_groups_at_each_time(
+        data: pd.DataFrame,
+        test_col: str,
+        timepoint_col: str,
+        overall_context: str,
+        show_ns: bool,
+    ):
+    times = data[timepoint_col].unique()
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Independent T-Test on ' 
+        + overall_context
+        + ' between groups at each ' + replace_underscore_dot(timepoint_col)
+    )
+    for t1, t_df in data.groupby(timepoint_col):
+        _, p_value = stats.ttest_ind(
+            t_df[t_df.group == 'aging_phenotype'][test_col],
+            t_df[t_df.group == 'no_change'][test_col],
+        )
+        context: str = timepoint_col.title() + ' ' + str(t1) 
+        print_p_value(context, p_value, show_ns=show_ns)
+
+
 def ind_ttest_group_time(
         data: pd.DataFrame,
         test_col: str,
@@ -78,7 +101,7 @@ def ind_ttest_group_time(
                 t1_df,
                 t2_df, 
             )
-            context: str = replace_underscore_dot(group) + ' ' \
+            context = replace_underscore_dot(group) + ' ' \
                 + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
                 + ' vs ' + str(t2)
             print_p_value(context, p_value, show_ns=show_ns)
@@ -92,7 +115,7 @@ def ind_ttest_group_time(
             t1_df,
             t2_df, 
         )
-        context: str = replace_underscore_dot(group) + ' ' \
+        context = replace_underscore_dot(group) + ' ' \
             + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
             + ' vs ' + str(t2)
         print_p_value(context, p_value, show_ns=show_ns)
@@ -180,7 +203,7 @@ def rel_ttest_group_time(
                 merged[test_col + '_2'],
             )
         
-        context: str = replace_underscore_dot(group) + ' ' \
+        context = replace_underscore_dot(group) + ' ' \
             + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
             + ' vs ' + str(t2) \
             + ', n ' + match_col_str + ': ' + str(count)
@@ -223,7 +246,7 @@ def ranksums_test_group_time(
                 t1_df,
                 t2_df, 
             )
-            context: str = replace_underscore_dot(group) + ' ' \
+            context = replace_underscore_dot(group) + ' ' \
                 + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
                 + ' vs ' + str(t2)
             print_p_value(context, p_value, show_ns=show_ns)
@@ -237,7 +260,7 @@ def ranksums_test_group_time(
             t1_df,
             t2_df, 
         )
-        context: str = replace_underscore_dot(group) + ' ' \
+        context = replace_underscore_dot(group) + ' ' \
             + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
             + ' vs ' + str(t2)
         print_p_value(context, p_value, show_ns=show_ns)
