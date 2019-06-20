@@ -5900,7 +5900,7 @@ def exhaust_persist_abund(
     sns.set_context(
         'paper',
         rc={
-            'lines.linewidth': 5,
+            'lines.linewidth': 3,
             'lines.markersize': 3,
             'lines.markeredgecolor': 'white',
             'axes.linewidth': 3,
@@ -5923,6 +5923,7 @@ def exhaust_persist_abund(
             timepoint=9
         )
     else:
+        print(Fore.YELLOW + 'Warning: counts or abundance will be plotted based on first time point')
         survival_df = get_clones_at_timepoint(
             survival_df,
             timepoint_col,
@@ -5955,6 +5956,12 @@ def exhaust_persist_abund(
         y_desc = cell_type.title() + ' Average Abundance (% WBC)'
         filename_addon='avg'
         survival_cell_df = survival_df
+    if not (by_clone or by_sum) and not (survival_cell_df[survival_cell_df[y_col] == 0].empty):
+        survival_cell_df = add_almost_zero(
+            survival_cell_df,
+            y_col,
+            min_div_factor=10,
+        )
 
     show_ns=True
     if by_clone or by_sum:
@@ -5989,7 +5996,7 @@ def exhaust_persist_abund(
 
 
 
-    plt.figure(figsize=(7,5))
+    fig, ax = plt.subplots(figsize=(7,5))
     if by_group:
         hue_col = 'group'
         filename_addon += '_by-group'
@@ -6002,7 +6009,10 @@ def exhaust_persist_abund(
         palette = COLOR_PALETTES['survived']
         dodge = False
 
-    ax = sns.boxplot(
+    if not by_clone:
+        ax.set(yscale='log')
+
+    sns.boxplot(
         x='survived',
         y=y_col,
         order=['Exhausted', 'Survived'],
@@ -6016,9 +6026,8 @@ def exhaust_persist_abund(
             "alpha": 0
         },
         showcaps=False,
+        ax=ax,
     )
-    if not by_clone:
-        ax.set(yscale='log')
 
 
     if by_clone or by_sum:
@@ -6072,10 +6081,28 @@ def exhaust_persist_hsc_abund(
         save_path: str = './output',
         save_format: str = 'png'
     ):
+    """ Swarmplot + median bar of boxplot overlay of HSC abundance
+    split by survived/exhausted clones
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame}
+        clonal_abundance_df {pd.DataFrame}
+        timepoint_col {str}
+        min_hsc_per_mouse {pd.DataFrame} -- Dataframe of minimum HSC
+            abundance required for one hsc clone to be 'real'
+        by_clone {bool} -- Plot Clone Count
+        by_sum {bool} -- Plot Sum abbundance
+        by_group {bool} -- Split by phenotypic group
+        save {bool}
+    
+    Keyword Arguments:
+        save_path {str}
+        save_format {str}
+    """
     sns.set_context(
         'paper',
         rc={
-            'lines.linewidth': 5,
+            'lines.linewidth': 3,
             'lines.markersize': 3,
             'lines.markeredgecolor': 'white',
             'axes.linewidth': 3,
@@ -6092,17 +6119,12 @@ def exhaust_persist_hsc_abund(
         lineage_bias_df,
         timepoint_col
     )
-    survival_df = get_clones_at_timepoint(
-        survival_df,
-        timepoint_col,
-        timepoint='first'
-    )
+
     hsc_data = get_hsc_abundance_perc_per_mouse(clonal_abundance_df)
-    if by_clone:
-        hsc_data = hsc_data.merge(
-            min_hsc_per_mouse,
-            validate='m:1'
-        )
+    hsc_data = merge_hsc_min_abund(
+        hsc_data,
+        min_hsc_per_mouse
+    )
 
 
     
@@ -6112,27 +6134,29 @@ def exhaust_persist_hsc_abund(
         how='inner',
         validate='m:1'
     )
+    survival_with_hsc_df = survival_with_hsc_df[survival_with_hsc_df.hsc_percent_engraftment >= survival_with_hsc_df.min_eng_hsc]
+
     y_col = 'perc_tracked_hsc'
     y_desc = 'Average % Abundance in Final HSC Pool'
     show_ns = True
     if by_sum:
         filename_addon='sum'
         y_desc = 'Sum % Abundance in Final HSC Pool'
+        survival_with_hsc_df = survival_with_hsc_df[
+            ['mouse_id', 'code', 'group', 'survived', y_col]
+        ].drop_duplicates()
         survival_sum_per_mouse = pd.DataFrame(
-            survival_with_hsc_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])[y_col].sum()
+            survival_with_hsc_df.groupby(['mouse_id', 'group', 'survived'])[y_col].sum()
             )[y_col].unstack(
                     fill_value=0
                 ).stack().reset_index(name=y_col)
 
         survival_sum_per_mouse = survival_sum_per_mouse[['mouse_id', 'group', 'survived', y_col]].drop_duplicates()
         survival_hsc_df = survival_sum_per_mouse
+
     elif by_clone:
         filename_addon='count'
         y_col = 'code'
-
-        # Account for 0 abundant clones that don't actually exist in HSC
-        survival_with_hsc_df = survival_with_hsc_df[survival_with_hsc_df.hsc_percent_engraftment >= survival_with_hsc_df.min_eng_hsc]
-
 
         survival_hsc_df = pd.DataFrame(
             survival_with_hsc_df.groupby(['mouse_id', 'group','survived']).code.nunique()
@@ -6142,12 +6166,15 @@ def exhaust_persist_hsc_abund(
         y_desc = '# of HSC clones'
         print(survival_hsc_df)
     else:
+        survival_with_hsc_df = survival_with_hsc_df[
+            ['mouse_id', 'code', 'group', 'survived', y_col]
+        ].drop_duplicates()
         filename_addon='avg'
         survival_hsc_df = survival_with_hsc_df
     
     if by_clone or by_sum:
         match_cols = ['mouse_id']
-        rel_ttest_group_time(
+        stat_tests.rel_ttest_group_time(
             survival_hsc_df,
             match_cols=match_cols,
             merge_type='outer',
@@ -6157,7 +6184,7 @@ def exhaust_persist_hsc_abund(
             overall_context=y_desc,
             show_ns=show_ns
         )
-        ind_ttest_group_time(
+        stat_tests.ind_ttest_group_time(
             survival_hsc_df,
             y_col,
             'survived',
@@ -6166,7 +6193,7 @@ def exhaust_persist_hsc_abund(
         )
     else:
         markers=True
-        ranksums_test_group_time(
+        stat_tests.ranksums_test_group_time(
             survival_hsc_df,
             y_col,
             'survived',
@@ -6736,10 +6763,12 @@ def exhausted_clone_abund(
         + '_' + group \
         + '.' + save_format
     save_plot(fname, save, save_format)
+
 def exhausted_clone_hsc_abund(
         lineage_bias_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
+        min_hsc_per_mouse: pd.DataFrame,
         group: str,
         by_sum: bool,
         save: bool = False,
@@ -6754,29 +6783,36 @@ def exhausted_clone_hsc_abund(
         timepoint_col
     )
     hsc_data = get_hsc_abundance_perc_per_mouse(clonal_abundance_df)
+    hsc_data = merge_hsc_min_abund(
+        hsc_data,
+        min_hsc_per_mouse
+    )
+    real_hsc_data = hsc_data[hsc_data['hsc_percent_engraftment'] > hsc_data['min_eng_hsc']]
 
 
     
     survival_with_hsc_df = survival_df.merge(
-        hsc_data[['mouse_id', 'code', 'perc_tracked_hsc']],
+        real_hsc_data[['mouse_id', 'code', 'perc_tracked_hsc']],
         on=['mouse_id', 'code'],
         how='inner',
         validate='m:1'
     )
     if by_sum:
         desc = 'sum'
+        y_col='perc_tracked_hsc'
         abundance_per_mouse = pd.DataFrame(
             survival_with_hsc_df.groupby(
             ['group', 'mouse_id', 'survived', timepoint_col]
             ).perc_tracked_hsc.sum()
-        ).reset_index()
+        )[y_col].unstack(fill_value=0).stack().reset_index(name=y_col)
     else:
         desc = 'mean'
+        y_col='perc_tracked_hsc'
         abundance_per_mouse = pd.DataFrame(
             survival_with_hsc_df.groupby(
-            ['group', 'mouse_id', 'survived', timepoint_col]
+                ['group', 'mouse_id', 'survived', timepoint_col]
             ).perc_tracked_hsc.mean()
-        ).reset_index()
+        )[y_col].unstack(fill_value=0).stack().reset_index(name=y_col)
     if timepoint_col == 'gen':
         abundance_per_mouse = abundance_per_mouse[abundance_per_mouse[timepoint_col] != 8.5]
         abundance_per_mouse['gen'] = abundance_per_mouse.gen.astype(int)
@@ -7521,7 +7557,7 @@ def plot_hsc_and_blood_clone_count(
         'paper',
         font_scale=1,
         rc={
-            'lines.linewidth': 1,
+            'lines.linewidth': 3,
             'axes.linewidth': 3,
             'axes.labelsize': 5,
             'xtick.major.width': 3,
@@ -7531,26 +7567,117 @@ def plot_hsc_and_blood_clone_count(
             'figure.titlesize': 'small',
         }
     )
+    if len(exclude_timepoints):
+        print(
+            Fore.YELLOW 
+            + ' Warning: Excluding Timepoints from blood count  - ' 
+            + ', '.join([str(x) for x in exclude_timepoints])
+        )
+    desc_addon = ''
+
     with_min_df = merge_hsc_min_abund(
         clonal_abundance_df,
         min_hsc_per_mouse
     )
-    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']
-    real_hsc_data = hsc_data[hsc_data['percent_engraftment'] > hsc_data['min_eng_hsc']]
+    hsc_data = with_min_df[with_min_df.cell_type == 'hsc']
+    real_hsc_data = hsc_data[
+        hsc_data['percent_engraftment'] > hsc_data['min_eng_hsc']
+    ]
 
-    blood_data = clonal_abundance_df[clonal_abundance_df.cell_type != 'hsc']
-    excluded_time_blood_data = blood_data[~blood_data[timepoint_col].isin(exclude_timepoints)]
+    blood_data = clonal_abundance_df[
+        clonal_abundance_df.cell_type != 'hsc'
+    ]
+    excluded_time_blood_data = blood_data[
+        ~blood_data[timepoint_col].isin(exclude_timepoints)
+    ]
 
     hsc_counts = pd.DataFrame(
-        hsc_data.groupby(['group', 'mouse_id'])['code'].nunique()
+        real_hsc_data.groupby(['group', 'mouse_id'])['code'].nunique()
     ).reset_index().assign(sample_type='hsc')
+
 
     blood_counts = pd.DataFrame(
         excluded_time_blood_data.groupby(['group', 'mouse_id'])['code'].nunique()
     ).reset_index().assign(sample_type='blood')
 
     counts = hsc_counts.append(blood_counts, ignore_index=True)
+    fig, ax = plt.subplots(figsize=(7,5))
+    ax = plt.gca()
+    order=['hsc', 'blood']
+    y_col = 'code'
 
+    show_ns = True
+    stat_tests.rel_ttest_group_time(
+        data=counts,
+        match_cols=['mouse_id'],
+        merge_type='outer',
+        fill_na=0,
+        test_col='code',
+        timepoint_col='sample_type',
+        overall_context='Blood vs HSC Clone Count',
+        show_ns=show_ns
+    )
+    stat_tests.ind_ttest_between_groups_at_each_time(
+        data=counts,
+        test_col='code',
+        timepoint_col='sample_type',
+        overall_context='Blood vs HSC Clone Count',
+        show_ns=show_ns,
+    )
 
+    if by_group:
+        desc_addon = 'by-group'
+        hue_col = 'group'
+        box_hue_col = 'group'
+        hue_order = ['aging_phenotype', 'no_change']
+        palette = COLOR_PALETTES['group']
+        box_palette = COLOR_PALETTES['group']
+        dodge = True
+    else:
+        hue_col = 'mouse_id'
+        hue_order = None
+        box_hue_col = None
+        palette = COLOR_PALETTES['mouse_id']
+        box_palette = None
+        dodge = False
 
+    sns.boxplot(
+        x='sample_type',
+        y=y_col,
+        hue=box_hue_col,
+        hue_order=hue_order,
+        palette=box_palette,
+        order=order,
+        data=counts,
+        ax=ax,
+        showbox=False,
+        whiskerprops={
+            "alpha": 0
+        },
+        showcaps=False,
+        fliersize=0,
+        dodge=dodge,
+    )
+    for mouse_id, m_df in counts.groupby('mouse_id'):
+        sns.stripplot(
+            x='sample_type',
+            y=y_col,
+            hue=hue_col,
+            hue_order=hue_order,
+            marker=MARKERS['mouse_id'][mouse_id],
+            palette=palette,
+            order=order,
+            data=m_df,
+            ax=ax,
+            zorder=0,
+            size=15,
+            linewidth=.8,
+            dodge=dodge,
+        )
+    plt.legend().remove()
 
+    fname = save_path + os.sep \
+        + 'hsc_vs_blood_count' \
+        + '_' + desc_addon \
+        + '.' + save_format
+    save_plot(fname, save, save_format)

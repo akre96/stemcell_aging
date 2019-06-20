@@ -186,7 +186,6 @@ def main():
 
     rest_of_clones_bias_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_lineage_bias.csv')
 
-    color_palettes = json.load(open('color_palettes.json', 'r'))
 
     if args.by_day:
         print(' - Time By Day Set \n')
@@ -227,6 +226,23 @@ def main():
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
+    if graph_type in ['hsc_vs_blood_count']:
+        save_path = args.output_dir + os.sep + 'hsc-blood_count'
+        if timepoint_col == 'month':
+            exclude_timepoints = [first_timepoint]
+        else:
+            exclude_timepoints = []
+        
+        plot_hsc_and_blood_clone_count(
+            present_clones_df,
+            timepoint_col,
+            min_hsc_per_mouse,
+            exclude_timepoints=exclude_timepoints,
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['abundance_change_changed_group_grid']:
         save_path = args.output_dir + os.sep + 'abundance_change_change-type_group_grid'
 
@@ -355,6 +371,7 @@ def main():
             lineage_bias_df,
             present_clones_df,
             timepoint_col,
+            min_hsc_per_mouse,
             by_sum=args.sum,
             group=args.group,
             save=args.save,
@@ -416,6 +433,7 @@ def main():
     if graph_type in ['exhaust_persist_hsc_abund']:
         save_path = args.output_dir + os.sep + 'exhaust_persist_hsc_abund' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
         exhaust_persist_hsc_abund(
             lineage_bias_df,
             present_clones_df,
