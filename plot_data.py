@@ -2160,55 +2160,35 @@ def main():
 
         print('Abundance cutoff set to: ' + str(abundance_cutoff))
 
-        cell_type = 'gr'
-        filt_lineage_bias_gr_df = combine_enriched_clones_at_time(
-            input_df=lineage_bias_df,
-            enrichment_time=timepoint,
-            timepoint_col=timepoint_col,
-            thresholds=thresholds,
-            analyzed_cell_types=[cell_type],
-            lineage_bias=True,
-        )
-        cell_type = 'b'
-        filt_lineage_bias_b_df = combine_enriched_clones_at_time(
-            input_df=lineage_bias_df,
-            enrichment_time=timepoint,
-            timepoint_col=timepoint_col,
-            thresholds=thresholds,
-            analyzed_cell_types=[cell_type],
-            lineage_bias=True,
-        )
         save_path=args.output_dir + os.sep \
             + args.y_col.title() + '_Line_Plot' \
             + os.sep + 'min_abund' \
             + str(args.filter_bias_abund).replace('.', '-') \
             + os.sep
-        plot_lineage_average(
-            filt_lineage_bias_gr_df,
-            present_clones_df,
-            title_addon='Gr > ' + str(round(thresholds['gr'], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
-            save=args.save,
-            timepoint=timepoint,
-            timepoint_col=timepoint_col,
-            y_col=args.y_col,
-            by_clone=args.by_clone,
-            save_path=save_path+'gr',
-            save_format='png',
-            abundance=abundance_cutoff,
-        )
-        plot_lineage_average(
-            filt_lineage_bias_b_df,
-            present_clones_df,
-            title_addon='B > ' + str(round(thresholds['b'], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
-            timepoint=timepoint,
-            timepoint_col=timepoint_col,
-            by_clone=args.by_clone,
-            abundance=abundance_cutoff,
-            y_col=args.y_col,
-            save_format='png',
-            save=args.save,
-            save_path=save_path+'b'
-        )
+
+        for cell_type in ['gr', 'b']:
+            filt_lineage_bias_df = combine_enriched_clones_at_time(
+                input_df=lineage_bias_df,
+                enrichment_time=timepoint,
+                timepoint_col=timepoint_col,
+                thresholds=thresholds,
+                analyzed_cell_types=[cell_type],
+                lineage_bias=True,
+            )
+            plot_lineage_average(
+                filt_lineage_bias_gr_df,
+                present_clones_df,
+                title_addon=cell_type.title() + ' > ' + str(round(thresholds[cell_type], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
+                save=args.save,
+                timepoint=timepoint,
+                timepoint_col=timepoint_col,
+                y_col=args.y_col,
+                by_clone=args.by_clone,
+                save_path=save_path+cell_type,
+                save_format='png',
+                abundance=abundance_cutoff,
+            )
+
     if graph_type == 'perc_bias_month':
         percentile = .995
         month = 4
@@ -2224,44 +2204,25 @@ def main():
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 
-        cell_type = 'gr'
-        filt_lineage_bias_gr_df = combine_enriched_clones_at_time(
-                                                                 input_df=lineage_bias_df,
-                                                                 enrichment_time=month,
-                                                                 thresholds=dominant_thresholds,
-                                                                 timepoint_col='month',
-                                                                 lineage_bias=True,
-                                                                 analyzed_cell_types=[cell_type],
-        )
-        cell_type = 'b'
-        filt_lineage_bias_b_df = combine_enriched_clones_at_time(
-                                                                 input_df=lineage_bias_df,
-                                                                 enrichment_time=month,
-                                                                 thresholds=dominant_thresholds,
-                                                                 timepoint_col='month',
-                                                                 lineage_bias=True,
-                                                                 analyzed_cell_types=[cell_type],
-        )
-        plot_lineage_average(filt_lineage_bias_gr_df,
-                             clonal_abundance_df=present_clones_df,
-                             title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['gr'], 2)) + '% WBC abundance in GR at Month ' + str(month),
-                             save=args.save,
-                             timepoint=month,
-                             timepoint_col=timepoint,
-                             save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/gr',
-                             save_format='png',
-                             percentile=percentile
-                            )
-        plot_lineage_average(filt_lineage_bias_b_df,
-                             clonal_abundance_df=present_clones_df,
-                             title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['b'], 2)) + '% WBC abundance in b at Month ' + str(month),
-                             timepoint=month,
-                             timepoint_col=timepoint,
-                             save=args.save,
-                             save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
-                             save_format='png',
-                             percentile=percentile
-                            )
+        for cell_type in ['gr', 'b']:
+            filt_lineage_bias_gr_df = combine_enriched_clones_at_time(
+                                                                    input_df=lineage_bias_df,
+                                                                    enrichment_time=month,
+                                                                    thresholds=dominant_thresholds,
+                                                                    timepoint_col='month',
+                                                                    lineage_bias=True,
+                                                                    analyzed_cell_types=[cell_type],
+            )
+            plot_lineage_average(filt_lineage_bias_gr_df,
+                                clonal_abundance_df=present_clones_df,
+                                title_addon='Filtered by clones with > ' + str(round(dominant_thresholds[cell_type], 2)) + '% WBC abundance in ' + cell_type.title() + ' at Month ' + str(month),
+                                save=args.save,
+                                timepoint=month,
+                                timepoint_col=timepoint,
+                                save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/' + cell_type,
+                                save_format='png',
+                                percentile=percentile
+                                )
 
     if graph_type == 'abundant_at_last':
         abundance_cutoff = 0
@@ -2315,38 +2276,23 @@ def main():
         for cell_type, threshold in dominant_thresholds.items():
             print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
 
-        filt_lineage_bias_b_df = clones_enriched_at_last_timepoint(
-            input_df=input_df,
-            timepoint_col=timepoint_col,
-            lineage_bias_df=lineage_bias_df,
-            thresholds=dominant_thresholds,
-            lineage_bias=True,
-            cell_type='gr',
-        )
-        filt_lineage_bias_gr_df = clones_enriched_at_last_timepoint(
-            input_df=input_df,
-            timepoint_col=timepoint_col,
-            lineage_bias_df=lineage_bias_df,
-            thresholds=dominant_thresholds,
-            lineage_bias=True,
-            cell_type='b',
-        )
-        plot_lineage_bias_line(
-            filt_lineage_bias_gr_df,
-            title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['gr'], 2)) + '% WBC abundance in GR at last timepoint',
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/gr',
-            save_format='png',
-            percentile=percentile
-        )
-        plot_lineage_bias_line(
-            filt_lineage_bias_b_df,
-            title_addon='Filtered by clones with > ' + str(round(dominant_thresholds['b'], 2)) + '% WBC abundance in B at last timepoint',
-            save=args.save,
-            save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/b',
-            save_format='png',
-            percentile=percentile
-        )
+        for cell_type in ['gr', 'b']:
+            filt_lineage_bias_df = clones_enriched_at_last_timepoint(
+                input_df=input_df,
+                timepoint_col=timepoint_col,
+                lineage_bias_df=lineage_bias_df,
+                thresholds=dominant_thresholds,
+                lineage_bias=True,
+                cell_type=cell_type,
+            )
+            plot_lineage_bias_line(
+                filt_lineage_bias_df,
+                title_addon='Filtered by clones with > ' + str(round(dominant_thresholds[cell_type], 2)) + '% WBC abundance in ' + cell_type.title() + ' at last timepoint',
+                save=args.save,
+                save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/'+cell_type,
+                save_format='png',
+                percentile=percentile
+            )
 
     # Lineage Bias Line Plots by threshold
     if graph_type == 'lineage_bias_line':
