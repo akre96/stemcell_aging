@@ -1731,8 +1731,7 @@ def calc_min_hsc_per_mouse(
     gfp_df = parse_wbc_count_file(gfp_file, ['hsc']).rename(columns={'cell_count':'gfp_perc'})
     donor_df = parse_wbc_count_file(donor_file, ['hsc']).rename(columns={'cell_count':'donor_perc'})
 
-    facs_data = wbc_count_df
-
+    facs_data = wbc_count_df[['mouse_id']].drop_duplicates()
     if hsc_count_df.empty:
         print(Fore.YELLOW + 'Warning: No Cell Count Data for HSCs -- setting to 2000 HSC cells')
         facs_data['cell_count'] = 2000
@@ -1782,5 +1781,27 @@ def merge_hsc_min_abund(
     return input_df.merge(
         min_hsc_per_mouse,
         how='inner',
-        validate='1:1'
+        validate='m:1'
     )
+
+def add_almost_zero(
+        input_df: pd.DataFrame,
+        col: str,
+        min_div_factor: float,
+    ):
+    """ Add an arbitrarily small amount to zero values for log scale plots
+    
+    Arguments:
+        input_df {pd.DataFrame}
+        col {str} -- column to add value to
+        min_div_factor {float} -- amount of minimum non-zero to divide by
+    
+    Returns:
+        pd.DataFrame -- input_df but with sepecified column uniformly increased
+    """
+    min_not_zero = input_df[input_df[col] != 0][col].min()
+    almost_zero = min_not_zero/min_div_factor
+    print(Fore.YELLOW + 'Adding ' + str(almost_zero) + ' to: ' + col)
+    input_df[col] = input_df[col] + almost_zero
+    return input_df
+
