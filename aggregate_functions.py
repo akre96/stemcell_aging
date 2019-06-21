@@ -1130,6 +1130,12 @@ def calculate_first_last_bias_change_with_avg_data(
     ) -> pd.DataFrame:
 
     df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change']
+    add_change_status = False
+    
+    if 'change_status' in lineage_bias_df.columns:
+        add_change_status = True
+        df_cols.append('change_status')
+
     bias_dist_df = pd.DataFrame(columns=df_cols)
     for name, group in lineage_bias_df.groupby(['code', 'mouse_id', 'group']):
         if len(group) < 2:
@@ -1148,6 +1154,9 @@ def calculate_first_last_bias_change_with_avg_data(
         bias_change_row['group'] = [name[2]]
         bias_change_row['average_'+y_col] = [avg_val]
         bias_change_row['bias_change'] = [bias_change]
+        if add_change_status:
+            bias_change_row['change_status'] = t1['change_status']
+
         bias_dist_df = bias_dist_df.append(bias_change_row, ignore_index=True)
     return bias_dist_df
 
@@ -1804,4 +1813,18 @@ def add_almost_zero(
     print(Fore.YELLOW + 'Adding ' + str(almost_zero) + ' to: ' + col)
     input_df[col] = input_df[col] + almost_zero
     return input_df
+
+def filter_for_survival_in_serial_transplant(
+        survival_df: pd.DataFrame,
+    ):
+    survival_df = survival_df[survival_df['gen'] != 8.5]
+
+    # Survived Clones only those in generation 8
+    survived = survival_df[survival_df['survived'] == 'Survived']
+    survived = survived[survived['gen'] == 8]
+
+    # Exhausted clones are those exhausted at any point
+    exhaust = survival_df[survival_df['survived'] == 'Exhausted']
+
+    return survived.append(exhaust)
 
