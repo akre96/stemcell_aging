@@ -1,13 +1,14 @@
 from typing import List, Any
 from itertools import combinations
 import pandas as pd
+import numpy as np
 import scipy.stats as stats
 from colorama import init, Fore, Back, Style
 
 init(autoreset=True)
 
-def replace_underscore_dot(string: str):
-    return string.replace('_', ' ').replace('.', '-').title()
+def replace_underscore_dot(string: Any):
+    return str(string).replace('_', ' ').replace('.', '-').title()
 
 def print_p_value(context: str, p_value: float, show_ns: bool = False):
     """ Print P-Value, styke by significance
@@ -40,6 +41,96 @@ def print_p_value(context: str, p_value: float, show_ns: bool = False):
             + context
             + ' P-Value: ' + str(p_value)
         )
+
+def ttest_rel_at_each_time(
+        data: pd.DataFrame,
+        value_col: str,
+        timepoint_col: str,
+        group_col: str,
+        match_cols: List[str],
+        merge_type: str,
+        overall_context: str,
+        fill_na: Any,
+        show_ns: bool,
+    ):
+    match_col_str = '-'.join(match_cols)
+    times = data[timepoint_col].unique()
+    print(
+        Fore.CYAN + Style.BRIGHT
+        + '\nPerforming Paired T-Test on '
+        + overall_context
+        + ' between ' + group_col.title() + 's at each ' + replace_underscore_dot(timepoint_col)
+    )
+    groups = data[group_col].unique()
+    for time, t_df in data.groupby(timepoint_col):
+        for (g1, g2) in combinations(groups, 2):
+            g1_df = t_df[t_df[group_col] == g1]
+            g2_df = t_df[t_df[group_col] == g2]
+            merged = g1_df.merge(
+                g2_df,
+                on=match_cols,
+                how=merge_type,
+                validate='1:1',
+                suffixes=['_1', '_2']
+            )
+            if fill_na is not None:
+                merged = merged.fillna(
+                    value=fill_na,
+                )
+
+            count = len(merged)
+            if count <= 1:
+                p_value = 1
+            else:
+                _, p_value = stats.ttest_rel(
+                    merged[value_col + '_1'],
+                    merged[value_col + '_2'],
+                )
+            
+            context: str = timepoint_col.title() + ' ' + replace_underscore_dot(time) + ' ' \
+                + replace_underscore_dot(group_col) + ' ' + str(g1) \
+                + ' vs ' + str(g2) \
+                + ', n ' + match_col_str + ': ' + str(count)
+            print_p_value(context, p_value, show_ns=show_ns)
+
+
+def ttest_1samp(
+        data: pd.DataFrame,
+        value_var: str,
+        group_vars: List[str],
+        null_mean: float,
+        overall_context: str,
+        show_ns: bool,
+        handle_nan: str,
+        handle_inf: str,
+    ):
+    print(
+        Fore.CYAN + Style.BRIGHT
+        + '\nPerforming 1 Sample T-Test on '
+        + overall_context
+        + ' difference from ' + str(null_mean)
+    )
+    if handle_inf == 'omit':
+        len_inf = len(data[
+            (data[value_var] == np.inf) |\
+            (data[value_var] == -np.inf)
+            ])
+        data = data[data[value_var] != np.inf]
+        data = data[data[value_var] != -np.inf]
+        print (Fore.YELLOW + ' Ignoring Infinite Values T-Test, n = ' + str(len_inf))
+
+    if handle_nan == 'omit':
+        len_nan = len(data[data[value_var].isnull()])
+        print (Fore.YELLOW + ' Ignoring NaN Values T-Test, n = ' + str(len_nan))
+    
+    for group_var, g_df in data.groupby(group_vars):
+        _, p_value = stats.ttest_1samp(
+            g_df[value_var],
+            popmean=null_mean,
+            nan_policy=handle_nan,
+        )
+        context: str = ' '.join(group_var).title()
+        print_p_value(context, p_value, show_ns=show_ns)
 
 def ind_ttest_between_groups_at_each_time(
         data: pd.DataFrame,
