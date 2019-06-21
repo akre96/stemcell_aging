@@ -41,7 +41,8 @@ from plotting_functions import *
 def main():
     """ Create plots set options via command line arguments
 
-    Available graph types:
+    Available graph types: -- Out of Date, reference comments in
+        google drive slides for how each graph is generated.
 
     default:                Subject to change based on what is being actively developed
     cluster:                Clustered heatmap of present clone engraftment
@@ -105,6 +106,7 @@ def main():
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--sum', dest='sum', help='Whether to plot sum abundance vs average abundance for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
+    parser.add_argument('--by-count', dest='by_count', help='Whether to plot count of clones for certain graphs', action="store_true")
     parser.add_argument('--by-mouse', dest='by_mouse', help='Whether to plot mouse color instead of group for certain graphs', action="store_true")
     parser.add_argument('--plot-rest', dest='plot_rest', help='Whether to plot rest of clones instead of tracked clones', action="store_true")
     parser.add_argument('--by-gen', dest='by_gen', help='Plotting done on a generation by generation basis', action="store_true")
@@ -372,6 +374,7 @@ def main():
             present_clones_df,
             timepoint_col,
             min_hsc_per_mouse,
+            by_count=args.by_count,
             by_sum=args.sum,
             group=args.group,
             save=args.save,
@@ -441,6 +444,7 @@ def main():
             min_hsc_per_mouse,
             by_sum=args.sum,
             by_clone=args.by_clone,
+            by_count=args.by_count,
             by_group=args.by_group,
             save=args.save,
             save_path=save_path,
@@ -1074,6 +1078,7 @@ def main():
         plot_bias_dist_mean_abund_group_vs(
             lineage_bias_df,
             timepoint_col,
+            change_status=args.change_type,
             cutoff=threshold,
             mtd=mtd,
             timepoint=args.timepoint,
@@ -1998,27 +2003,14 @@ def main():
                 continue
                 
             th_change_df = pd.read_csv(bias_change_file[0])
-            plot_bias_change_hist(th_change_df,
-                threshold=threshold,
-                absolute_value=True,
-                group='all',
-                save=args.save,
-                save_path=save_path
-            )
-            plot_bias_change_hist(th_change_df,
-                threshold=threshold,
-                absolute_value=True,
-                group='no_change',
-                save=args.save,
-                save_path=save_path
-            )
-            plot_bias_change_hist(th_change_df,
-                threshold=threshold,
-                absolute_value=True,
-                group='aging_phenotype',
-                save=args.save,
-                save_path=save_path
-            )
+            for group in ['all', 'aging_phenotype', 'no_change']:
+                plot_bias_change_hist(th_change_df,
+                    threshold=threshold,
+                    absolute_value=True,
+                    group=group,
+                    save=args.save,
+                    save_path=save_path
+                )
                     
     if graph_type == 'max_engraftment':
         plot_max_engraftment(present_clones_df, title='All Present Clones')
