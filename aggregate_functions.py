@@ -1828,3 +1828,52 @@ def filter_for_survival_in_serial_transplant(
 
     return survived.append(exhaust)
 
+
+def filter_lineage_bias_cell_type_ratio_per_mouse(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        wbc_df: pd.DataFrame,
+        filter_threshold: float,
+    ) -> pd.DataFrame:
+    """ Filter Lineage bias based on the ratio of Gr
+    
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- [description]
+        timepoint_col {str} -- column time is calculated with
+        WBC_file_path {str} -- cell count from facs data
+        filter_threshold {float} -- B Abundance to filter
+    
+    Returns:
+        pd.DataFrame -- filtered lineage bias dataframe
+    """
+    print('\n Filtering Lineage Bias Ratio Based on Gr/B Ratio Per Mouse at First Time Point')
+    # TODO: Instead of merging gr and b, stack the dataframe
+    filt_df = lineage_bias_df
+
+    # Only use data from first time point to calculate ratio
+    first_day = wbc_df['day'].min()
+    wbc_df = wbc_df[wbc_df['day'] == first_day]
+
+    pivotted = wbc_df.pivot_table(
+        index='mouse_id',
+        columns='cell_type',
+        values='cell_count'
+    )
+    pivotted['gr-b_ratio'] = pivotted['gr']/pivotted['b']
+    pivotted['gr_filter'] = pivotted['gr-b_ratio'] * filter_threshold
+    pivotted['b_filter'] = filter_threshold
+    print('Length Before Filtering: ', len(lineage_bias_df))
+
+    filters = pivotted[['gr_filter', 'b_filter']].reset_index()
+    with_filters_df = lineage_bias_df.merge(
+        filters,
+        how='inner',
+        validate='m:1',
+    )
+    filt_df = with_filters_df[
+        (with_filters_df['gr_percent_engraftment'] >= with_filters_df['gr_filter']) |\
+        (with_filters_df['b_percent_engraftment'] >= with_filters_df['b_filter'])
+    ]
+    print('Length After Filtering: ', len(filt_df), '\n')
+
+    return filt_df

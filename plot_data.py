@@ -171,14 +171,6 @@ def main():
     if args.threshold:
         print(' - Threshold set to: ' + str(args.threshold))
     
-    if args.filter_bias_abund:
-        print(' - Lineage Bias Min Abundance set to: ' + str(args.filter_bias_abund))
-        lineage_bias_df = raw_lineage_bias_df[
-            (raw_lineage_bias_df.gr_percent_engraftment >= args.filter_bias_abund) \
-            | (raw_lineage_bias_df.b_percent_engraftment >= args.filter_bias_abund)
-        ]
-    else:
-        lineage_bias_df = raw_lineage_bias_df
 
     if args.cache:
         print(' - Using Cached Data')
@@ -188,6 +180,7 @@ def main():
 
     rest_of_clones_bias_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_lineage_bias.csv')
 
+    lineage_bias_df = raw_lineage_bias_df
 
     if args.by_day:
         print(' - Time By Day Set \n')
@@ -225,6 +218,18 @@ def main():
         cell_count_df = cell_count_df.assign(month=lambda x: day_to_month(x.day))
         rest_of_clones_abundance_df = rest_of_clones_abundance_df.assign(month=lambda x: day_to_month(x.day))
         rest_of_clones_bias_df = rest_of_clones_bias_df.assign(month=lambda x: day_to_month(x.day))
+
+    if args.filter_bias_abund:
+        print(' - Lineage Bias Min Abundance set to: ' + str(args.filter_bias_abund))
+        lineage_bias_df = filter_lineage_bias_cell_type_ratio_per_mouse(
+            lineage_bias_df,
+            timepoint_col,
+            cell_count_df,
+            args.filter_bias_abund
+        )
+    else:
+        lineage_bias_df = raw_lineage_bias_df
+
     print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
     print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
