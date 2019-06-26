@@ -32,7 +32,7 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
         month = int(round(day/30))
 
         for cell_type in analyzed_cell_types:
-            cell_type_col_name = [re.match(cell_type.upper(), x.upper()) is not None for x in one_timepoint_cols]
+            cell_type_col_name = [re.match(cell_type.lower(), x.lower()) is not None for x in one_timepoint_cols]
 
             # Check if cell exists at time point
             if not any(cell_type_col_name):
@@ -42,7 +42,7 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
             cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]].str.replace(" ", "")
             cell_type_timepoint_data['day'] = day
             cell_type_timepoint_data['month'] = month
-            cell_type_timepoint_data['cell_type'] = cell_type
+            cell_type_timepoint_data['cell_type'] = cell_type.lower()
             cell_type_col = one_timepoint_cols[cell_type_col_name]
             cell_type_timepoint_data['cell_count'] = one_timepoint_data[cell_type_col]
             parsed_timepoint_data = parsed_timepoint_data.append(cell_type_timepoint_data, ignore_index=True)

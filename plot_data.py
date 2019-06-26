@@ -240,13 +240,13 @@ def main():
 
 
     if graph_type in ['default']:
-        print(lineage_bias_df[['lineage_bias']])
-        sns.scatterplot(
+        sns.violinplot(
             data=lineage_bias_df,
             x=timepoint_col,
             y='lineage_bias',
-            hue='mouse_id',
+            estimator=None,
         )
+
     if graph_type in ['hsc_vs_blood_count']:
         save_path = args.output_dir + os.sep + 'hsc-blood_count'
         if timepoint_col == 'month':

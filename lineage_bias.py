@@ -254,7 +254,9 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
 
 
     if baseline_timepoint is None:
+        print(' - Baseline time point not stet --> normalizing to mouse FACS data at each time point')
         with_baseline_counts_df = present_df.merge(cell_counts_df[['mouse_id', 'cell_type', 'cell_count', baseline_column]], how='left', on=['mouse_id', 'cell_type', baseline_column])
+        print(with_baseline_counts_df)
     else:
         timepoint_df = cell_counts_df.loc[cell_counts_df[baseline_column] == baseline_timepoint]
         with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])
@@ -339,13 +341,17 @@ def main():
     args = parser.parse_args()
 
     input_df = pd.read_csv(args.input)
-    cell_count_data = parse_wbc_count_file(args.counts_file)
     if args.monocyte:
         myeloid_cell_type = 'mo'
     else:
         myeloid_cell_type = 'gr'
 
     lymphoid_cell_type = 'b'
+
+    cell_count_data = parse_wbc_count_file(
+        args.counts_file,
+        analyzed_cell_types=[myeloid_cell_type, lymphoid_cell_type]
+        )
 
     time_column = 'day'
     if args.baseline_timepoint == 'None':
