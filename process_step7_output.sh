@@ -58,19 +58,19 @@ REST_OF_CLONES_OUTPUT_DIR=~/Data/stemcell_aging/rest_of_clones
 #REST_OF_CLONES_OUTPUT_DIR=${root_data_dir}/rest_of_clones
 
 # Marys Data Processing Preset
-root_data_dir=~/Data/mary_project_0-01
-STEP_7_RESULTS_DIR=${root_data_dir}/Step7_0-01_060619
-OUTPUT_DIR=${root_data_dir}/step7_long
-CONSOLIDATED_OUTPUT_DIR=${root_data_dir}
-MOUSE_GROUP_PHENOTYPE_FILE=${root_data_dir}/mouse_id_group_mary.csv
-LINEAGE_BIAS_DIR=${root_data_dir}/lineage_bias
-GFP_FILE="${root_data_dir}/GFP*.txt"
-DONOR_FILE="${root_data_dir}/DONOR*.txt"
-WBC_FILE="${root_data_dir}/WBC*.txt"
-PREFIX=M
-TIMEPOINT_COL='day'
-BASELINE_TIMEPOINT='127'
-REST_OF_CLONES_OUTPUT_DIR=${root_data_dir}/rest_of_clones
+#root_data_dir=~/Data/mary_project_0-01
+#STEP_7_RESULTS_DIR=${root_data_dir}/Step7_0-01_060619
+#OUTPUT_DIR=${root_data_dir}/step7_long
+#CONSOLIDATED_OUTPUT_DIR=${root_data_dir}
+#MOUSE_GROUP_PHENOTYPE_FILE=${root_data_dir}/mouse_id_group_mary.csv
+#LINEAGE_BIAS_DIR=${root_data_dir}/lineage_bias
+#GFP_FILE="${root_data_dir}/GFP*.txt"
+#DONOR_FILE="${root_data_dir}/DONOR*.txt"
+#WBC_FILE="${root_data_dir}/WBC*.txt"
+#PREFIX=M
+#TIMEPOINT_COL='day'
+#BASELINE_TIMEPOINT='127'
+#REST_OF_CLONES_OUTPUT_DIR=${root_data_dir}/rest_of_clones
 
 # Create directories if they do not exist
 mkdir -p $OUTPUT_DIR $CONSOLIDATED_OUTPUT_DIR $LINEAGE_BIAS_DIR $REST_OF_CLONES_OUTPUT_DIR

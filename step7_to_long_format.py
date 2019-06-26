@@ -38,7 +38,7 @@ def parse_column_metadata(col_name: str) -> Dict[str, Any]:
         'user': matches.group(1),
         'mouse_id': matches.group(2),
         'day': int(matches.group(3)),
-        'cell_type': matches.group(4),
+        'cell_type': matches.group(4).lower(),
     }
 
 def transform_row_wide_to_long(row: pd.DataFrame) -> pd.DataFrame:

@@ -99,6 +99,8 @@ def main():
     parser.add_argument('--invert', dest='invert', help='Invert the selection being done while filtering', action='store_true')
     parser.add_argument('-f', '--filter-bias-abund', dest='filter_bias_abund', help='Abundance threshold to filter lineage bias data', type=float, required=False, default=0.05)
     parser.add_argument('--group', dest='group', help='Set group to inspect', type=str, required=False, default='all')
+    parser.add_argument('--myeloid-cell', dest='myeloid_cell', help='cell used for myeloid lineage', type=str, required=False, default='gr')
+    parser.add_argument('--lymphoid-cell', dest='lymphoid_cell', help='cell used for lymphoid lineage', type=str, required=False, default='b')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=timepoint_type, required=False)
     parser.add_argument('--change-type', dest='change_type', help='Set type of lineage bias changed clones to inspect for certain graphs', type=change_type, required=False)
@@ -125,9 +127,8 @@ def main():
     raw_lineage_bias_df = pd.read_csv(args.lineage_bias)
     bias_change_df = pd.read_csv(args.bias_change)
 
-    analysed_cell_types = ['gr', 'b']
-    phenotypic_groups = ['aging_phenotype', 'no_change']
-    cell_count_df = parse_wbc_count_file(args.cell_count, ['gr', 'hsc', 'b', 'wbc'])
+    analyzed_cell_types = [args.myeloid_cell, args.lymphoid_cell]
+    cell_count_df = parse_wbc_count_file(args.cell_count, [args.myeloid_cell, 'hsc', args.lymphoid_cell, 'wbc'])
 
     min_hsc_per_mouse = calc_min_hsc_per_mouse(
         args.cell_count,
@@ -135,12 +136,19 @@ def main():
         args.donor
         )
 
-    if not input_df[~input_df.group.isin(phenotypic_groups)].empty:
-        print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
-        print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
+    if 'group' not in input_df.columns:
+        print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: No Groups !!')
+        input_df['group'] = 'None'
+        raw_lineage_bias_df['group'] = 'None'
+    else:
+        phenotypic_groups = input_df.group.unique()
+        if not input_df[~input_df.group.isin(phenotypic_groups)].empty:
+            print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
+            print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
+        for group in phenotypic_groups:
+            print(group.title() + ' Mice: ' + str(input_df[input_df.group == group].mouse_id.nunique()))
 
     present_clones_df = input_df
-
     graph_type = args.graph_type
     if graph_type == 'default':
         print(Style.BRIGHT + '\n -- Plotting Default Plot(s) -- \n')
@@ -225,14 +233,20 @@ def main():
             lineage_bias_df,
             timepoint_col,
             cell_count_df,
-            args.filter_bias_abund
+            args.filter_bias_abund,
+            myeloid_cell=args.myeloid_cell,
+            lymphoid_cell=args.lymphoid_cell,
         )
-    else:
-        lineage_bias_df = raw_lineage_bias_df
 
-    print('Aging Phenotype Mice: ' + str(input_df[input_df.group == 'aging_phenotype'].mouse_id.nunique()))
-    print('No Change Mice: ' + str(input_df[input_df.group == 'no_change'].mouse_id.nunique())  + '\n')
 
+    if graph_type in ['default']:
+        print(lineage_bias_df[['lineage_bias']])
+        sns.scatterplot(
+            data=lineage_bias_df,
+            x=timepoint_col,
+            y='lineage_bias',
+            hue='mouse_id',
+        )
     if graph_type in ['hsc_vs_blood_count']:
         save_path = args.output_dir + os.sep + 'hsc-blood_count'
         if timepoint_col == 'month':
@@ -256,7 +270,6 @@ def main():
         plot_abundance_change_changed_group_grid(
             lineage_bias_df,
             timepoint_col,
-            by_clone=args.by_clone,
             by_mouse=args.by_mouse,
             save=args.save,
             save_path=save_path,
@@ -1051,6 +1064,30 @@ def main():
             save=args.save,
             save_path=save_path,
         )
+    if graph_type in ['abund_change_bias_dist_group_vs']:
+        save_path = args.output_dir + os.sep + 'abund_change_bias_dist_group_vs'
+        if args.threshold:
+            threshold = args.threshold
+        else:
+            threshold = 0.01
+
+        if args.options != 'default':
+            mtd = int(args.options)
+        else:
+            mtd = 1
+
+        for ct in ['gr', 'b']:
+            plot_abund_change_bias_dist_group_vs(
+                lineage_bias_df,
+                timepoint_col,
+                cutoff=threshold,
+                mtd=mtd,
+                by_mouse=args.by_mouse,
+                timepoint=args.timepoint,
+                y_col=ct+'_change',
+                save=args.save,
+                save_path=save_path,
+            )
     if graph_type in ['bias_change_mean_dist_vs_group']:
         save_path = args.output_dir + os.sep + 'bias_distribution_mean_abund_vs_g'
         if args.threshold:
@@ -1062,23 +1099,6 @@ def main():
             mtd = int(args.options)
         else:
             mtd = 1
-        ## PLots unused, uncomment to filter based on b and gr average engraftment
-        #plot_bias_dist_mean_abund_group_vs(
-            #lineage_bias_df,
-            #timepoint_col,
-            #cutoff=threshold,
-            #y_col='b_percent_engraftment',
-            #save=args.save,
-            #save_path=save_path,
-        #)
-        #plot_bias_dist_mean_abund_group_vs(
-            #lineage_bias_df,
-            #timepoint_col,
-            #cutoff=threshold,
-            #y_col='gr_percent_engraftment',
-            #save=args.save,
-            #save_path=save_path,
-        #)
 
         plot_bias_dist_mean_abund_group_vs(
             lineage_bias_df,
@@ -1088,6 +1108,7 @@ def main():
             mtd=mtd,
             timepoint=args.timepoint,
             y_col='sum_abundance',
+            by_mouse=args.by_mouse,
             save=args.save,
             save_path=save_path,
         )
@@ -1190,7 +1211,6 @@ def main():
 
         if args.invert:
             if timepoint_col == 'month':
-                print('Filtering with abundance > 0.01 at a minimum of 3 time points')
                 lineage_bias_df = filter_lineage_bias_n_timepoints_threshold(
                     raw_lineage_bias_df,
                     threshold=0.01,
@@ -2153,7 +2173,6 @@ def main():
             timepoint = args.timepoint
 
 
-        analysed_cell_types = ['gr', 'b']
 
         print('Abundance cutoff set to: ' + str(abundance_cutoff))
 
@@ -2163,7 +2182,7 @@ def main():
             + str(args.filter_bias_abund).replace('.', '-') \
             + os.sep
 
-        for cell_type in ['gr', 'b']:
+        for cell_type in analyzed_cell_types:
             filt_lineage_bias_df = combine_enriched_clones_at_time(
                 input_df=lineage_bias_df,
                 enrichment_time=timepoint,
@@ -2322,7 +2341,7 @@ def main():
             percentile = 0.995
             print('Percentile Set To: ' + str(percentile))
             present_at_month_4 = present_clones_df.loc[present_clones_df[timepoint_col] == first_timepoint]
-            dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
+            dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile, cell_types=analyzed_cell_types)
 
         print(dominant_thresholds)
         for cell_type, threshold in dominant_thresholds.items():
@@ -2334,6 +2353,7 @@ def main():
         plot_clone_enriched_at_time(present_clones_df,
                                     [timepoint],
                                     dominant_thresholds,
+                                    analyzed_cell_types=analyzed_cell_types,
                                     timepoint_col=timepoint_col,
                                     save=args.save,
                                     save_path=args.output_dir + os.sep + 'Dominant_Clone_Abundance_Over_Time',

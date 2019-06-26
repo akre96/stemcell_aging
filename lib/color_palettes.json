@@ -13,7 +13,8 @@
         "no_change" : "#f5883f",
         "aging_phenotype" : "#2ab0cc",
         "No Change" : "#f5883f",
-        "Aging Phenotype" : "#2ab0cc"
+        "Aging Phenotype" : "#2ab0cc",
+        "None": "#484848"
     },
     "change_status_3": [
         "#8cc35c",

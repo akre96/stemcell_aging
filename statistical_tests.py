@@ -129,7 +129,9 @@ def ttest_1samp(
             popmean=null_mean,
             nan_policy=handle_nan,
         )
-        context: str = ' '.join(group_var).title()
+        mean_val = g_df[value_var].mean()
+        context: str = ' '.join(group_var).title() \
+            + ', Mean: ' + str(mean_val)
         print_p_value(context, p_value, show_ns=show_ns)
 
 def ind_ttest_between_groups_at_each_time(

@@ -23,14 +23,15 @@ def main():
     parser.add_argument('--gfp', dest='gfp_file', help='Path to txt file containing gfp percent data', required=True)
     parser.add_argument('--wbcs', dest='wbcs_file', help='Path to txt containing FACS cell count data', required=True)
     parser.add_argument('--donor', dest='donor_file', help='Path to file containing donor chimerism data', required=True)
-    parser.add_argument('--group', dest='group_file', help='Path to csv file with columns for mouse_id and group', required=True)
+    parser.add_argument('--group', dest='group_file', help='Path to csv file with columns for mouse_id and group', required=False)
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', required=True)
     parser.add_argument('-t', '--timepoint-col', dest='timepoint_col', help='Column to look for time in', required=True)
-    parser.add_argument('-b', '--baseline-timepoint', dest='baseline_timepoint', help='Timepoint to set as baseline value for normalization', required=True, type=int)
+    parser.add_argument('-b', '--baseline-timepoint', dest='baseline_timepoint', help='Timepoint to set as baseline value for normalization', required=False)
 
     args = parser.parse_args()
 
-    group_info_df = pd.read_csv(args.group_file)
+    if args.group_file:
+        group_info_df = pd.read_csv(args.group_file)
     WBC_df = parse_wbc_count_file(args.wbcs_file, analyzed_cell_types=['gr', 'b', 'wbc'])
     GFP_df = parse_wbc_count_file(args.gfp_file).rename(columns={'cell_count':'GFP_perc'})
     donor_df = parse_wbc_count_file(args.donor_file).rename(columns={'cell_count':'donor_perc'})
@@ -68,14 +69,24 @@ def main():
     total_clones_df['code'] = 'Total Clones'
 
     rest_of_clones_df = pd.concat([total_clones_df, unbarcoded_df, host_clones_df], ignore_index=True)
-    rest_of_clones_df = rest_of_clones_df.merge(group_info_df, how='left', on=['mouse_id'])
+    if args.group_file:
+        rest_of_clones_df = rest_of_clones_df.merge(group_info_df, how='left', on=['mouse_id'])
+    else:
+        rest_of_clones_df['group'] = 'No Groups'
     rest_of_clones_df.to_csv(args.output_dir + os.sep + 'rest_of_clones_abundance_long.csv')
+
+    if args.baseline_timepoint == 'None':
+        base_time_point = None
+    elif args.baseline_timepoint:
+        base_time_point = int(args.baseline_timepoint)
+    else:
+        base_time_point = input_df['day'].min()
 
     with_baseline_counts_df = calculate_baseline_counts(
         rest_of_clones_df[['code', 'mouse_id', 'cell_type', 'day', 'month', 'group', 'percent_engraftment']],
         WBC_df,
         baseline_column=args.timepoint_col,
-        baseline_timepoint=args.baseline_timepoint
+        baseline_timepoint=base_time_point
         )
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
 

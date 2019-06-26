@@ -204,16 +204,25 @@ def filter_lineage_bias_anytime(
 def get_clones_at_timepoint(
         input_df: pd.DataFrame,
         timepoint_col: str,
-        timepoint: Any
+        timepoint: Any,
+        by_mouse: bool,
     ) -> pd.DataFrame:
     if timepoint == 'last':
         filt_df = find_last_clones(
             input_df,
             timepoint_col
         )
+        if by_mouse:
+            filt_df = find_last_clones_in_mouse(
+                input_df,
+                timepoint_col
+            )
     elif timepoint == 'first':
-        tp = input_df[timepoint_col].min()
-        filt_df = input_df[input_df[timepoint_col] == tp]
+        if by_mouse:
+            tp = input_df[timepoint_col].min()
+            filt_df = input_df[input_df[timepoint_col] == tp]
+        else:
+            filt_df = input_df.sort_values(timepoint_col).groupby(['mouse_id', 'code']).first()
     else:
         filt_df = input_df[input_df[timepoint_col] == int(timepoint)]
     return filt_df
@@ -707,12 +716,15 @@ def mark_changed(
         timepoint=timepoint
     )
     cutoff = cutoffs[0]
-    with_bias_df = input_df.merge(
-        bias_change_df[['code', 'group', 'mouse_id', 'bias_change']],
-        how='left',
-        on=['code', 'group', 'mouse_id'],
-        validate='m:m',
-    )
+    if not 'bias_change' in input_df.columns:
+        with_bias_df = input_df.merge(
+            bias_change_df[['code', 'group', 'mouse_id', 'bias_change']],
+            how='left',
+            on=['code', 'group', 'mouse_id'],
+            validate='m:m',
+        )
+    else:
+        with_bias_df = input_df
     with_bias_df['change_cutoff'] = cutoff
     print('Lineage Bias Change Cutoff: ' + str(round(cutoff, 2)))
 
@@ -1123,13 +1135,47 @@ def bias_clones_to_abundance(
         raise ValueError('No Cell Type Detected To Find Abundance In')
     return bias_clones_abundance_df
 
+def calculate_first_last_bias_change(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        by_mouse: str
+    ):
+    group_cols = ['mouse_id', 'code', 'group']
+
+    lineage_bias_at_first_df = get_clones_at_timepoint(
+        lineage_bias_df,
+        timepoint_col,
+        'first',
+        by_mouse=by_mouse,
+    )
+    lineage_bias_at_last_df = get_clones_at_timepoint(
+        lineage_bias_df,
+        timepoint_col,
+        'last',
+        by_mouse=by_mouse,
+    )
+    both_time_bias_df = lineage_bias_at_first_df.merge(
+        lineage_bias_at_last_df,
+        on=group_cols,
+        suffixes=['_first', '_last'],
+        validate='1:1'
+    )
+
+    bias_change_df = both_time_bias_df.assign(
+        bias_change=lambda x: x.lineage_bias_last - x.lineage_bias_first,
+        gr_change=lambda x: x.gr_percent_engraftment_last - x.lineage_bias_first,
+        b_change=lambda x: x.b_percent_engraftment_last - x.lineage_bias_first,
+        time_change=lambda x: x[timepoint_col+'_last'] - x[timepoint_col+'_first'],
+    )
+    bias_change_df = bias_change_df[bias_change_df['time_change'] != 0]
+    return bias_change_df
 def calculate_first_last_bias_change_with_avg_data(
     lineage_bias_df: pd.DataFrame,
     y_col: str,
     timepoint_col: str,
     ) -> pd.DataFrame:
 
-    df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change']
+    df_cols = ['mouse_id', 'code', 'group', 'average_'+y_col, 'bias_change', 'gr_change', 'b_change']
     add_change_status = False
     
     if 'change_status' in lineage_bias_df.columns:
@@ -1153,6 +1199,8 @@ def calculate_first_last_bias_change_with_avg_data(
         bias_change_row['mouse_id'] = [name[1]]
         bias_change_row['group'] = [name[2]]
         bias_change_row['average_'+y_col] = [avg_val]
+        bias_change_row['gr_change'] = [t2['gr_percent_engraftment'] - t1['gr_percent_engraftment']]
+        bias_change_row['b_change'] = [t2['b_percent_engraftment'] - t1['b_percent_engraftment']]
         bias_change_row['bias_change'] = [bias_change]
         if add_change_status:
             bias_change_row['change_status'] = t1['change_status']
@@ -1394,6 +1442,18 @@ def not_survived_bias_by_time_change(
         not_survived_count_df = not_survived_count_df.append(not_survived_counts)
     return not_survived_count_df
 
+
+def add_avg_abundance_until_timepoint_clonal_abundance_df(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    output_df = pd.DataFrame()
+    for _, g_df in clonal_abundance_df.groupby(UNIQUE_CODE_COLS):
+        sort_df = g_df.sort_values(by=timepoint_col).reset_index()
+        for i in range(len(sort_df)):
+            sort_df.loc[i, 'avg_abundance'] = sort_df.loc[:i, ['percent_engraftment']].sum(axis=1).mean()
+        output_df = output_df.append(sort_df)
+    return output_df
 
 def add_avg_abundance_until_timepoint(
         lineage_bias_df: pd.DataFrame,
@@ -1688,12 +1748,14 @@ def get_clones_exist_first_and_last_per_mouse(
     first_df = get_clones_at_timepoint(
         input_df,
         timepoint_col,
-        'first'
+        'first',
+        by_mouse=True,
     )
     last_df = get_clones_at_timepoint(
         input_df,
         timepoint_col,
         'last',
+        by_mouse=True,
     )
     both_df = first_df.merge(
         last_df[['mouse_id', 'code']].drop_duplicates(),
@@ -1769,8 +1831,8 @@ def calc_min_hsc_per_mouse(
             validate='1:1'
         )
 
-    # (GFP * DONOR)/ (100 * HSC_COUNT)
-    facs_data['min_eng_hsc'] = facs_data['gfp_perc'] * facs_data['donor_perc'] / (facs_data['cell_count'] * 100)
+    # (DONOR)/ (HSC_COUNT)
+    facs_data['min_eng_hsc'] = facs_data['donor_perc'] / (facs_data['cell_count'])
     return facs_data[['mouse_id', 'min_eng_hsc']].drop_duplicates()
 
 def merge_hsc_min_abund(
@@ -1834,6 +1896,8 @@ def filter_lineage_bias_cell_type_ratio_per_mouse(
         timepoint_col: str,
         wbc_df: pd.DataFrame,
         filter_threshold: float,
+        myeloid_cell:str,
+        lymphoid_cell:str,
     ) -> pd.DataFrame:
     """ Filter Lineage bias based on the ratio of Gr
     
@@ -1859,20 +1923,20 @@ def filter_lineage_bias_cell_type_ratio_per_mouse(
         columns='cell_type',
         values='cell_count'
     )
-    pivotted['gr-b_ratio'] = pivotted['gr']/pivotted['b']
-    pivotted['gr_filter'] = pivotted['gr-b_ratio'] * filter_threshold
-    pivotted['b_filter'] = filter_threshold
+    pivotted['m-l_ratio'] = pivotted[myeloid_cell]/pivotted[lymphoid_cell]
+    pivotted['m_filter'] = pivotted['m-l_ratio'] * filter_threshold
+    pivotted['l_filter'] = filter_threshold
     print('Length Before Filtering: ', len(lineage_bias_df))
 
-    filters = pivotted[['gr_filter', 'b_filter']].reset_index()
+    filters = pivotted[['m_filter', 'l_filter']].reset_index()
     with_filters_df = lineage_bias_df.merge(
         filters,
         how='inner',
         validate='m:1',
     )
     filt_df = with_filters_df[
-        (with_filters_df['gr_percent_engraftment'] >= with_filters_df['gr_filter']) |\
-        (with_filters_df['b_percent_engraftment'] >= with_filters_df['b_filter'])
+        (with_filters_df['myeloid_percent_abundance'] >= with_filters_df['m_filter']) |\
+        (with_filters_df['lymphoid_percent_engraftment'] >= with_filters_df['l_filter'])
     ]
     print('Length After Filtering: ', len(filt_df), '\n')
 

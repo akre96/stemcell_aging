@@ -201,7 +201,7 @@ def plot_clone_enriched_at_time(filtered_df: pd.DataFrame,
                                 enrichement_months: List[Any],
                                 enrichment_thresholds: Dict[str, float],
                                 timepoint_col: str,
-                                analyzed_cell_types: List[str] = ['gr', 'b'],
+                                analyzed_cell_types: List[str],
                                 by_clone: bool = False,
                                 save: bool = False,
                                 save_path: str = './output',
@@ -1602,7 +1602,7 @@ def swamplot_abundance_cutoff(
                 + ' ' + cell_type.title() + ' Clones'
                 stat_tests.print_p_value(context, p_value)
                 
-            plt.figure(figsize=(7, 5))
+            plt.figure(figsize=(7, 7))
             plt.yscale('log')
             pal = COLOR_PALETTES['mouse_id']
             ax = sns.swarmplot(
@@ -1664,7 +1664,7 @@ def swamplot_abundance_cutoff(
             + ' ' + cell_type.title() + ' Clones'
             stat_tests.print_p_value(context, p_value)
 
-        plt.figure(figsize=(7, 5))
+        plt.figure(figsize=(7, 7))
         plt.yscale('log')
         pal = COLOR_PALETTES['mouse_id']
         ax = sns.swarmplot(
@@ -2525,13 +2525,15 @@ def plot_extreme_bias_time(
                 + ' At ' \
                 + timepoint_col.title() + ' ' + str(timepoint)
             
-            # Remove Clones with only 2 time points for balanced clone graph
-            biased_at_time_df['uid'] = biased_at_time_df['mouse_id'].str.cat(biased_at_time_df['code'], sep='')
-            by_clone_group = biased_at_time_df.groupby('uid').aggregate(np.count_nonzero)
-            more_than_2_timepoints = by_clone_group[by_clone_group[timepoint_col] > 2].index
-            biased_at_time_df = biased_at_time_df[
-                biased_at_time_df['uid'].isin(more_than_2_timepoints)
-            ]
+            # Uncomment to remove clones with only 2 time points for balanced clone graph
+
+            #print('Filtering with abundance > 0.01 at a minimum of 3 time points')
+            #biased_at_time_df['uid'] = biased_at_time_df['mouse_id'].str.cat(biased_at_time_df['code'], sep='')
+            #by_clone_group = biased_at_time_df.groupby('uid').aggregate(np.count_nonzero)
+            #more_than_2_timepoints = by_clone_group[by_clone_group[timepoint_col] > 2].index
+            #biased_at_time_df = biased_at_time_df[
+                #biased_at_time_df['uid'].isin(more_than_2_timepoints)
+            #]
     else:
         plot_title = 'Bias beyond ' \
             + str(round(bias_cutoff, 2)) + ' at ' \
@@ -2818,6 +2820,93 @@ def plot_abund_swarm_box(
             + '.' + save_format
         save_plot(fname, save, save_format)
 
+def plot_abund_change_bias_dist_group_vs(
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        cutoff: float,
+        mtd: int,
+        timepoint: int,
+        y_col: str,
+        by_mouse: bool,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png'
+    ) -> None:
+
+    sns.set_context(
+        'paper',
+        font_scale=2,
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 3,
+            'axes.labelsize': 22,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 22,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+
+        )
+    bias_change_df = calculate_first_last_bias_change(
+        lineage_bias_df,
+        timepoint_col,
+        by_mouse=by_mouse
+    )
+    _, _, _, _, cutoffs, _ = calculate_bias_change_cutoff(
+        bias_change_df,
+        mtd,
+        timepoint=timepoint
+    )
+    print('Bias Change Cutoff at:', cutoffs[0])
+    bias_change_cutoff = cutoffs[0]
+    
+    plt.figure(figsize=(7,6))
+
+    for gname, g_df in bias_change_df.groupby('group'):
+        c = COLOR_PALETTES['group'][gname]
+        sns.distplot(
+            g_df.bias_change,
+            rug=False,
+            kde=False,
+            hist=True,
+            hist_kws={
+                'histtype': 'step',
+                'weights': g_df[y_col],
+                'linewidth': 3,
+                'alpha': .8,
+                'color': c
+            },
+            color=c,
+            label=NEW_GROUP_NAME_MAP[gname],
+
+        )
+
+        plt.title(
+            y_col_to_title(y_col)
+        )
+        plt.xlabel('Change In Lineage Bias')
+        plt.ylabel(y_col_to_title(y_col))
+        plt.xlim((-2,2))
+        # Shrink current axis's height by 10% on the bottom
+        ax = plt.gca()
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                        box.width, box.height * 0.9])
+
+        # Put a legend below current axis
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.18),
+            ncol=2)
+
+    min_max_change = [bias_change_cutoff, -1 * bias_change_cutoff]
+    ymin, ymax = plt.ylim()
+    plt.vlines(min_max_change, ymin, ymax, linestyles='dashed')
+    plt.hlines(0, -2, 2, colors='gray', linestyles='dashed')
+    fname = save_path + os.sep +'bias_change_dist_vs_group_' \
+        + y_col \
+        + '_' + str(cutoff).replace('.','-') \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
 def plot_bias_dist_mean_abund_group_vs(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
@@ -2825,6 +2914,7 @@ def plot_bias_dist_mean_abund_group_vs(
         mtd: int,
         timepoint: int,
         change_status: str,
+        by_mouse: bool,
         y_col: str = 'sum_abundance',
         save: bool = False,
         save_path: str = './output',
@@ -2846,36 +2936,31 @@ def plot_bias_dist_mean_abund_group_vs(
         }
 
         )
-    bias_change_df = get_bias_change(
+    bias_change_df = calculate_first_last_bias_change(
         lineage_bias_df,
         timepoint_col,
+        by_mouse
     )
     _, _, _, _, cutoffs, _ = calculate_bias_change_cutoff(
         bias_change_df,
         mtd,
         timepoint=timepoint
     )
-    lineage_bias_df = mark_changed(
-        lineage_bias_df,
+    change_marked_df = mark_changed(
+        bias_change_df,
         bias_change_df,
         min_time_difference=1,
     )
     bias_change_cutoff = cutoffs[0]
-    bias_dist_df = calculate_first_last_bias_change_with_avg_data(
-        lineage_bias_df,
-        y_col,
-        timepoint_col
-    )
     
     plt.figure(figsize=(7,6))
     if change_status is not None:
-        bias_dist_df = bias_dist_df[bias_dist_df['change_status'] == change_status]
+        change_marked_df = change_marked_df[change_marked_df['change_status'] == change_status]
 
-    for gname, g_df in bias_dist_df.groupby('group'):
+    for gname, g_df in change_marked_df.groupby('group'):
         c = COLOR_PALETTES['group'][gname]
-        filt_df = g_df[g_df['average_'+y_col] >= cutoff]
         sns.distplot(
-            filt_df.bias_change,
+            g_df.bias_change,
             rug=False,
             kde=False,
             hist=True,
@@ -3490,6 +3575,10 @@ def plot_not_survived_abundance(
         save_path: str = './output',
         save_format: str = 'png',
     ):
+    lineage_bias_df = lineage_bias_df[
+        (lineage_bias_df['gr_percent_engraftment'] < 0.01) |\
+        (lineage_bias_df['b_percent_engraftment'] < 0.01)
+    ]
     survival_df = create_lineage_bias_survival_df(
         lineage_bias_df,
         timepoint_col
@@ -3719,6 +3808,20 @@ def plot_hsc_abund_bias_at_last(
         save_format: str='png',
     ) -> None:
 
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 20,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 20,
+            'ytick.labelsize': 20,
+            'figure.titlesize': 'small',
+        }
+
+        )
     if clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].empty:
         raise ValueError('No HSC Cells in Clonal Abundance Data')
     cats_order = [
@@ -4215,6 +4318,20 @@ def plot_abundance_by_change(
         save_path: str = './output',
         save_format: str = 'png',
     ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 2,
+            'axes.linewidth': 3,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+
+        )
     bias_change_df = get_bias_change(
         lineage_bias_df,
         timepoint_col
@@ -4304,7 +4421,7 @@ def plot_abundance_by_change(
                 )
                 context: str = str(timepoint) + ' - ' + a + ' vs ' + b
                 stat_tests.print_p_value(context, p_value)
-        plt.figure(figsize=(10,9))
+        plt.figure(figsize=(7, 5))
         plt.title(
             cell_type.title() + ' '
             + desc_add.title()
@@ -4327,7 +4444,7 @@ def plot_abundance_by_change(
 
         # Put a legend below current axis
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.18),
-            fancybox=True, shadow=True, ncol=3, title='')
+            fancybox=True, shadow=True, ncol=3, title='').remove()
         fname = fname_prefix + '_' + cell_type \
             + '_' + desc_add \
             + '.' + save_format
@@ -5923,8 +6040,14 @@ def exhaust_persist_abund(
             'figure.titlesize': 'small',
         }
     )
-    survival_df = create_lineage_bias_survival_df(
-        lineage_bias_df,
+    present_clones_df = clonal_abundance_df[clonal_abundance_df['percent_engraftment'] > 0.01]
+
+    exhaustion_labeled_df = add_exhaustion_labels(
+        present_clones_df,
+        timepoint_col
+    )
+    survival_df = add_avg_abundance_until_timepoint_clonal_abundance_df(
+        exhaustion_labeled_df,
         timepoint_col
     )
     if timepoint_col  == 'month':
@@ -5940,7 +6063,9 @@ def exhaust_persist_abund(
             timepoint_col,
             timepoint='first'
         )
-    y_col = cell_type + '_avg_abundance'
+    y_col = 'avg_abundance'
+    if not by_clone:
+        survival_df = survival_df[survival_df['cell_type'] == cell_type]
     if by_sum:
         y_desc = cell_type.title() + ' Accumulated Abundance (% WBC)'
         filename_addon='sum'
@@ -6127,8 +6252,10 @@ def exhaust_persist_hsc_abund(
         }
     )
     without_hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type.isin(['gr','b'])]
-    survival_df = create_lineage_bias_survival_df(
-        lineage_bias_df,
+    survival_df = add_exhaustion_labels(
+        clonal_abundance_df[
+            clonal_abundance_df['percent_engraftment'] > 0.01
+        ],
         timepoint_col
     )
 
@@ -7190,7 +7317,7 @@ def plot_hsc_abundance_by_change(
     show_ns = False
     if by_sum or by_clone:
         match_cols = ['mouse_id']
-        rel_ttest_group_time(
+        stat_tests.rel_ttest_group_time(
             hsc_data,
             match_cols=match_cols,
             merge_type='outer',
@@ -7200,7 +7327,7 @@ def plot_hsc_abundance_by_change(
             overall_context=y_desc,
             show_ns=show_ns
         )
-        ind_ttest_group_time(
+        stat_tests.ind_ttest_group_time(
             hsc_data,
             y_col,
             'change_type',
@@ -7209,7 +7336,7 @@ def plot_hsc_abundance_by_change(
         )
     else:
         markers=True
-        ranksums_test_group_time(
+        stat_tests.ranksums_test_group_time(
             hsc_data,
             y_col,
             'change_type',
@@ -7410,7 +7537,6 @@ def plot_abundance_change_changed_group_grid(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         by_mouse:bool,
-        by_clone: bool,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -7433,11 +7559,7 @@ def plot_abundance_change_changed_group_grid(
         None
     """
     
-    lineage_bias_df = get_clones_exist_first_and_last_per_mouse(
-        lineage_bias_df,
-        timepoint_col
-    ) 
-    y_cols =  ['gr_abundance_diff', 'b_abundance_diff']
+    y_cols =  ['gr_change', 'b_change']
     group_cols = ['mouse_id', 'group', 'change_status']
 
     if by_mouse:
@@ -7446,10 +7568,7 @@ def plot_abundance_change_changed_group_grid(
         group_desc = 'by-clone'
 
     # NOTE By_Clone here is used as a flag for log2 fold vs linear change
-    if not by_clone:
-        math_desc = 'log2fc'
-    else:
-        math_desc = 'absolute_change'
+    math_desc = 'absolute_change'
 
     sns.set_context(
         'paper',
@@ -7465,136 +7584,48 @@ def plot_abundance_change_changed_group_grid(
             'figure.titlesize': 'small',
         }
     )
-    bias_change_df = get_bias_change(
+    bias_change_df = calculate_first_last_bias_change(
         lineage_bias_df,
         timepoint_col,
+        by_mouse=by_mouse,
     )
-    lineage_bias_df = mark_changed(
-        lineage_bias_df,
+    marked_lineage_bias_df = mark_changed(
+        bias_change_df,
         bias_change_df,
         min_time_difference=1,
     )
 
     if timepoint_col == 'gen':
-        lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+        marked_lineage_bias_df = marked_lineage_bias_df[lineage_bias_df.gen != 8.5]
 
-
-    if not by_clone:
-        raw_lineage_bias_df = lineage_bias_df.copy()
-        # For log 2fc take min not zero value and divide by 100. Replace 0s with that number
-        lineage_bias_df = add_almost_zero(
-            lineage_bias_df,
-            'b_percent_engraftment',
-            min_div_factor = 100
-        )
-        lineage_bias_df = add_almost_zero(
-            lineage_bias_df,
-            'gr_percent_engraftment',
-            min_div_factor = 100
-        )
-        raw_lineage_bias_at_first_df = find_last_clones_in_mouse(
-            raw_lineage_bias_df,
-            timepoint_col,
-        )
-        raw_lineage_bias_at_last_df = get_clones_at_timepoint(
-            raw_lineage_bias_df,
-            timepoint_col,
-            'first'
-        )
-        raw_both_time_bias_df = raw_lineage_bias_at_first_df.merge(
-            raw_lineage_bias_at_last_df,
-            on=group_cols + ['code'],
-            suffixes=['_first', '_last'],
-            validate='1:1'
-        )
-
-    lineage_bias_at_first_df = get_clones_at_timepoint(
-        lineage_bias_df,
-        timepoint_col,
-        'last'
-    )
-    # Uncomment to get last per mouse
-    #lineage_bias_at_first_df = find_last_clones_in_mouse(
-        #lineage_bias_df,
-        #timepoint_col,
-    #)
-    lineage_bias_at_last_df = get_clones_at_timepoint(
-        lineage_bias_df,
-        timepoint_col,
-        'first'
-    )
-    both_time_bias_df = lineage_bias_at_first_df.merge(
-        lineage_bias_at_last_df,
-        on=group_cols + ['code'],
-        suffixes=['_first', '_last'],
-        validate='1:1'
-    )
-
-    if not by_clone:
-        raw_both_time_bias_df = raw_both_time_bias_df.assign(
-            gr_abundance_diff=lambda x: np.log2(x.gr_percent_engraftment_last/x.gr_percent_engraftment_first),
-            b_abundance_diff=lambda x: np.log2(x.b_percent_engraftment_last/x.b_percent_engraftment_first),
-        )
-
-        both_time_bias_df = both_time_bias_df.assign(
-            gr_abundance_diff=lambda x: np.log2(x.gr_percent_engraftment_last/x.gr_percent_engraftment_first),
-            b_abundance_diff=lambda x: np.log2(x.b_percent_engraftment_last/x.b_percent_engraftment_first),
-        )
-    else:
-        both_time_bias_df = both_time_bias_df.assign(
-            gr_abundance_diff=lambda x: x.gr_percent_engraftment_last - x.gr_percent_engraftment_first,
-            b_abundance_diff=lambda x: x.b_percent_engraftment_last - x.b_percent_engraftment_first,
-        )
-        raw_both_time_bias_df = both_time_bias_df
-    
-    
 
     if by_mouse:
-        raw_avg_abund_per_mouse = pd.DataFrame(raw_both_time_bias_df.groupby(
-            group_cols
-            )[y_cols].mean()).reset_index()
-        avg_abund_per_mouse = pd.DataFrame(both_time_bias_df.groupby(
+        avg_abund_per_mouse = pd.DataFrame(marked_lineage_bias_df.groupby(
             group_cols
             )[y_cols].mean()).reset_index()
         
-        raw_melt_df = pd.melt(
-            raw_avg_abund_per_mouse,
-            id_vars=group_cols,
-            value_vars=y_cols
-        )
         melt_df = pd.melt(
             avg_abund_per_mouse,
             id_vars=group_cols,
             value_vars=y_cols
         )
     else:
-        raw_melt_df = pd.melt(
-            raw_both_time_bias_df,
-            id_vars=['code'] + group_cols,
-            value_vars=y_cols
-        )
         melt_df = pd.melt(
-            both_time_bias_df,
+            marked_lineage_bias_df,
             id_vars=['code'] + group_cols,
             value_vars=y_cols
         )
-    raw_melt_df['change_status'] = raw_melt_df['change_status'].str[0]
-    raw_melt_df['group_first'] = raw_melt_df['group'].str[0]
-    raw_melt_df['change-group'] = raw_melt_df['change_status'].str.cat(raw_melt_df['group_first'], sep='-')
     melt_df['change_status'] = melt_df['change_status'].str[0]
     melt_df['group_first'] = melt_df['group'].str[0]
     melt_df['change-group'] = melt_df['change_status'].str.cat(melt_df['group_first'], sep='-')
     col_order = ['U-a', 'U-n', 'C-a', 'C-n']
 
     # Find sig difference
-    if not by_clone:
-        nan_inf_handle = 'omit'
-    else:
-        nan_inf_handle = 'propagate'
+    nan_inf_handle = 'propagate'
 
     show_ns=True
     stat_tests.ttest_1samp(
-        data=raw_melt_df,
+        data=melt_df,
         group_vars=['change-group', 'variable'],
         value_var='value',
         null_mean=0,
@@ -7615,10 +7646,11 @@ def plot_abundance_change_changed_group_grid(
     )
 
     g.map(
-        plot_violin_mean,
+        #plot_violin_mean,
+        sns.violinplot,
         "change-group",
         "value",
-        inner=None,
+        #inner=None,
         order=col_order,
         zorder=0,
     )

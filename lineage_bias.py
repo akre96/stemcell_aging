@@ -17,23 +17,23 @@ from aggregate_functions import filter_threshold, \
     filter_clones_threshold_anytime
 from parse_facs_data import parse_wbc_count_file
 
-def calc_angle(gr_value: float, b_value: float) -> float:
+def calc_angle(m_value: float, l_value: float) -> float:
     """ Calculates angle towards myeloid bias
 
     Arguments:
-        gr_value {float} -- gr normalized percent engraftment
-        b_value {float} -- b normalized percent engraftment
+        m_value {float} -- myeloid normalized percent engraftment
+        l_value {float} -- lymphoid normalized percent engraftment
 
     Returns:
         float -- angle in radians towards myeloid bias, range [0,pi/2]
     """
 
-    if b_value == 0.0:
-        if gr_value == 0.0:
+    if l_value == 0.0:
+        if m_value == 0.0:
             return pi/4
         return pi/2
 
-    towards_myloid_angle = atan(gr_value/b_value)
+    towards_myloid_angle = atan(m_value/l_value)
     return towards_myloid_angle
 
 def calc_bias_from_angle(theta: float) -> float:
@@ -50,18 +50,18 @@ def calc_bias_from_angle(theta: float) -> float:
     myloid_bias = sin(2 * (theta - (pi/4)))
     return myloid_bias
 
-def calc_bias(gr_value: float, b_value: float) -> float:
+def calc_bias(m_value: float, l_value: float) -> float:
     """ Calculates myeloid (+) lymhoid (-) bias from normalized percent engraftment
 
     Arguments:
-        gr_value {float} -- gr normalized percent engraftment
-        b_value {float} -- b normalized percent engraftment
+        m_value {float} -- myeloid normalized percent engraftment
+        l_value {float} -- lymphoid normalized percent engraftment
 
     Returns:
         float -- bias from [-1, 1] with myeloid (+) and lymphoid (-)
     """
 
-    return calc_bias_from_angle(calc_angle(gr_value, b_value))
+    return calc_bias_from_angle(calc_angle(m_value, l_value))
 
 def calculate_baseline_max(present_df: pd.DataFrame,
                            baseline_timepoint: int = 4,
@@ -126,9 +126,9 @@ def normalize_to_baseline_max(with_baseline_max_df: pd.DataFrame) -> pd.DataFram
     return norm_data_df
 
 def normalize_input_to_baseline_max(input_df: pd.DataFrame,
+                                    analyzed_cell_types: List[str],
                                     baseline_timepoint: int = 4,
                                     baseline_column: str = 'month',
-                                    analyzed_cell_types: List[str] = ['gr', 'b'],
                                     present_threshold: float = 0.01,
                                    ) -> pd.DataFrame:
     """ Wrapper function handling filtering, baseline calculation, and normalization of input
@@ -139,7 +139,7 @@ def normalize_input_to_baseline_max(input_df: pd.DataFrame,
     Keyword Arguments:
         baseline_timepoint {int} -- timepoint to use for baseline (default: {4})
         baseline_column {str} --  column to find timepoint in (default: {'month'})
-        analyzed_cell_types {List[str]} -- cell_types to filter for (default: {['gr', 'b']})
+        analyzed_cell_types {List[str]} -- cell_types to filter for 
         present_threshold {float} -- threshold to mark clones present (default: {0.01})
 
     Returns:
@@ -161,11 +161,17 @@ def normalize_input_to_baseline_max(input_df: pd.DataFrame,
     norm_data_df = normalize_to_baseline_max(with_baseline_max_df)
     return norm_data_df
 
-def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
+def create_lineage_bias_df(
+        norm_data_df: pd.DataFrame,
+        lymphoid_cell_type: str,
+        myeloid_cell_type: str
+    ) -> pd.DataFrame:
     """ Calculates Lineage Bias for all present clones
 
     Arguments:
         norm_data_df {pd.DataFrame} -- long format input with percent engraftments normalized
+        lymphoid_cell_type {str} -- Cell type to use as representative for lymphoid
+        myeloid_cell_type {str} -- cell type to use as represenetative for myeloid
 
     Raises:
         ValueError -- Raises error if ant clone-mouse-day has more than expected (2) cell types
@@ -177,12 +183,12 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
     """
 
     lineage_bias_columns = ['mouse_id',
+                            'group',
                             'code',
                             'day',
-                            'month',
                             'lineage_bias',
-                            'gr_percent_engraftment',
-                            'b_percent_engraftment',
+                            'myeloid_percent_engraftment',
+                            'lymphoid_percent_engraftment',
                             'has_null']
 
     lineage_bias_df = pd.DataFrame(columns=lineage_bias_columns)
@@ -191,30 +197,32 @@ def create_lineage_bias_df(norm_data_df: pd.DataFrame) -> pd.DataFrame:
     for _, group in norm_data_df.groupby(['mouse_id', 'code', 'day']):
 
         # If cell_type not found (filtered out), uses 0 as normalized percent engraftment
-        if group[group.cell_type == 'gr'].empty:
-            gr_value = 0.0
-            gr_engraftment = 0.0
+        if group[group.cell_type == myeloid_cell_type].empty:
+            m_value = 0.0
+            myeloid_abundance = 0.0
         else:
-            gr_value = group[group.cell_type == 'gr'].norm_percent_engraftment.values[0]
-            gr_engraftment = group[group.cell_type == 'gr'].percent_engraftment.values[0]
-        if group[group.cell_type == 'b'].empty:
-            b_value = 0.0
-            b_engraftment = 0.0
+            m_value = group[group.cell_type == myeloid_cell_type].norm_percent_engraftment.values[0]
+            myeloid_abundance = group[group.cell_type == myeloid_cell_type].percent_engraftment.values[0]
+        if group[group.cell_type == lymphoid_cell_type].empty:
+            l_value = 0.0
+            lymphoid_abundance = 0.0
         else:
-            b_value = group[group.cell_type == 'b'].norm_percent_engraftment.values[0]
-            b_engraftment = group[group.cell_type == 'b'].percent_engraftment.values[0]
+            l_value = group[group.cell_type == lymphoid_cell_type].norm_percent_engraftment.values[0]
+            lymphoid_abundance = group[group.cell_type == lymphoid_cell_type].percent_engraftment.values[0]
 
         new_row = pd.DataFrame(columns=lineage_bias_columns)
         new_row['has_null'] = [group.norm_percent_engraftment.isnull().values.any()]
-        new_row['lineage_bias'] = [calc_bias(gr_value, b_value)]
-        new_row['gr_percent_engraftment'] = gr_engraftment
-        new_row['b_percent_engraftment'] = b_engraftment
-        new_row['sum_percent_engraftment'] = gr_engraftment + b_engraftment
+        new_row['lineage_bias'] = [calc_bias(m_value, l_value)]
+        new_row['myeloid_percent_abundance'] = myeloid_abundance
+        new_row['lymphoid_percent_abundance'] = lymphoid_abundance
+        new_row['sum_percent_abundance'] = myeloid_abundance + lymphoid_abundance
         new_row['code'] = group.code.unique()
         new_row['day'] = group.day.unique()
-        new_row['month'] = group.month.unique()
         new_row['mouse_id'] = group.mouse_id.unique()
-        new_row['group'] = group['group'].unique()
+        if 'group' in group.columns:
+            new_row['group'] = group['group'].unique()
+        else:
+            new_row['group'] = 'None'
 
         # Ensures row added for unique clone
         if len(new_row.code) > 1:
@@ -245,8 +253,11 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
     """
 
 
-    timepoint_df = cell_counts_df.loc[cell_counts_df[baseline_column] == baseline_timepoint]
-    with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])
+    if baseline_timepoint is None:
+        with_baseline_counts_df = present_df.merge(cell_counts_df[['mouse_id', 'cell_type', 'cell_count', baseline_column]], how='left', on=['mouse_id', 'cell_type', baseline_column])
+    else:
+        timepoint_df = cell_counts_df.loc[cell_counts_df[baseline_column] == baseline_timepoint]
+        with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])
 
     return with_baseline_counts_df
 
@@ -322,30 +333,41 @@ def main():
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
     parser.add_argument('-l', '--bias-only', dest='bias_only', help='Set flag if you only want to calculate lineage bias, not its change', action="store_true")
     parser.add_argument('-d', '--by-day', dest='by_day', help='Calculations done using day column and day 127', action="store_true")
+    parser.add_argument('--monocyte', dest='monocyte', help='Calculations done using monocytes instead of granulocytes for myeloid', action="store_true")
+    parser.add_argument('--baseline-timepoint', dest='baseline_timepoint', help='baseline time point for lineage bias. None if normalize at each time', required=False)
 
     args = parser.parse_args()
 
     input_df = pd.read_csv(args.input)
     cell_count_data = parse_wbc_count_file(args.counts_file)
+    if args.monocyte:
+        myeloid_cell_type = 'mo'
+    else:
+        myeloid_cell_type = 'gr'
 
-    time_column = 'month'
-    base_time_point = 4
-    if args.by_day:
-        time_column = 'day'
-        base_time_point = 127
+    lymphoid_cell_type = 'b'
+
+    time_column = 'day'
+    if args.baseline_timepoint == 'None':
+        base_time_point = None
+    elif args.baseline_timepoint:
+        base_time_point = int(args.baseline_timepoint)
+    else:
+        base_time_point = input_df[time_column].min()
+
     if args.abundance_cutoff:
         print('Lineage Bias Calculated using baseline by ' + time_column + ' at point: ' + str(base_time_point))
         abundance_cutoff = args.abundance_cutoff
         _, thresholds = calculate_thresholds_sum_abundance(
             input_df,
             abundance_cutoff=abundance_cutoff,
-            analyzed_cell_types=['gr','b'],
+            analyzed_cell_types=[myeloid_cell_type, lymphoid_cell_type],
             timepoint_col=time_column
         )
         print('Calculating Lineage Bias and Change for cumulative abundance cutoff: ' + str(abundance_cutoff) + '\n')
 
         print('Filtering for present clones (any time point clone > thresholds)...')
-        present_df = filter_clones_threshold_anytime(input_df, thresholds, ['gr', 'b'])
+        present_df = filter_clones_threshold_anytime(input_df, thresholds, [myeloid_cell_type, lymphoid_cell_type])
         print('Done.\n')
     else:
         print('Lineage Bias Calculated using baseline by ' + time_column + 'at point: ' + str(base_time_point))
@@ -353,7 +375,7 @@ def main():
         print('Calculating Lineage Bias and Change for presence threshold of: ' + str(threshold) + '\n')
 
         print('Filtering for present clones...')
-        present_df = filter_threshold(input_df, threshold, ['gr', 'b'])
+        present_df = filter_threshold(input_df, threshold, [myeloid_cell_type, lymphoid_cell_type])
         print('Done.\n')
 
     print('Normalizing data...')
@@ -371,7 +393,7 @@ def main():
         fname_suffix = '_a' + str(abundance_cutoff).replace('.', '-') + '_from-counts.csv'
     else:
         fname_suffix = '_t' + str(threshold).replace('.', '-') + '_from-counts.csv'
-    lineage_bias_df = create_lineage_bias_df(norm_data_df)
+    lineage_bias_df = create_lineage_bias_df(norm_data_df, lymphoid_cell_type, myeloid_cell_type)
     lineage_bias_file_name = args.output_dir + os.sep + 'lineage_bias' + fname_suffix
     print('Done.\n')
     print('\nSaving Lineage Bias Data To: ' + lineage_bias_file_name)
