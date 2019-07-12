@@ -41,6 +41,9 @@ BASELINE_TIMEPOINT='4'
 REST_OF_CLONES_OUTPUT_DIR=~/Data/stemcell_aging/rest_of_clones
 
 
+# Representative cell type to use for lineage bias calculation
+LYMPHOID_CELL_TYPE='gr'
+MYELOID_CELL_TYPE='b'
 
 ## 10x serial transplant Presets
 #root_data_dir=~/Data/serial_transplant_10x
@@ -94,6 +97,8 @@ python lineage_bias.py \
     -i $CONSOLIDATED_OUTPUT_DIR/${PREFIX}_all*_long.csv\
     -c $WBC_FILE \
     -o $LINEAGE_BIAS_DIR \
+    --lymph $LYMPHOID_CELL_TYPE \
+    --myel $MYELOID_CELL_TYPE
 
 
 # Calculate lineage bias and abundance for Untracked clones and host clones by treating them as indibidual clones
@@ -104,4 +109,6 @@ python rest_of_clones_calc.py \
     --group $MOUSE_GROUP_PHENOTYPE_FILE \
     --timepoint-col $TIMEPOINT_COL \
     --baseline-timepoint $BASELINE_TIMEPOINT \
-    -o $REST_OF_CLONES_OUTPUT_DIR
+    -o $REST_OF_CLONES_OUTPUT_DIR \
+    --lymph $LYMPHOID_CELL_TYPE \
+    --myel $MYELOID_CELL_TYPE

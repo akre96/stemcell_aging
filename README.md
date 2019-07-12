@@ -20,6 +20,7 @@ Uses python 3.7.2
 ### Setting up environment
   1. Load virtual environment manager of choice using python 3.7.x
       - Anaconda, virtualenv, etc.
+      - If you have python3 run `python3 -m venv venv` and then `source venv/bin/activate`
   2. In the environment run:  
   `pip install -r requirements.txt`
 

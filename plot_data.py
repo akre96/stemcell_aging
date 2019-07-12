@@ -244,6 +244,7 @@ def main():
             data=lineage_bias_df,
             x=timepoint_col,
             y='lineage_bias',
+            hue='group',
             estimator=None,
         )
 

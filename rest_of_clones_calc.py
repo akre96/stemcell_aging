@@ -27,12 +27,14 @@ def main():
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', required=True)
     parser.add_argument('-t', '--timepoint-col', dest='timepoint_col', help='Column to look for time in', required=True)
     parser.add_argument('-b', '--baseline-timepoint', dest='baseline_timepoint', help='Timepoint to set as baseline value for normalization', required=False)
+    parser.add_argument('--lymph', '--lymphoid-cell-type', dest='lymphoid_cell_type', help='Cell to use for lymphoid representative', default='b', required=False)
+    parser.add_argument('--myel', '--myeloid-cell-type', dest='myeloid_cell_type', help='Cell to use for myeloid representative', default='gr', required=False)
 
     args = parser.parse_args()
 
     if args.group_file:
         group_info_df = pd.read_csv(args.group_file)
-    WBC_df = parse_wbc_count_file(args.wbcs_file, analyzed_cell_types=['gr', 'b', 'wbc'])
+    WBC_df = parse_wbc_count_file(args.wbcs_file, analyzed_cell_types=[args.myeloid_cell_type, args.lymphoid_cell_type, 'wbc'])
     GFP_df = parse_wbc_count_file(args.gfp_file).rename(columns={'cell_count':'GFP_perc'})
     donor_df = parse_wbc_count_file(args.donor_file).rename(columns={'cell_count':'donor_perc'})
 
@@ -91,7 +93,11 @@ def main():
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
 
     print('Calculating lineage bias...')
-    lineage_bias_df = create_lineage_bias_df(norm_data_df)
+    lineage_bias_df = create_lineage_bias_df(
+        norm_data_df,
+        lymphoid_cell_type=args.lymphoid_cell_type,
+        myeloid_cell_type=args.myeloid_cell_type,
+        )
 
 
     lineage_bias_file_name = args.output_dir + os.sep + 'rest_of_clones_lineage_bias.csv'

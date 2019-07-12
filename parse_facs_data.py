@@ -2,7 +2,7 @@ from typing import List
 import re
 import pandas as pd
 
-def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b']) -> pd.DataFrame:
+def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b'], sep: str ='\t') -> pd.DataFrame:
     """ Parses white blood cell count file to format as dataframe
 
     Arguments:
@@ -10,12 +10,13 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
 
     Keyword Arguments:
         analyzed_cell_types {List[str]} -- cell types to parse for (default: {['gr', 'b']})
+        sep {str} -- String used to seperate cells in file
 
     Returns:
         pd.DataFrame -- dataframe of mouse_id, cell_type, day, cell_count
     """
 
-    count_data_raw = pd.read_csv(wbc_count_file_path, sep='\t')
+    count_data_raw = pd.read_csv(wbc_count_file_path, sep=sep)
     parsed_counts = pd.DataFrame()
     col_names = count_data_raw.columns
     end_cols = [i for i, x in enumerate(col_names.tolist()) if x.find('Unnamed') != -1]

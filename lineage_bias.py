@@ -335,18 +335,15 @@ def main():
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
     parser.add_argument('-l', '--bias-only', dest='bias_only', help='Set flag if you only want to calculate lineage bias, not its change', action="store_true")
     parser.add_argument('-d', '--by-day', dest='by_day', help='Calculations done using day column and day 127', action="store_true")
-    parser.add_argument('--monocyte', dest='monocyte', help='Calculations done using monocytes instead of granulocytes for myeloid', action="store_true")
     parser.add_argument('--baseline-timepoint', dest='baseline_timepoint', help='baseline time point for lineage bias. None if normalize at each time', required=False)
+    parser.add_argument('--lymph', '--lymphoid-cell-type', dest='lymphoid_cell_type', help='Cell to use for lymphoid representative', default='b', required=False)
+    parser.add_argument('--myel', '--myeloid-cell-type', dest='myeloid_cell_type', help='Cell to use for myeloid representative', default='gr', required=False)
 
     args = parser.parse_args()
 
     input_df = pd.read_csv(args.input)
-    if args.monocyte:
-        myeloid_cell_type = 'mo'
-    else:
-        myeloid_cell_type = 'gr'
-
-    lymphoid_cell_type = 'b'
+    lymphoid_cell_type = args.lymphoid_cell_type
+    myeloid_cell_type = args.myeloid_cell_type
 
     cell_count_data = parse_wbc_count_file(
         args.counts_file,
