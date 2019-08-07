@@ -5,7 +5,7 @@ from ..aggregate_functions import filter_threshold, count_clones, find_enriched_
 
 TEST_DATA = pd.read_csv('test/test_data/test_all_long.csv')
 REAL_DATA = pd.read_csv('test/test_data/Ania_M_all_percent-engraftment_100818_long.csv')
-TIMEPOINT_COL='month'
+TIMEPOINT_COL='day'
 def test_filter_threshold():
     threshold = .021
     analyzed_cell_types = ['gr']
@@ -42,11 +42,11 @@ def test_enriched_clones():
     threshold = .0
     analyzed_cell_types = ['gr', 'b']
     filt_df = filter_threshold(TEST_DATA, threshold, analyzed_cell_types)
-    enrichment_month = 4
+    enrichment_day= 122
     enrichment_threshold = .04
 
     # Finds the right barcode
-    enriched_clones_df = find_enriched_clones_at_time(filt_df, enrichment_month, enrichment_threshold, 'b', timepoint_col='month')
+    enriched_clones_df = find_enriched_clones_at_time(filt_df, enrichment_day, enrichment_threshold, 'b', timepoint_col='day')
     print(enriched_clones_df)
     unique_clones = enriched_clones_df.code.unique()
     assert enriched_clones_df.code.nunique() == 1
@@ -56,55 +56,55 @@ def test_enriched_clones_real_data():
     threshold = .01
     analyzed_cell_types = ['gr', 'b']
     filt_df = filter_threshold(REAL_DATA, threshold, analyzed_cell_types)
-    enrichment_month = 4
+    enrichment_day = 120
     enrichment_threshold = .2
 
     # Finds the right barcode
-    enriched_clones_df = find_enriched_clones_at_time(filt_df, enrichment_month, enrichment_threshold, 'b', timepoint_col=TIMEPOINT_COL)
+    enriched_clones_df = find_enriched_clones_at_time(filt_df, enrichment_day, enrichment_threshold, 'b', timepoint_col=TIMEPOINT_COL)
     should_be_empty_index = (enriched_clones_df.cell_type == 'gr') | \
         (
-            (enriched_clones_df.month == enrichment_month) & \
+            (enriched_clones_df.day == enrichment_day) & \
             (enriched_clones_df.percent_engraftment < enrichment_threshold)
         )
 
     assert enriched_clones_df[should_be_empty_index].empty
-    codes_index = (enriched_clones_df.month == enrichment_month) & (enriched_clones_df.percent_engraftment >= enrichment_threshold)
+    codes_index = (enriched_clones_df.day == enrichment_day) & (enriched_clones_df.percent_engraftment >= enrichment_threshold)
     for code in enriched_clones_df.code.unique():
         if code not in enriched_clones_df[codes_index].code.unique():
             print(enriched_clones_df.loc[enriched_clones_df.code == code])
     npt.assert_array_equal(enriched_clones_df[codes_index].code.unique().sort(), enriched_clones_df.code.unique().sort())
 
-    enriched_clones_df = find_enriched_clones_at_time(filt_df, enrichment_month, enrichment_threshold, 'gr', timepoint_col=TIMEPOINT_COL)
+    enriched_clones_df = find_enriched_clones_at_time(filt_df, enrichment_day, enrichment_threshold, 'gr', timepoint_col=TIMEPOINT_COL)
     should_be_empty_index = (enriched_clones_df.cell_type == 'b') | \
         (
-            (enriched_clones_df.month == enrichment_month) & \
+            (enriched_clones_df.day== enrichment_day) & \
             (enriched_clones_df.percent_engraftment < enrichment_threshold)
         )
 
     assert enriched_clones_df[should_be_empty_index].empty
-    codes_index = (enriched_clones_df.month == enrichment_month) & (enriched_clones_df.percent_engraftment >= enrichment_threshold)
+    codes_index = (enriched_clones_df.day == enrichment_day) & (enriched_clones_df.percent_engraftment >= enrichment_threshold)
     for code in enriched_clones_df.code.unique():
         if code not in enriched_clones_df[codes_index].code.unique():
-            print(enriched_clones_df.loc[enriched_clones_df.code == code, ['mouse_id','month', 'code']])
+            print(enriched_clones_df.loc[enriched_clones_df.code == code, ['mouse_id','day', 'code']])
     npt.assert_array_equal(enriched_clones_df[codes_index].code.unique(), enriched_clones_df.code.unique())
 
 def test_combine_enriched_clones_real_data():
     threshold = .01
     analyzed_cell_types = ['gr', 'b']
     filt_df = filter_threshold(REAL_DATA, threshold, analyzed_cell_types)
-    enrichment_month = 14
+    enrichment_day = 420
     enrichment_threshold = .2
     thresholds = {'b':enrichment_threshold}
 
     # Finds the right barcode
     enriched_df = combine_enriched_clones_at_time(
            filt_df,
-           enrichment_month,
-           TIMEPOINT_COL,
+           enrichment_day,
+           'day',
            thresholds,
            'b',
     )
-    should_be_empty_index = (enriched_df.month == enrichment_month) & (enriched_df.percent_engraftment < enrichment_threshold)
-    print(enriched_df[should_be_empty_index][['percent_engraftment', 'month', 'cell_type', 'mouse_id']])
+    should_be_empty_index = (enriched_df.day == enrichment_day) & (enriched_df.percent_engraftment < enrichment_threshold)
+    print(enriched_df[should_be_empty_index][['percent_engraftment', 'day', 'cell_type', 'mouse_id']])
     assert enriched_df[should_be_empty_index].empty
-    assert enriched_df[(enriched_df.month == enrichment_month) & (enriched_df.percent_engraftment < enrichment_threshold)].empty
+    assert enriched_df[(enriched_df.day == enrichment_day) & (enriched_df.percent_engraftment < enrichment_threshold)].empty

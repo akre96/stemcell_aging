@@ -1,6 +1,6 @@
 
 def y_col_type(string: str):
-    if string in ['gr_percent_engraftment', 'b_percent_engraftment', 'lineage_bias']:
+    if string in ['myeloid_percent_abundance', 'lymphoid_percent_abundance', 'lineage_bias']:
         return string
     if string == 'None':
         return None

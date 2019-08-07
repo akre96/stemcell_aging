@@ -2,7 +2,7 @@ from typing import List
 import re
 import pandas as pd
 
-def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b'], sep: str ='\t') -> pd.DataFrame:
+def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b'], sep: str = '\t') -> pd.DataFrame:
     """ Parses white blood cell count file to format as dataframe
 
     Arguments:
@@ -29,7 +29,9 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
             start_index = end_cols[i-1] + 1
         one_timepoint_data = count_data_raw[col_names[start_index:end_col_index]]
         one_timepoint_cols = one_timepoint_data.columns
-        day = int(one_timepoint_data.columns[0][1:])
+        if one_timepoint_cols.empty:
+            continue
+        day = int(one_timepoint_cols[0][1:])
         month = int(round(day/30))
 
         for cell_type in analyzed_cell_types:

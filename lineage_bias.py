@@ -257,6 +257,24 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
         print(' - Baseline time point not stet --> normalizing to mouse FACS data at each time point')
         with_baseline_counts_df = present_df.merge(cell_counts_df[['mouse_id', 'cell_type', 'cell_count', baseline_column]], how='left', on=['mouse_id', 'cell_type', baseline_column])
         print(with_baseline_counts_df)
+    elif baseline_timepoint == 'by_mouse':
+        min_tp = pd.DataFrame(
+            present_df.groupby(['mouse_id'])[baseline_column].min()
+        ).reset_index()
+        tp_cell_counts = cell_counts_df.merge(
+            min_tp,
+            how='inner',
+        )
+        print(' - Baseline set by mouse as follows:')
+        for m, m_df in tp_cell_counts.groupby('mouse_id'):
+            print('\t', m, baseline_column + ':', m_df[baseline_column].unique())
+
+        with_baseline_counts_df = present_df.merge(
+            tp_cell_counts[['mouse_id', 'cell_type', 'cell_count']].drop_duplicates(),
+            how='inner',
+            validate='m:1'
+        )
+
     else:
         timepoint_df = cell_counts_df.loc[cell_counts_df[baseline_column] == baseline_timepoint]
         with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])
@@ -344,17 +362,23 @@ def main():
     input_df = pd.read_csv(args.input)
     lymphoid_cell_type = args.lymphoid_cell_type
     myeloid_cell_type = args.myeloid_cell_type
-
+    sep = '\t'
+    if args.counts_file.split('.')[-1] == 'csv':
+        sep = ','
     cell_count_data = parse_wbc_count_file(
         args.counts_file,
-        analyzed_cell_types=[myeloid_cell_type, lymphoid_cell_type]
+        analyzed_cell_types=[myeloid_cell_type, lymphoid_cell_type],
+        sep=sep
         )
 
     time_column = 'day'
     if args.baseline_timepoint == 'None':
         base_time_point = None
     elif args.baseline_timepoint:
-        base_time_point = int(args.baseline_timepoint)
+        if args.baseline_timepoint == 'by_mouse':
+            base_time_point = 'by_mouse'
+        else:
+            base_time_point = int(args.baseline_timepoint)
     else:
         base_time_point = input_df[time_column].min()
 

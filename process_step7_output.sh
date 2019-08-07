@@ -42,8 +42,8 @@ REST_OF_CLONES_OUTPUT_DIR=~/Data/stemcell_aging/rest_of_clones
 
 
 # Representative cell type to use for lineage bias calculation
-LYMPHOID_CELL_TYPE='gr'
-MYELOID_CELL_TYPE='b'
+LYMPHOID_CELL_TYPE='b'
+MYELOID_CELL_TYPE='gr'
 
 ## 10x serial transplant Presets
 #root_data_dir=~/Data/serial_transplant_10x

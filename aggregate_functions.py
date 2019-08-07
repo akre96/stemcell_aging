@@ -2,6 +2,7 @@
 
 """
 from typing import List, Dict, Tuple, Any
+from operator import itemgetter
 from math import pi, sin
 import os
 import numpy as np
@@ -27,7 +28,11 @@ MAP_LINEAGE_BIAS_CATEGORY = {
     'MB': 'Myeloid Biased',
     'MC': 'Myeloid Committed',
 }
-
+MAP_BIAS_CELL_TYPE = {
+    'gr': 'myeloid',
+    'mo': 'myeloid',
+    'b': 'lymphoid',
+}
 MAP_LINEAGE_BIAS_CATEGORY_SHORT = {
     'LC': 'Ly Committed',
     'LB': 'Ly Biased',
@@ -35,6 +40,8 @@ MAP_LINEAGE_BIAS_CATEGORY_SHORT = {
     'MB': 'My Biased',
     'MC': 'My Committed',
 }
+def sort_xy_lists(x: List, y: List):
+    return [list(x) for x in zip(*sorted(zip(x, y), key=itemgetter(0)))]
 def filter_threshold(input_df: pd.DataFrame,
                      threshold: float,
                      analyzed_cell_types: List[str],
@@ -117,7 +124,6 @@ def find_last_clones(
             input_df,
             how='inner',
             on=['code', 'mouse_id', timepoint_col],
-            validate='1:1'
         )
     else:
         last_clones = pd.DataFrame(
@@ -168,7 +174,7 @@ def filter_lineage_bias_threshold(
         threshold: float,
         cell_type: str,
     ) -> pd.DataFrame:
-    filter_col = cell_type + '_percent_engraftment'
+    filter_col = MAP_BIAS_CELL_TYPE[cell_type] + '_percent_abundance'
     return lineage_bias_df.loc[lineage_bias_df[filter_col] >= threshold]
     
 def filter_lineage_bias_thresholds(
@@ -177,7 +183,7 @@ def filter_lineage_bias_thresholds(
     ) -> pd.DataFrame:
     filt_df = pd.DataFrame()
     for cell_type in thresholds.keys():
-        filter_col = cell_type + '_percent_engraftment'
+        filter_col = MAP_BIAS_CELL_TYPE[cell_type] + '_percent_abundance'
         filt_df = filt_df.append(lineage_bias_df.loc[lineage_bias_df[filter_col] >= thresholds[cell_type]])
     return filt_df.drop_duplicates()
 
@@ -190,7 +196,7 @@ def filter_lineage_bias_anytime(
     for cell_type, threshold in thresholds.items():
         filt_df = filt_df.append(
             lineage_bias_df[(
-                lineage_bias_df[cell_type + '_percent_engraftment'] >= threshold
+                lineage_bias_df[MAP_BIAS_CELL_TYPE[cell_type] + '_percent_abundance'] >= threshold
             )]
             )
     filt_codes = filt_df[['code','mouse_id']].drop_duplicates(subset=['code','mouse_id'])
@@ -368,7 +374,11 @@ def combine_enriched_clones_at_time(
     all_enriched_df = pd.DataFrame()
     for cell_type in analyzed_cell_types:
         if lineage_bias:
-            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, timepoint_col=timepoint_col, lineage_bias=lineage_bias, threshold_column=cell_type+'_percent_engraftment')
+            if cell_type == 'gr':
+                lin_type = 'myeloid'
+            if cell_type == 'b':
+                lin_type = 'lymphoid'
+            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, timepoint_col=timepoint_col, lineage_bias=lineage_bias, threshold_column=lin_type+'_percent_abundance')
         else:
             enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, timepoint_col=timepoint_col, lineage_bias=lineage_bias)
         all_enriched_df = all_enriched_df.append(enriched_cell_df)
@@ -690,8 +700,8 @@ def calculate_bias_change_cutoff(
         plt.close(fig=fig)
 
     if len(x_c) > 1:
-        print(x_c)
-        raise ValueError('Too many candidates found')
+        print(Fore.YELLOW + Style.BRIGHT + 'Warning: Too many change cutoff candidates found')
+        print(Fore.YELLOW + ','.join([str(k) for k in x_c]))
 
     return x, y, y1, y2, x_c, y_c
 
@@ -699,6 +709,7 @@ def mark_changed(
         input_df: pd.DataFrame,
         bias_change_df: pd.DataFrame,
         min_time_difference: int,
+        merge_type: str ='inner',
         timepoint: Any = None,
     ) -> pd.DataFrame:
     """ Adds column to input df based on if clone has 'changed' or not
@@ -719,7 +730,7 @@ def mark_changed(
     if not 'bias_change' in input_df.columns:
         with_bias_df = input_df.merge(
             bias_change_df[['code', 'group', 'mouse_id', 'bias_change']],
-            how='left',
+            how=merge_type,
             on=['code', 'group', 'mouse_id'],
             validate='m:m',
         )
@@ -745,6 +756,8 @@ def mark_changed(
         })
     )
     with_change_df.loc[~with_change_df.changed, 'change_type'] = 'Unchanged'
+    with_change_df.loc[with_change_df.bias_change.isna(), 'change_type'] = 'Unknown'
+    with_change_df.loc[with_change_df.bias_change.isna(), 'change_status'] = 'Unknown'
 
     return with_change_df
 
@@ -949,6 +962,7 @@ def day_to_gen(day: int):
 def day_to_month(day: pd.Series):
     month = round((day)/30).astype(int)
     month[month == 14] = 15
+    month[month == 18] = 17
     return month 
 
 def calculate_abundance_change(
@@ -1122,10 +1136,10 @@ def bias_clones_to_abundance(
     """
     filtered_clones = lineage_bias_df.code.unique()
     cell_type = None
-    if y_col == 'gr_percent_engraftment':
+    if y_col == 'myeloid_percent_abundance':
         cell_type = 'gr'
         clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == cell_type]
-    elif y_col == 'b_percent_engraftment':
+    elif y_col == 'lymphoid_percent_abundance':
         cell_type = 'b'
         clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.cell_type == cell_type]
     if cell_type:
@@ -1158,13 +1172,12 @@ def calculate_first_last_bias_change(
         lineage_bias_at_last_df,
         on=group_cols,
         suffixes=['_first', '_last'],
+        how='inner',
         validate='1:1'
     )
-
+    print(both_time_bias_df.columns)
     bias_change_df = both_time_bias_df.assign(
         bias_change=lambda x: x.lineage_bias_last - x.lineage_bias_first,
-        gr_change=lambda x: x.gr_percent_engraftment_last - x.lineage_bias_first,
-        b_change=lambda x: x.b_percent_engraftment_last - x.lineage_bias_first,
         time_change=lambda x: x[timepoint_col+'_last'] - x[timepoint_col+'_first'],
     )
     bias_change_df = bias_change_df[bias_change_df['time_change'] != 0]
@@ -1463,9 +1476,9 @@ def add_avg_abundance_until_timepoint(
     for _, g_df in lineage_bias_df.groupby(UNIQUE_CODE_COLS):
         sort_df = g_df.sort_values(by=timepoint_col).reset_index()
         for i in range(len(sort_df)):
-            sort_df.loc[i, 'accum_abundance'] = sort_df.loc[:i, ['gr_percent_engraftment', 'b_percent_engraftment']].sum(axis=1).mean()
-            sort_df.loc[i, 'gr_avg_abundance'] = sort_df.loc[:i, ['gr_percent_engraftment']].sum(axis=1).mean()
-            sort_df.loc[i, 'b_avg_abundance'] = sort_df.loc[:i, ['b_percent_engraftment']].sum(axis=1).mean()
+            sort_df.loc[i, 'accum_abundance'] = sort_df.loc[:i, ['myeloid_percent_abundance', 'lymphoid_percent_abundance']].sum(axis=1).mean()
+            sort_df.loc[i, 'myeloid_avg_abundance'] = sort_df.loc[:i, ['myeloid_percent_engraftment']].sum(axis=1).mean()
+            sort_df.loc[i, 'lymphoid_avg_abundance'] = sort_df.loc[:i, ['lymphoid_percent_engraftment']].sum(axis=1).mean()
         output_df = output_df.append(sort_df)
     return output_df
 
@@ -1792,12 +1805,14 @@ def filter_lineage_bias_n_timepoints_threshold(
 def calc_min_hsc_per_mouse(
         cell_count_file: str,
         gfp_file: str,
-        donor_file: str
+        donor_file: str,
+        tenx_hsc_counts_file: str,
     ):
 
     cell_count_df = parse_wbc_count_file(cell_count_file, ['hsc', 'wbc'])
 
     wbc_count_df = cell_count_df[cell_count_df.cell_type == 'wbc'].rename(columns={'cell_count': 'wbc_count'})
+    tenx_hsc_df = pd.read_csv(tenx_hsc_counts_file)
     hsc_count_df = cell_count_df[cell_count_df.cell_type == 'hsc']
     gfp_df = parse_wbc_count_file(gfp_file, ['hsc']).rename(columns={'cell_count':'gfp_perc'})
     donor_df = parse_wbc_count_file(donor_file, ['hsc']).rename(columns={'cell_count':'donor_perc'})
@@ -1809,28 +1824,21 @@ def calc_min_hsc_per_mouse(
     else:
         facs_data = facs_data.merge(
             hsc_count_df,
-            validate='1:1',
         )
+        for mouse_id, m_df in tenx_hsc_df.groupby('mouse_id'):
+            if not facs_data[facs_data.mouse_id == mouse_id].empty:
+                print('\t Using 10x HSC count to filter: ', mouse_id)
+                facs_data.loc[facs_data.mouse_id == mouse_id, 'cell_count'] = m_df['hsc'].values[0]
 
-
-    if gfp_df.empty:
-        print(Fore.YELLOW + 'Warning: No GFP Data for HSCs -- setting to 100 percent GFP')
-        facs_data['gfp_perc'] = 100
-    else:
-        facs_data = facs_data.merge(
-            gfp_df,
-            validate='1:1',
-        )
 
     if donor_df.empty:
         print( Fore.YELLOW + 'Warning: No Donor Chimerism Data for HSCs -- setting to 100 percent Donor Chimerism')
         facs_data['donor_perc'] = 100
     else:
         facs_data = facs_data.merge(
-            donor_df,
-            validate='1:1'
+            donor_df.fillna(value=100),
+            validate='1:1',
         )
-
     # (DONOR)/ (HSC_COUNT)
     facs_data['min_eng_hsc'] = facs_data['donor_perc'] / (facs_data['cell_count'])
     return facs_data[['mouse_id', 'min_eng_hsc']].drop_duplicates()
@@ -1941,3 +1949,55 @@ def filter_lineage_bias_cell_type_ratio_per_mouse(
     print('Length After Filtering: ', len(filt_df), '\n')
 
     return filt_df
+
+def fill_mouse_id_zeroes(
+        clonal_abundance_df: pd.DataFrame,
+        info_cols: List[str],
+        fill_col: str,
+        fill_cat_col: str,
+        fill_cats: List[str],
+        fill_val: Any = 0
+    ) -> pd.DataFrame:
+
+    if 'mouse_id' in info_cols:
+        raise ValueError('Mouse ID Cannot be in info cols')
+
+    filled_df = pd.DataFrame()
+    for mouse_id, m_df in clonal_abundance_df.groupby(['mouse_id']):
+        for cat in fill_cats:
+            if m_df[m_df[fill_cat_col] == cat].empty:
+                fill_vals = pd.DataFrame.from_dict(
+                    {
+                        'mouse_id': [mouse_id],
+                        fill_col: [fill_val],
+                        fill_cat_col: [cat],
+                    }
+                )
+                filled_df = filled_df.append(fill_vals)
+            else:
+                print(m_df[fill_cat_col])
+    with_info = filled_df.merge(
+        clonal_abundance_df[info_cols + ['mouse_id']].drop_duplicates(),
+        on=['mouse_id'],
+        how='inner',
+    )
+    return clonal_abundance_df.append(with_info)
+
+def filter_low_abund_hsc(
+        min_hsc_per_mouse: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+    with_min_hsc = clonal_abundance_df.merge(
+        min_hsc_per_mouse[['mouse_id', 'min_eng_hsc']].drop_duplicates(),
+        how='left',
+        validate='m:1',
+    )
+    no_low_hsc = with_min_hsc[
+        ~(
+            (with_min_hsc.cell_type == 'hsc') &\
+            (with_min_hsc.percent_engraftment < with_min_hsc.min_eng_hsc )
+        )
+    ]
+    print('Length before filtering HSCs:', len(clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']))
+    print('Length after filtering HSCs:', len(no_low_hsc[no_low_hsc.cell_type == 'hsc']))
+    return no_low_hsc

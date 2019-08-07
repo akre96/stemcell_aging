@@ -133,7 +133,8 @@ def main():
     min_hsc_per_mouse = calc_min_hsc_per_mouse(
         args.cell_count,
         args.gfp,
-        args.donor
+        args.donor,
+        tenx_hsc_counts_file='~/Data/tenx_hsc_counts.csv'
         )
 
     if 'group' not in input_df.columns:
@@ -238,20 +239,64 @@ def main():
             lymphoid_cell=args.lymphoid_cell,
         )
 
+    if graph_type in ['abundance_changed_bygroup']:
+        save_path = args.output_dir + os.sep + 'abundance_by_change' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
 
-    if graph_type in ['default']:
-        sns.violinplot(
-            data=lineage_bias_df,
-            x=timepoint_col,
-            y='lineage_bias',
-            hue='group',
-            estimator=None,
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+
+        plot_abundance_changed_bygroup(
+            lineage_bias_df,
+            present_clones_df,
+            timepoint_col,
+            mtd,
+            timepoint=args.timepoint,
+            merge_type='inner',
+            sum=args.sum,
+            save=args.save,
+            save_path=save_path
         )
+    if graph_type in ['hsc_to_ct_bootstrap']:
+        save_path = args.output_dir + os.sep + 'hsc_to_ct_bootstrap'
+
+        abundance_cutoff = .01
+        thresholds = {'gr': 0.0, 'b': 0.0, 'hsc': 0.0}
+
+        if options != 'default':
+            n_clusters = int(options)
+        else:
+            n_clusters = 2
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=[args.myeloid_cell_type, args.lymphoid_cell_type, 'hsc']
+            )
+        for cell_type in ['gr', 'b']:
+            plot_hsc_vs_cell_type_abundance_bootstrapped(
+                present_clones_df,
+                timepoint_col,
+                min_hsc_per_mouse,
+                by_group=args.by_group,
+                thresholds=thresholds,
+                cell_type=cell_type,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
 
     if graph_type in ['hsc_vs_blood_count']:
         save_path = args.output_dir + os.sep + 'hsc-blood_count'
-        if timepoint_col == 'month':
-            exclude_timepoints = [first_timepoint]
+        if args.timepoint:
+            exclude_timepoints = [int(args.timepoint)]
         else:
             exclude_timepoints = []
         
@@ -473,6 +518,7 @@ def main():
         save_path = args.output_dir + os.sep + 'hsc_blood_prod_over_time'
         heatmap_correlation_hsc_ct(
             present_clones_df,
+            min_hsc_per_mouse,
             timepoint_col,
             by_mouse=args.by_mouse,
             group=args.group,
@@ -487,6 +533,7 @@ def main():
 
         hsc_blood_prod_over_time(
             present_clones_df,
+            min_hsc_per_mouse,
             timepoint_col,
             group=args.group,
             save=args.save,
@@ -760,6 +807,7 @@ def main():
             present_clones_df,
             timepoint_col,
             mtd,
+            min_hsc_per_mouse,
             by_group=args.by_group,
             by_clone=args.by_clone,
             timepoint=args.timepoint,
@@ -783,7 +831,8 @@ def main():
             present_clones_df,
             timepoint_col,
             mtd,
-            args.timepoint,
+            timepoint=args.timepoint,
+            merge_type='inner',
             sum=args.sum,
             save=args.save,
             save_path=save_path
@@ -993,6 +1042,7 @@ def main():
             threshold = 0.0
         if args.y_col == 'lineage_bias':
             raise ValueError("Y-Col must be 'sum_abundance', 'gr_percent_engraftment', or 'b_percent_engraftment")
+
         plot_bias_first_last(
             lineage_bias_df,
             timepoint_col,
@@ -1819,6 +1869,7 @@ def main():
             change_marked_df = mark_changed(
                 present_clones_df,
                 bias_change_df,
+                merge_type='left',
                 min_time_difference=mtd,
                 timepoint=args.timepoint,
             )
@@ -2193,7 +2244,7 @@ def main():
                 lineage_bias=True,
             )
             plot_lineage_average(
-                filt_lineage_bias_gr_df,
+                filt_lineage_bias_df,
                 present_clones_df,
                 title_addon=cell_type.title() + ' > ' + str(round(thresholds[cell_type], 2)) + '% WBC at ' + timepoint_col.title() + ': ' + str(timepoint),
                 save=args.save,

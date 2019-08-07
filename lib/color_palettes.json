@@ -23,7 +23,8 @@
     ],
     "change_status": {
         "Unchanged": "deepskyblue",
-        "Changed": "firebrick"
+        "Changed": "firebrick",
+        "Unknown": "#353b48"
     },
     "change_status_2": [
         "#8cc35c",
@@ -32,7 +33,8 @@
     "change_type": {
         "Myeloid": "#d72424",
         "Lymphoid": "#32bec3",
-        "Unchanged": "#e6e6e6"
+        "Unchanged": "#e6e6e6",
+        "Unknown": "#353b48"
     },
     "time_point": "coolwarm",
     "mouse_id": {
@@ -69,7 +71,16 @@
         "M3018": "#e84118",
         "M3028": "#000075",
         "M3026": "#a9a9a9",
-        "M3023": "#4f372d"
+        "M3023": "#4f372d",
+        "M2062": "#42d4f4",
+        "M2063": "#bfef45",
+        "M2064": "#ffbe76",
+        "M2065": "#911eb4",
+        "M2066": "#f032e6",
+        "M190": "#f58231",
+        "M2012": "#e84118",
+        "M2059": "#000075",
+        "M2061": "#a9a9a9"
     },
     "cluster_label": {
         "0": "#00a8ff",

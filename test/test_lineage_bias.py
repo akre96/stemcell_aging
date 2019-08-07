@@ -84,7 +84,7 @@ def test_lineage_bias_0():
     test_expected = EXPECTED_LINEAGE_BIAS.loc[EXPECTED_LINEAGE_BIAS.mouse_id == 'M1']
 
     norm_data_df = normalize_input_to_baseline_max(test_data, baseline_timepoint=4, baseline_column='month', analyzed_cell_types=['gr', 'b'])
-    lineage_bias_df = create_lineage_bias_df(norm_data_df)
+    lineage_bias_df = create_lineage_bias_df(norm_data_df, lymphoid_cell_type='b', myeloid_cell_type='gr')
     assert_array_equal(lineage_bias_df.lineage_bias, test_expected.lineage_bias_expected)
 
 def test_lineage_bias_change():
@@ -97,7 +97,7 @@ def test_lineage_bias_change():
     test_expected = EXPECTED_LINEAGE_BIAS.loc[EXPECTED_LINEAGE_BIAS.mouse_id == 'M3']
 
     norm_data_df = normalize_input_to_baseline_max(test_data, baseline_timepoint=4, baseline_column='month', analyzed_cell_types=['gr', 'b'])
-    lineage_bias_df = create_lineage_bias_df(norm_data_df)
+    lineage_bias_df = create_lineage_bias_df(norm_data_df, lymphoid_cell_type='b', myeloid_cell_type='gr')
     assert_array_almost_equal(lineage_bias_df.lineage_bias, test_expected.lineage_bias_expected, decimal=6)
 
 def test_baseline_gen_nobaseline():
@@ -126,7 +126,7 @@ def test_lineage_bias_no_gr():
     test_expected = EXPECTED_LINEAGE_BIAS.loc[EXPECTED_LINEAGE_BIAS.mouse_id == 'M6']
     
     norm_data_df = normalize_input_to_baseline_max(test_data, baseline_timepoint=4, baseline_column='month', analyzed_cell_types=['gr', 'b'])
-    lineage_bias_df = create_lineage_bias_df(norm_data_df)
+    lineage_bias_df = create_lineage_bias_df(norm_data_df, lymphoid_cell_type='b', myeloid_cell_type='gr')
     assert_array_almost_equal(lineage_bias_df.lineage_bias, test_expected.lineage_bias_expected, decimal=6)
 
 def test_bias_angle():
