@@ -30,6 +30,12 @@
         "#8cc35c",
         "#ff6547"
     ],
+    "bias_category": {
+        "MB": "#d72424",
+        "LB": "#32bec3",
+        "B": "#e6e6e6",
+        "Unknown": "#353b48"
+    },
     "change_type": {
         "Myeloid": "#d72424",
         "Lymphoid": "#32bec3",
