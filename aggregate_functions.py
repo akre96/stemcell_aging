@@ -680,7 +680,13 @@ def calculate_bias_change_cutoff(
     if kde is None:
         close_figure = True
         fig = plt.figure()
-        kde = sns.kdeplot(bias_change_df.bias_change.abs(), shade=True)
+        kde = sns.kdeplot(
+            bias_change_df.bias_change.abs(),
+            kernel='gau',
+            shade=True,
+            color='silver',
+            alpha=.3
+            )
 
     # C0 KDE of all clones
     x, y = kde.get_lines()[0].get_data()
@@ -702,14 +708,14 @@ def calculate_bias_change_cutoff(
     if len(x_c) > 1:
         print(Fore.YELLOW + Style.BRIGHT + 'Warning: Too many change cutoff candidates found')
         print(Fore.YELLOW + ','.join([str(k) for k in x_c]))
-
+    print('Bias Change Cutoff:', x_c[0])
     return x, y, y1, y2, x_c, y_c
 
 def mark_changed(
         input_df: pd.DataFrame,
         bias_change_df: pd.DataFrame,
         min_time_difference: int,
-        merge_type: str ='inner',
+        merge_type: str = 'inner',
         timepoint: Any = None,
     ) -> pd.DataFrame:
     """ Adds column to input df based on if clone has 'changed' or not
@@ -737,7 +743,6 @@ def mark_changed(
     else:
         with_bias_df = input_df
     with_bias_df['change_cutoff'] = cutoff
-    print('Lineage Bias Change Cutoff: ' + str(round(cutoff, 2)))
 
     with_change_df = with_bias_df.assign(
         changed=lambda row: row.bias_change.abs() >= cutoff,
@@ -1035,6 +1040,7 @@ def calculate_bias_change(
         timepoint_col: str = 'month',
         cumulative: bool = False,
         first_timepoint: int = 1,
+        use_month_17: bool = False,
     ) -> pd.DataFrame:
     """ Calculate change in bias across time
     
@@ -1055,6 +1061,9 @@ def calculate_bias_change(
         pd.DataFrame -- Bias_change_df
     """
 
+    if not use_month_17:
+        print(Fore.YELLOW + 'EXCLUDING MONTH 17 FROM BIAS CHANGE')
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.month == 17]
 
     bias_change_cols = ['mouse_id', 'code', 'group', 'bias_change', 'time_change', 'time_unit', 't1', 't2', 'label_change']
     bias_change_df = pd.DataFrame(columns=bias_change_cols)
@@ -1152,9 +1161,13 @@ def bias_clones_to_abundance(
 def calculate_first_last_bias_change(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
-        by_mouse: str
+        by_mouse: str,
+        exclude_month_17: bool = True
     ):
     group_cols = ['mouse_id', 'code', 'group']
+    if exclude_month_17 and timepoint_col == 'month':
+        print(Fore.YELLOW + 'EXCLUDING MONTH 17 FROM BIAS CHANGE')
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.month != 17]
 
     lineage_bias_at_first_df = get_clones_at_timepoint(
         lineage_bias_df,
@@ -1175,7 +1188,6 @@ def calculate_first_last_bias_change(
         how='inner',
         validate='1:1'
     )
-    print(both_time_bias_df.columns)
     bias_change_df = both_time_bias_df.assign(
         bias_change=lambda x: x.lineage_bias_last - x.lineage_bias_first,
         time_change=lambda x: x[timepoint_col+'_last'] - x[timepoint_col+'_first'],
@@ -1385,10 +1397,10 @@ def define_bias_category(lineage_bias: float) -> str:
     balanced_value_max = sin(2 * (balanced_angle_max - (pi/4)))
     balanced_angle = pi/4
     
-    if lineage_bias == -1:
-        return 'LC'
-    if lineage_bias == 1:
-        return 'MC'
+    #if lineage_bias == -1:
+        #return 'LC'
+    #if lineage_bias == 1:
+        #return 'MC'
     if lineage_bias >= balanced_value_max:
         return 'MB'
     if lineage_bias <= balanced_value_min:

@@ -147,9 +147,12 @@ def main():
             print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: Following Mice not in a phenotypic group !!')
             print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
         for group in phenotypic_groups:
-            print(group.title() + ' Mice: ' + str(input_df[input_df.group == group].mouse_id.nunique()))
+            print(str(group).title() + ' Mice: ' + str(input_df[input_df.group == group].mouse_id.nunique()))
 
-    present_clones_df = input_df
+    present_clones_df = filter_low_abund_hsc(
+        min_hsc_per_mouse,
+        input_df,
+    )
     graph_type = args.graph_type
     if graph_type == 'default':
         print(Style.BRIGHT + '\n -- Plotting Default Plot(s) -- \n')
@@ -312,10 +315,14 @@ def main():
         )
     if graph_type in ['abundance_change_changed_group_grid']:
         save_path = args.output_dir + os.sep + 'abundance_change_change-type_group_grid'
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
 
         plot_abundance_change_changed_group_grid(
             lineage_bias_df,
             timepoint_col,
+            mtd=mtd,
             by_mouse=args.by_mouse,
             save=args.save,
             save_path=save_path,
@@ -896,7 +903,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -937,7 +944,7 @@ def main():
 
         plot_change_marked(
             lineage_bias_df,
-            input_df,
+            present_clones_df,
             timepoint_col,
             mtd,
             args.y_col,
@@ -956,7 +963,7 @@ def main():
 
         plot_hsc_abund_bias_at_last(
             lineage_bias_df,
-            input_df,
+            present_clones_df,
             timepoint_col,
             by_group=args.by_group,
             save=args.save,
@@ -1014,7 +1021,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1064,7 +1071,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1171,7 +1178,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1315,7 +1322,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1342,7 +1349,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1381,7 +1388,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1510,7 +1517,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1548,7 +1555,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1578,7 +1585,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1609,7 +1616,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
@@ -1646,7 +1653,7 @@ def main():
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col
             )
@@ -1711,7 +1718,7 @@ def main():
             abundance_cutoff = args.abundance_cutoff
 
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col
             )
@@ -1862,14 +1869,15 @@ def main():
         if args.cache:
             change_marked_df = pd.read_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv')
         else:
-            bias_change_df = get_bias_change(
+            bias_change_df = calculate_first_last_bias_change(
                 lineage_bias_df,
                 timepoint_col=timepoint_col,
+                by_mouse=False,
             )
             change_marked_df = mark_changed(
                 present_clones_df,
                 bias_change_df,
-                merge_type='left',
+                merge_type='inner',
                 min_time_difference=mtd,
                 timepoint=args.timepoint,
             )
@@ -2035,7 +2043,7 @@ def main():
 
             abundance_cutoff = args.abundance_cutoff
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
                 analyzed_cell_types=['gr','b'],
@@ -2187,7 +2195,7 @@ def main():
             abundance_cutoff = args.abundance_cutoff
 
             _, thresholds = calculate_thresholds_sum_abundance(
-                input_df,
+                present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col
             )
@@ -2311,7 +2319,7 @@ def main():
 
         for cell_type in analyzed_cell_types:
             filt_lineage_bias_df = clones_enriched_at_last_timepoint(
-                input_df=input_df,
+                input_df=present_clones_df,
                 lineage_bias_df=lineage_bias_df,
                 thresholds=thresholds,
                 lineage_bias=True,
@@ -2346,7 +2354,7 @@ def main():
 
         for cell_type in ['gr', 'b']:
             filt_lineage_bias_df = clones_enriched_at_last_timepoint(
-                input_df=input_df,
+                input_df=present_clones_df,
                 timepoint_col=timepoint_col,
                 lineage_bias_df=lineage_bias_df,
                 thresholds=dominant_thresholds,
@@ -2365,7 +2373,7 @@ def main():
     # Lineage Bias Line Plots by threshold
     if graph_type == 'lineage_bias_line':
         threshold = 1
-        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=input_df,
+        filt_lineage_bias_df = clones_enriched_at_last_timepoint(input_df=present_clones_df,
                                                                  timepoint_col=timepoint_col,
                                                                  lineage_bias_df=lineage_bias_df,
                                                                  thresholds={'any': threshold},
