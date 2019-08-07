@@ -8,7 +8,7 @@ root_dir = '~/Data/stemcell_aging'
 data = pd.read_csv('~/Data/stemcell_aging/Ania_M_allAnia_percent-engraftment_052219_long.csv')
 
 cell_type = 'gr'
-group = 'no_change'
+group = 'aging_phenotype'
 p_anywhere_filter = 0.01
 change_p = 0.01
 
@@ -36,7 +36,7 @@ for time, tp_df in not_first_tp.groupby('day'):
         how='inner',
         validate='1:1'
     )
-    pass_filt = t_diff_df[np.abs(t_diff_df.percent_engraftment - t_diff_df.first_abund) < change_p]
+    pass_filt = t_diff_df[np.abs(t_diff_df.percent_engraftment - t_diff_df.first_abund) > change_p]
     changes_codes = changes_codes + pass_filt.code.unique().tolist()
 
 filt_change_df = cell_data[cell_data.code.isin(changes_codes)]
