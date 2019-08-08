@@ -3233,7 +3233,6 @@ def plot_dist_bias_at_time(
         t_df = find_last_clones_in_mouse(lineage_bias_df, timepoint_col)
     else:
         t_df = lineage_bias_df[lineage_bias_df[timepoint_col].isin([timepoint])]
-    print(t_df)
     filt_df = filter_lineage_bias_anytime(
         t_df,
         thresholds
@@ -3744,6 +3743,7 @@ def plot_not_survived_abundance(
 def plot_not_survived_count_box(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
+        by_group: bool,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
@@ -3778,59 +3778,39 @@ def plot_not_survived_count_box(
         ['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
         ).reset_index().sort_values(by='time_change')
     fig = plt.figure(figsize=(8,6))
-    ax = sns.boxplot(
-        x='last_timepoint',
-        y='code',
-        order=count_df.last_timepoint.unique(),
-        data=count_df,
-        palette=COLOR_PALETTES[timepoint_col]
-    )
+    file_name_addon =''
+    if by_group:
+        ax = sns.boxplot(
+            x='last_timepoint',
+            y='code',
+            hue='group',
+            order=count_df.last_timepoint.unique(),
+            data=count_df,
+            palette=COLOR_PALETTES['group']
+        )
+        file_name_addon ='_by_group'
+    else:
+        ax = sns.boxplot(
+            x='last_timepoint',
+            y='code',
+            order=count_df.last_timepoint.unique(),
+            data=count_df,
+            palette=COLOR_PALETTES[timepoint_col]
+        )
     _, max_codes = plt.ylim()
-    ax2 = ax.twinx()
     ax.set_ylim(0, max_codes)
     ax.set_ylabel('# Of Exhausted Clones')
-    ax2.set_ylim(0, 100 * max_codes/all_clone_num)
-    ax2.set_ylabel('% Average Unique Clones Per Mouse')
 
     ax.set_xlabel('End Point (' + timepoint_col.title() + ')')
     plt.title(
         'Count of Exhausted Clones Over Time'
     )
+    ax.legend().remove()
     fname = save_path + os.sep \
         + 'not_survived_count' \
+        + file_name_addon \
         + '.' + save_format
     save_plot(fname, save, save_format)
-
-    # Plot Clones By Group
-    for group, g_df in not_survived_df.groupby('group'):
-        count_df = pd.DataFrame(
-            g_df.groupby(['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
-            ).reset_index().sort_values(by='time_change')
-        fig = plt.figure(figsize=(10,7))
-        ax = sns.boxplot(
-            x='last_timepoint',
-            y='code',
-            order=count_df.last_timepoint.unique(),
-            data=count_df.sort_values(by='time_change'),
-            palette=COLOR_PALETTES[timepoint_col]
-        )
-        _, max_codes = plt.ylim()
-        ax2 = ax.twinx()
-        ax.set_ylim(0, max_codes)
-        ax.set_ylabel('# Of Exhausted Clones')
-        ax2.set_ylim(0, 100 * max_codes/all_clone_num)
-        ax2.set_ylabel('% Average Unique Clones Per Mouse')
-
-        ax.set_xlabel('End Point (' + timepoint_col.title() + ')')
-        plt.suptitle(
-            'Count of Exhausted Clones Over Time'
-        )
-        plt.title('Group: ' + group.replace('_', ' ').title())
-        fname = save_path + os.sep \
-            + 'not_survived_count' \
-            + '_' + group \
-            + '.' + save_format
-        save_plot(fname, save, save_format)
 
 
 def plot_hsc_abund_bias_at_last(
@@ -3913,15 +3893,46 @@ def plot_hsc_abund_bias_at_last(
             + '.' + save_format
         save_plot(fname, save, save_format)
     else:
-        plt.figure(figsize=(12,8))
-        ax = sns.barplot(
-            y='percent_engraftment',
-            x='bias_category',
-            order=unique_cats,
-            data=myeloid_hsc_abundance_df,
-            palette=COLOR_PALETTES['bias_category'],
+        sems=[[],[]]
+        means=[]
+        colors=[]
+        for bias_cat in unique_cats:
+            cats_df = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df.bias_category == bias_cat]
+            sems[0].append(0)
+            sems[1].append(cats_df.percent_engraftment.sem())
+            means.append(cats_df.percent_engraftment.mean())
+            colors.append(COLOR_PALETTES['bias_category'][bias_cat])
+        
+        coords = np.arange(len(unique_cats)) + 1
+        width = 0.8
+        fig, ax = plt.subplots(figsize=(12,8))
+        ax.bar(
+            x=coords,
+            height=means,
+            width=width,
+            tick_label=unique_cats,
+            color=colors,
+            log=True,
         )
-        ax.set(yscale='log')
+        _, caps, _ = ax.errorbar(
+            coords,
+            means,
+            yerr=sems,
+            color='black',
+            capsize=10,
+            capthick=2,
+            ls='none',
+            )
+        caps[0].set_marker('_')
+        caps[0].set_markersize(0)
+        #ax = sns.barplot(
+            #y='percent_engraftment',
+            #x='bias_category',
+            #order=unique_cats,
+            #data=myeloid_hsc_abundance_df,
+            #palette=COLOR_PALETTES['bias_category'],
+            #yerr=sems,
+        #)
         plt.xlabel('')
         plt.ylabel('HSC Abundance (% HSCs)')
         plt.title(
@@ -3930,12 +3941,12 @@ def plot_hsc_abund_bias_at_last(
 
         print(
             Fore.CYAN + Style.BRIGHT 
-            + '\nPerforming Independent T-Test of HSC Abundance Between Bias Types\n'
+            + '\nPerforming Ranksums Test of HSC Abundance Between Bias Types\n'
         )
         for (a, b) in combinations(unique_cats,2):
             a_vals = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df['bias_category'] == a]
             b_vals = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df['bias_category'] == b]
-            stat, p_value = stats.ttest_ind(
+            stat, p_value = stats.ranksums(
                 a_vals.percent_engraftment,
                 b_vals.percent_engraftment,
             )
@@ -6360,7 +6371,6 @@ def exhaust_persist_hsc_abund(
             fill_val=0
         )
         y_desc = '# of HSC clones'
-        print(survival_hsc_df)
 
     else:
         survival_with_hsc_df = survival_with_hsc_df[
@@ -7980,6 +7990,11 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
             'figure.titlesize': 'small',
         }
     )
+    if timepoint_col == 'month':
+        if 17 in clonal_abundance_df.month.unique():
+            print(Fore.YELLOW + 'WARNING: Removing month 17')
+            clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.month != 17]
+
     filt_df = filter_cell_type_threshold(
         clonal_abundance_df,
         thresholds,
@@ -7994,9 +8009,10 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
     x_col = 'hsc_percent_engraftment'
     _, ax = plt.subplots(figsize=(7,5))
 
-    sub_sample_amount = .9
+    sub_sample_amount = .90
     sub_sample_count = round(len(wide_ct_abundance_df) * sub_sample_amount)
     n_sub_samples = 50
+    alpha=0.2
 
     # Log Transform Data:
     wide_ct_abundance_df[x_col] = np.log10(1+(wide_ct_abundance_df[x_col] * 1000))
@@ -8014,7 +8030,7 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
             sub_sample_df[x_col]
         )
         res = reg_model.fit()
-        prstd, iv_l, iv_u = wls_prediction_std(res, alpha=0.10)
+        prstd, iv_l, iv_u = wls_prediction_std(res, alpha=alpha)
         x, y = sort_xy_lists(sub_sample_df[x_col], iv_l)
         if i == 0:
             lower_lims = pd.DataFrame.from_dict({'hsc_percent_engraftment': x, str(i): y}).drop_duplicates()
@@ -8055,26 +8071,32 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
             s=100,
             alpha=0.8,
             linewidths=2,
-            edgecolors='red'
+            edgecolors='#d63031'
         )
     ticks = ticker.FuncFormatter(
         lambda x, pos: r'$10^{' + r'{0:g}'.format(x - 3) + r'}$'
     )
     ax.xaxis.set_major_formatter(ticks)
     ax.yaxis.set_major_formatter(ticks)
-
+    # UNCOMMENT TO PLOT DECISION BOUNDARY
+    #ax.plot(
+        #boundary['hsc_percent_engraftment'],
+        #boundary['boundary'],
+        #c='#d63031'
+    #)
     ax.set_xlabel('HSC Abundance')
     ax.set_ylabel(cell_type.title() + ' Abundance')
     plt.title(
         cell_type.title()
         + ' sub-samples: ' + str(n_sub_samples)
-        + ' sample-size: ' + str(sub_sample_count)
         + ' sample-perc: ' + str(100 * sub_sample_amount)
+        + ' alpha: ' + str(alpha)
         )
     fname = save_path + os.sep \
         + 'hsc_bootstrap_' \
         + cell_type  \
         + '_a' + str(thresholds[cell_type]).replace('.','-') \
+        + '_alpha' + str(alpha).replace('.','-') \
         + '_nregs' + str(n_sub_samples) \
         + '_sampratio' + str(sub_sample_amount).replace('.', '-') \
         + '_color-' + hue_col \

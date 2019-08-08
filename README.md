@@ -58,7 +58,7 @@ Exact usage on transplant data:
 Example from serial transplantation data:  
 `python lineage_bias.py -i ~/Data/serial_transplant_data/M_allAniaAnia\ serial\ transpl_percent-engraftment_121018_long.csv -c ~/Data/serial_transplant_data/WBC\ serial\ transpl\ 111618.txt -o ~/Data/serial_transplant_data/lineage_bias`
 
-### Calculate 'Rest of Clones' Data
+### Calculate 'Rest of Clones' Data -- Out of Date, no longer works
 1. In the root directory run:
 ```
 python rest_of_clones_calc.py \

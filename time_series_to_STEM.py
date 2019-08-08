@@ -9,7 +9,7 @@ root_dir = '/home/sakre/Data/stemcell_aging'
 data = pd.read_csv('~/Data/stemcell_aging/Ania_M_allAnia_percent-engraftment_052219_long.csv')
 
 p_anywhere_filter = 0.01
-change_p = 0.1
+change_p = 0.05
 
 
 onep_anywhere = data[data.percent_engraftment > p_anywhere_filter]

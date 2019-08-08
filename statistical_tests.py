@@ -10,36 +10,33 @@ init(autoreset=True)
 def replace_underscore_dot(string: Any):
     return str(string).replace('_', ' ').replace('.', '-').title()
 
-def print_p_value(context: str, p_value: float, show_ns: bool = False):
+def print_p_value(context: str, p_value: float, mean: float = None, show_ns: bool = False):
     """ Print P-Value, styke by significance
     
     Arguments:
         context {str} -- What to print just before P-Value
         p_value {float}
     """
+    text = context \
+            + ' P-Value: ' + str(p_value)
+    if mean is not None:
+        text += ' Mean: ' + str(mean)
+
     if p_value < 0.001:
         print(
-            Fore.WHITE + Back.CYAN + Style.BRIGHT
-            + context
-            + ' P-Value: ' + str(p_value)
+            Fore.WHITE + Back.CYAN + Style.BRIGHT + text
         )
     elif p_value < 0.01:
         print(
-            Fore.CYAN + Style.BRIGHT
-            + context
-            + ' P-Value: ' + str(p_value)
+            Fore.CYAN + Style.BRIGHT + text
         )
     elif p_value < 0.05:
         print(
-            Fore.CYAN 
-            + context
-            + ' P-Value: ' + str(p_value)
+            Fore.CYAN + text
         )
     elif show_ns:
         print(
-            Fore.WHITE
-            + context
-            + ' P-Value: ' + str(p_value)
+            Fore.WHITE + text
         )
 
 def ttest_rel_at_each_time(
@@ -163,6 +160,7 @@ def ind_ttest_group_time(
         timepoint_col: str,
         overall_context: str,
         show_ns: bool,
+        group_col: str = 'group',
     ):
     times = data[timepoint_col].unique()
     print(
@@ -171,10 +169,13 @@ def ind_ttest_group_time(
         + overall_context
         + ' between groups at each ' + replace_underscore_dot(timepoint_col)
     )
+    groups = data[group_col].unique()
+    if len(groups) != 2:
+        raise ValueError('Too many groups: ' + ', '.join(groups))
     for t1, t_df in data.groupby(timepoint_col):
         _, p_value = stats.ttest_ind(
-            t_df[t_df.group == 'aging_phenotype'][test_col],
-            t_df[t_df.group == 'no_change'][test_col],
+            t_df[t_df[group_col] == groups[0]][test_col],
+            t_df[t_df[group_col] == groups[1]][test_col],
         )
         context: str = timepoint_col.title() + ' ' + str(t1) 
         print_p_value(context, p_value, show_ns=show_ns)
@@ -185,7 +186,7 @@ def ind_ttest_group_time(
         + overall_context
         + ' per group between ' + replace_underscore_dot(timepoint_col) + 's'
     )
-    for group, g_df in data.groupby('group'):
+    for group, g_df in data.groupby(group_col):
         for (t1, t2) in combinations(times, 2):
             t1_df = g_df[g_df[timepoint_col] == t1][test_col]
             t2_df = g_df[g_df[timepoint_col] == t2][test_col]
@@ -308,41 +309,49 @@ def ranksums_test_group_time(
         timepoint_col: str,
         overall_context: str,
         show_ns: bool,
+        group_col: str = 'group'
     ):
     times = data[timepoint_col].unique()
+    groups = data[group_col].unique()
+    if len(groups) != 2:
+        raise ValueError('Too many groups: ' + ', '.join(groups))
+
     print(
         Fore.CYAN + Style.BRIGHT 
         + '\nPerforming Rank-Sum T-Test on ' 
         + overall_context
-        + ' between groups at each ' + replace_underscore_dot(timepoint_col)
+        + ' between ' + group_col + ' at each ' + replace_underscore_dot(timepoint_col)
     )
     for t1, t_df in data.groupby(timepoint_col):
         _, p_value = stats.ranksums(
-            t_df[t_df.group == 'aging_phenotype'][test_col],
-            t_df[t_df.group == 'no_change'][test_col],
+            t_df[t_df[group_col] == groups[0]][test_col],
+            t_df[t_df[group_col] == groups[1]][test_col],
         )
+        mean_diff = t_df[t_df[group_col] == groups[0]][test_col].mean() \
+            - t_df[t_df[group_col] == groups[1]][test_col].mean()
         context: str = timepoint_col.title() + ' ' + str(t1) 
-        print_p_value(context, p_value, show_ns=show_ns)
+        print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
 
     print(
         Fore.CYAN + Style.BRIGHT 
         + '\nPerforming Rank Sum T-Test on ' 
         + overall_context
-        + ' per group between ' + replace_underscore_dot(timepoint_col) + 's'
+        + ' per ' + group_col + ' between ' + replace_underscore_dot(timepoint_col) + 's'
     )
-    for group, g_df in data.groupby('group'):
+    for group, g_df in data.groupby(group_col):
         for (t1, t2) in combinations(times, 2):
             t1_df = g_df[g_df[timepoint_col] == t1][test_col]
             t2_df = g_df[g_df[timepoint_col] == t2][test_col]
 
-            stat, p_value = stats.ranksums(
+            _, p_value = stats.ranksums(
                 t1_df,
-                t2_df, 
+                t2_df,
             )
+            mean_diff = t1_df.mean() - t2_df.mean()
             context = replace_underscore_dot(group) + ' ' \
                 + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
                 + ' vs ' + str(t2)
-            print_p_value(context, p_value, show_ns=show_ns)
+            print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
 
     group = 'all'
     for (t1, t2) in combinations(times, 2):
@@ -353,7 +362,8 @@ def ranksums_test_group_time(
             t1_df,
             t2_df, 
         )
+        mean_diff = t1_df.mean() - t2_df.mean()
         context = replace_underscore_dot(group) + ' ' \
             + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
             + ' vs ' + str(t2)
-        print_p_value(context, p_value, show_ns=show_ns)
+        print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)

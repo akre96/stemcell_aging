@@ -1739,7 +1739,6 @@ def mark_outliers(input_df: pd.DataFrame, outlier_df: pd.DataFrame):
     outlier_mask = outlier_df['unadj_p'] < 0.05
     temp_df = input_df[outlier_mask].assign(outlier=True)
     temp_df = temp_df.append(input_df[~outlier_mask].assign(outlier=False), ignore_index=True)
-    print(temp_df.columns)
     return temp_df
 
 def get_hsc_abundance_perc_per_mouse(
@@ -1837,10 +1836,10 @@ def calc_min_hsc_per_mouse(
         facs_data = facs_data.merge(
             hsc_count_df,
         )
-        for mouse_id, m_df in tenx_hsc_df.groupby('mouse_id'):
-            if not facs_data[facs_data.mouse_id == mouse_id].empty:
-                print('\t Using 10x HSC count to filter: ', mouse_id)
-                facs_data.loc[facs_data.mouse_id == mouse_id, 'cell_count'] = m_df['hsc'].values[0]
+    for mouse_id, m_df in tenx_hsc_df.groupby('mouse_id'):
+        if not facs_data[facs_data.mouse_id == mouse_id].empty:
+            print('\t Using 10x HSC count to filter: ', mouse_id)
+            facs_data.loc[facs_data.mouse_id == mouse_id, 'cell_count'] = m_df['hsc'].values[0]
 
 
     if donor_df.empty:
@@ -1986,8 +1985,6 @@ def fill_mouse_id_zeroes(
                     }
                 )
                 filled_df = filled_df.append(fill_vals)
-            else:
-                print(m_df[fill_cat_col])
     with_info = filled_df.merge(
         clonal_abundance_df[info_cols + ['mouse_id']].drop_duplicates(),
         on=['mouse_id'],

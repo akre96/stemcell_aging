@@ -26,3 +26,6 @@ output
 
 # Personal Script Files
 *.sh
+
+# Jupyter Lab checkpoints
+.ipynb_checkpoints

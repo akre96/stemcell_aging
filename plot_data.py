@@ -241,7 +241,7 @@ def main():
             myeloid_cell=args.myeloid_cell,
             lymphoid_cell=args.lymphoid_cell,
         )
-
+    print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
     if graph_type in ['abundance_changed_bygroup']:
         save_path = args.output_dir + os.sep + 'abundance_by_change' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
@@ -978,6 +978,7 @@ def main():
         plot_not_survived_count_box(
             lineage_bias_df,
             timepoint_col,
+            by_group=args.by_group,
             save=args.save,
             save_path=save_path
         )
