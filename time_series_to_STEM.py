@@ -1,17 +1,26 @@
 import os
+from typing import List
 import pandas as pd
 import numpy as np
+import aggregate_functions as agg
 
-#root_dir = '~/Data/serial_transplant_data'
-#data = pd.read_csv('~/Data/serial_transplant_data/M_allAniaAnia serial transpl_percent-engraftment_121018_long.csv')
 
-root_dir = '/home/sakre/Data/stemcell_aging'
-data = pd.read_csv('~/Data/stemcell_aging/Ania_M_allAnia_percent-engraftment_052219_long.csv')
+root_dir = '/home/sakre/Data/aging_and_10x'
+data = pd.read_csv(root_dir + '/Ania_M_all OT2.0 rerun_percent-engraftment_NO filter_080819_long.csv')
+timepoint_col = 'month'
+data['month'] = agg.day_to_month(data['day'])
 
 p_anywhere_filter = 0.01
 change_p = 0.05
 
-
+data = agg.remove_month_17_and_6(
+    data,
+    timepoint_col,
+)
+data = agg.filter_mice_with_n_timepoints(
+    data,
+    n_timepoints=4
+)
 onep_anywhere = data[data.percent_engraftment > p_anywhere_filter]
 onep_anywhere = onep_anywhere[['code', 'mouse_id']].drop_duplicates()
 filt_data = data.merge(
@@ -28,7 +37,7 @@ for cell_type in ['gr', 'b']:
         ## Make change relative to first >= change_p in abundance
         first_tp = cell_data[cell_data.day == cell_data['day'].min()].rename(columns={'percent_engraftment': 'first_abund'})[['code', 'mouse_id', 'first_abund']]
         not_first_tp = cell_data[cell_data.day != cell_data['day'].min()]
-        changes_codes = []
+        changes_codes: List[str] = []
         for time, tp_df in not_first_tp.groupby('day'):
             t_diff_df = first_tp.merge(
                 tp_df,
@@ -44,7 +53,7 @@ for cell_type in ['gr', 'b']:
 
         piv = filt_change_df.pivot_table(
             index=['code'],
-            columns=['day'],
+            columns=[timepoint_col],
             values='percent_engraftment'
         )
         save_dir = \
@@ -59,15 +68,17 @@ for cell_type in ['gr', 'b']:
             print('Creating', save_dir)
             os.makedirs(save_dir)
 
+        file_name = save_dir \
+            + '/' \
+            + cell_type \
+            + '_' + group \
+            + '_data_filt_' \
+            + str(p_anywhere_filter).replace('.', '-') \
+            + '_change_' \
+            + str(change_p).replace('.', '-') \
+            + '.tsv'
+        print('Saving File:', file_name)
         piv.to_csv(
-            save_dir
-            + '/'
-            + cell_type
-            + '_' + group
-            + '_data_filt_'
-            + str(p_anywhere_filter).replace('.', '-')
-            + '_change_'
-            + str(change_p).replace('.', '-')
-            + '.tsv',
+            file_name,
             sep='\t'
             )

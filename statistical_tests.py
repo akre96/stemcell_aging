@@ -237,7 +237,6 @@ def rel_ttest_group_time(
         for (t1, t2) in combinations(times, 2):
             t1_df = g_df[g_df[timepoint_col] == t1]
             t2_df = g_df[g_df[timepoint_col] == t2]
-
             merged = t1_df.merge(
                 t2_df,
                 on=match_cols,
@@ -312,13 +311,18 @@ def ranksums_test_group_time(
         group_col: str = 'group'
     ):
     times = data[timepoint_col].unique()
-    groups = data[group_col].unique()
+    groups = data[group_col].dropna().unique()
     if len(groups) != 2:
-        raise ValueError('Too many groups: ' + ', '.join(groups))
+        print(data.groupby(group_col).code.nunique())
+        print(groups)
+        if 'aging_phenotype' in groups:
+            groups = ['no_change', 'aging_phenotype']
+        else:
+            raise ValueError('Too many groups: ' + ', '.join([str(x) for x in groups]))
 
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Rank-Sum T-Test on ' 
+        + '\nPerforming Ranksums Test on ' 
         + overall_context
         + ' between ' + group_col + ' at each ' + replace_underscore_dot(timepoint_col)
     )
@@ -334,7 +338,7 @@ def ranksums_test_group_time(
 
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Rank Sum T-Test on ' 
+        + '\nPerforming Ranksums Test on ' 
         + overall_context
         + ' per ' + group_col + ' between ' + replace_underscore_dot(timepoint_col) + 's'
     )

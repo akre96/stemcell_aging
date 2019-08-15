@@ -14,6 +14,7 @@ from colorama import init, Fore, Back, Style
 from intersection.intersection import intersection
 from data_types import timepoint_type
 from parse_facs_data import parse_wbc_count_file
+import progressbar
 
 init(autoreset=True)
 
@@ -89,6 +90,12 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
                                 threshold_column=threshold_column,
                 )
     for cell_type in analyzed_cell_types:
+        print(
+            '\t Filtering for clones with', 
+            cell_type,
+            '>',
+            thresholds[cell_type]
+        )
         cell_df = filter_threshold(input_df,
                                    threshold=thresholds[cell_type],
                                    analyzed_cell_types=[cell_type],
@@ -97,6 +104,20 @@ def filter_cell_type_threshold(input_df: pd.DataFrame,
         filtered_df = filtered_df.append(cell_df)
     return filtered_df
 
+def find_first_clones_in_mouse(
+        input_df: pd.DataFrame,
+        timepoint_col: str,
+    ) -> pd.DataFrame:
+    first_clones = pd.DataFrame(
+        input_df.groupby(['mouse_id'])[timepoint_col].min()
+        ).reset_index()
+    first_clones_with_data = first_clones.merge(
+        input_df,
+        how='inner',
+        on=['mouse_id', timepoint_col],
+        validate='1:m'
+    )
+    return first_clones_with_data
 def find_last_clones_in_mouse(
         input_df: pd.DataFrame,
         timepoint_col: str,
@@ -137,10 +158,32 @@ def find_last_clones(
         )
     return last_clones_with_data
 
+def find_n_to_last_clones(
+        input_df: pd.DataFrame,
+        timepoint_col: str,
+        n: int,
+    ):
+    print('... Filtering for', n, 'to last clones')
+    time_cols = input_df[['mouse_id', timepoint_col]].drop_duplicates()
+    grouped_df = time_cols.sort_values(by=['mouse_id', timepoint_col], ascending=False).groupby(['mouse_id'])
+    max_time_df = pd.DataFrame(grouped_df.nth(n=n-1)[timepoint_col]).reset_index()
+    print(max_time_df)
+    last_clones_with_data = input_df.merge(
+        max_time_df,
+        how='inner',
+        validate='m:1'
+    )
+    count_group = last_clones_with_data.groupby(['mouse_id', timepoint_col])
+    print('Remaining Codes Per Time points:', count_group.code.nunique())
+
+    return last_clones_with_data
+
 def filter_clones_threshold_anytime(
         input_df: pd.DataFrame,
         thresholds: Dict[str, float],
         analyzed_cell_types: List[str],
+        filter_exempt_cell_types: List[str] = ['hsc'],
+        filt_0_out_exempt: bool = False,
     ) -> pd.DataFrame:
     """ Filter for clones above a threshold at any time point
     
@@ -154,18 +197,26 @@ def filter_clones_threshold_anytime(
     """
 
 
+    exempt_df = input_df[input_df.cell_type.isin(filter_exempt_cell_types)]
+    if filt_0_out_exempt:
+        print('\t Filtering for clones > 0 abundance in ', filter_exempt_cell_types)
+        exempt_df = exempt_df[exempt_df.percent_engraftment > 0]
+    not_exempt_df = input_df[~input_df.cell_type.isin(filter_exempt_cell_types)]
     hard_filtered_df = filter_cell_type_threshold(
-        input_df,
+        not_exempt_df,
         thresholds,
         analyzed_cell_types,
     )
     deduped = hard_filtered_df.drop_duplicates(subset=['code', 'mouse_id'])
-    clones_above_thresh_at_any_time = input_df.merge(
+    clones_above_thresh_at_any_time = not_exempt_df.merge(
         deduped[['code', 'mouse_id']],
         how='inner',
         on=['code', 'mouse_id'],
         validate='m:1'
-    )
+    ).append(exempt_df)
+    change_in_length = len(input_df) - len(clones_above_thresh_at_any_time)
+    print('Filters:', thresholds)
+    print('Change in length of abundanc post filtering:', change_in_length)
     return clones_above_thresh_at_any_time[clones_above_thresh_at_any_time.cell_type.isin(analyzed_cell_types)]
 
 
@@ -184,7 +235,7 @@ def filter_lineage_bias_thresholds(
     filt_df = pd.DataFrame()
     for cell_type in thresholds.keys():
         filter_col = MAP_BIAS_CELL_TYPE[cell_type] + '_percent_abundance'
-        filt_df = filt_df.append(lineage_bias_df.loc[lineage_bias_df[filter_col] >= thresholds[cell_type]])
+        filt_df = filt_df.append(lineage_bias_df.loc[lineage_bias_df[filter_col] > thresholds[cell_type]])
     return filt_df.drop_duplicates()
 
 def filter_lineage_bias_anytime(
@@ -192,6 +243,7 @@ def filter_lineage_bias_anytime(
         thresholds: Dict[str, float],
     ) -> pd.DataFrame:
 
+    print('Filtering Lineage Bias for clones passing threshold at anytime:', thresholds)
     filt_df = pd.DataFrame()
     for cell_type, threshold in thresholds.items():
         filt_df = filt_df.append(
@@ -199,12 +251,13 @@ def filter_lineage_bias_anytime(
                 lineage_bias_df[MAP_BIAS_CELL_TYPE[cell_type] + '_percent_abundance'] >= threshold
             )]
             )
-    filt_codes = filt_df[['code','mouse_id']].drop_duplicates(subset=['code','mouse_id'])
+    filt_codes = filt_df[['code', 'mouse_id']].drop_duplicates(subset=['code','mouse_id'])
     anytime_thresh_df = lineage_bias_df.merge(
         filt_codes,
         how='inner',
         validate='m:1'
     )
+    print('Length post filtering abundance anytime:', len(anytime_thresh_df))
     return anytime_thresh_df
 
 def get_clones_at_timepoint(
@@ -212,8 +265,22 @@ def get_clones_at_timepoint(
         timepoint_col: str,
         timepoint: Any,
         by_mouse: bool,
+        n: Any = None,
     ) -> pd.DataFrame:
-    if timepoint == 'last':
+    if n is not None:
+        if timepoint == 'last':
+            if by_mouse:
+                filt_df = find_n_to_last_clones(
+                    input_df,
+                    timepoint_col,
+                    n
+                )
+            else:
+                raise ValueError('N to ' + str(timepoint) + ' Not Implemented for by clone yet')
+        else:
+            raise ValueError('N to ' + str(timepoint) + ' Not Implemented')
+
+    elif timepoint == 'last':
         filt_df = find_last_clones(
             input_df,
             timepoint_col
@@ -225,8 +292,10 @@ def get_clones_at_timepoint(
             )
     elif timepoint == 'first':
         if by_mouse:
-            tp = input_df[timepoint_col].min()
-            filt_df = input_df[input_df[timepoint_col] == tp]
+            filt_df = find_first_clones_in_mouse(
+                input_df,
+                timepoint_col
+            )
         else:
             filt_df = input_df.sort_values(timepoint_col).groupby(['mouse_id', 'code']).first()
     else:
@@ -654,8 +723,9 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, timepoint_col: str, cell_
 def calculate_bias_change_cutoff(
         bias_change_df: pd.DataFrame,
         min_time_difference: int,
-        kde=None,
+        return_kde: bool = False,
         timepoint=None,
+        **kde_kwargs
     ) -> Tuple:
     """ Calculates change amount that qualifies as "change"
 
@@ -669,6 +739,7 @@ def calculate_bias_change_cutoff(
     ValueError:
         if more than 1 cutoff found, throws error
     """
+    
     bias_change_df = bias_change_df[bias_change_df.time_change >= min_time_difference] 
     if timepoint is not None:
         bias_change_df = filter_bias_change_timepoint(
@@ -676,18 +747,15 @@ def calculate_bias_change_cutoff(
             timepoint
         )
         print(bias_change_df)
-    close_figure = False
-    if kde is None:
-        close_figure = True
-        fig = plt.figure()
-        kde = sns.kdeplot(
-            bias_change_df.bias_change.abs(),
-            kernel='gau',
-            shade=True,
-            color='silver',
-            alpha=.3
-            )
-
+    kde = sns.kdeplot(
+        bias_change_df.bias_change.abs(),
+        kernel='gau',
+        shade=True,
+        color='silver',
+        alpha=.3,
+        **kde_kwargs
+        )
+    
     # C0 KDE of all clones
     x, y = kde.get_lines()[0].get_data()
     y_peak = y.argmax() + 1
@@ -702,14 +770,14 @@ def calculate_bias_change_cutoff(
 
     x_c, y_c = intersection(x, y1, x, y2)
 
-    if close_figure:
-        plt.close(fig=fig)
+    if not return_kde:
+        plt.close()
 
     if len(x_c) > 1:
         print(Fore.YELLOW + Style.BRIGHT + 'Warning: Too many change cutoff candidates found')
         print(Fore.YELLOW + ','.join([str(k) for k in x_c]))
     print('Bias Change Cutoff:', x_c[0])
-    return x, y, y1, y2, x_c, y_c
+    return x, y, y1, y2, x_c, y_c, kde
 
 def mark_changed(
         input_df: pd.DataFrame,
@@ -727,7 +795,7 @@ def mark_changed(
     Returns:
         pd.DataFrame -- input_df with changed column
     """
-    _, _, _, _, cutoffs, _ = calculate_bias_change_cutoff(
+    _, _, _, _, cutoffs, _, _ = calculate_bias_change_cutoff(
         bias_change_df,
         min_time_difference,
         timepoint=timepoint
@@ -783,8 +851,15 @@ def sum_abundance_by_change(
         pd.DataFrame -- sum of abundance in chagen vs not changed at each time point, per cell_type, mouse_id
     """
 
-    total_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', timepoint_col]).percent_engraftment.sum()).reset_index()
-    by_change_sum = pd.DataFrame(with_change_contribution_df.groupby(['cell_type', 'group', 'mouse_id', timepoint_col, 'changed', 'change_type']).percent_engraftment.sum()).reset_index()
+    total_sum = pd.DataFrame(
+        with_change_contribution_df.groupby(
+            ['cell_type', 'group', 'mouse_id', timepoint_col]
+        ).percent_engraftment.sum()).reset_index()
+    by_change_sum = pd.DataFrame(
+        with_change_contribution_df.groupby(
+            ['cell_type', 'group', 'mouse_id', timepoint_col, 'changed', 'change_type']
+            ).percent_engraftment.sum()
+        ).reset_index()
     total_sum['changed'] = 'Total'
     total_sum['total_abundance'] = total_sum['percent_engraftment']
     if percent_of_total:
@@ -862,7 +937,11 @@ def calculate_thresholds_sum_abundance(
     )
     for cell_type in analyzed_cell_types:
         first_day = input_df[timepoint_col].min()
-        month_4_cell_df = input_df.loc[(input_df[timepoint_col] == first_day) & (input_df.cell_type == cell_type)]
+        month_4_cell_df = find_first_clones_in_mouse(
+            input_df,
+            timepoint_col
+        )
+        month_4_cell_df = month_4_cell_df[month_4_cell_df.cell_type == cell_type]
         # USE LAST IF HSC DATA
         if cell_type == 'hsc':
             month_4_cell_df = find_last_clones_in_mouse(
@@ -968,7 +1047,7 @@ def day_to_month(day: pd.Series):
     month = round((day)/30).astype(int)
     month[month == 14] = 15
     month[month == 18] = 17
-    return month 
+    return month
 
 def calculate_abundance_change(
         abundance_df: pd.DataFrame,
@@ -1061,9 +1140,10 @@ def calculate_bias_change(
         pd.DataFrame -- Bias_change_df
     """
 
-    if not use_month_17:
-        print(Fore.YELLOW + 'EXCLUDING MONTH 17 FROM BIAS CHANGE')
-        lineage_bias_df = lineage_bias_df[lineage_bias_df.month == 17]
+    if  (not use_month_17):
+        if 17 in lineage_bias_df[timepoint_col].unique():
+            print(Fore.YELLOW + 'EXCLUDING MONTH 17 FROM BIAS CHANGE')
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.month != 17]
 
     bias_change_cols = ['mouse_id', 'code', 'group', 'bias_change', 'time_change', 'time_unit', 't1', 't2', 'label_change']
     bias_change_df = pd.DataFrame(columns=bias_change_cols)
@@ -1161,13 +1241,14 @@ def bias_clones_to_abundance(
 def calculate_first_last_bias_change(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
-        by_mouse: str,
+        by_mouse: bool,
         exclude_month_17: bool = True
     ):
     group_cols = ['mouse_id', 'code', 'group']
     if exclude_month_17 and timepoint_col == 'month':
-        print(Fore.YELLOW + 'EXCLUDING MONTH 17 FROM BIAS CHANGE')
-        lineage_bias_df = lineage_bias_df[lineage_bias_df.month != 17]
+        if 17 in lineage_bias_df.month.unique():
+            print(Fore.YELLOW + 'EXCLUDING MONTH 17 FROM BIAS CHANGE')
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.month != 17]
 
     lineage_bias_at_first_df = get_clones_at_timepoint(
         lineage_bias_df,
@@ -1287,70 +1368,6 @@ def add_first_last_to_lineage_bias(
         filt_df = filt_df.append(sort_df, ignore_index=True)
     return filt_df
 
-def abundant_clone_survival(
-    clonal_abundance_df: pd.DataFrame,
-    timepoint_col: str,
-    thresholds: Dict[str, float],
-    cell_types: List[str],
-    cumulative: bool,
-) -> pd.DataFrame:
-    """ Calculate percent surivival of clones abundant before transplant to after
-    
-    Arguments:
-        clonal_abundance_df {pd.DataFrame}
-        timepoint_col {str} -- column to serach for time in
-        thresholds {Dict[str, float]} -- {cell_type:threshold}
-        cumulative {bool} -- True means Across (1-3,1-4,etc.), false = between (1-2,2-3,etc.)
-    
-    Returns:
-        pd.DataFrame -- DataFrame showing if a clone survived a transplantation
-    """
-
-    sorted_df = clonal_abundance_df.sort_values(by=timepoint_col)
-    timepoints = sorted_df[timepoint_col].unique()
-    if cumulative:
-        t1s = [timepoints[0]] * (len(timepoints) - 1)
-    else:
-        t1s = timepoints[:-1]
-    t2s = timepoints[1:]
-    clonal_survival_df = pd.DataFrame()
-    for t1, t2 in zip(t1s, t2s):
-        t1_df = filter_cell_type_threshold(
-            sorted_df[sorted_df[timepoint_col] == t1],
-            analyzed_cell_types=cell_types,
-            thresholds=thresholds
-        )
-        t2_df = sorted_df[sorted_df[timepoint_col] == t2]
-        survived = t2_df.merge(
-            t1_df[['mouse_id', 'code']],
-            on=['mouse_id', 'code'],
-            how='inner',
-        )
-        t1_unique_clones = pd.DataFrame(t1_df.groupby(['mouse_id', 'group'])\
-            .code.nunique()
-        ).reset_index().rename(columns={'code':'t1_num_codes'})
-
-        survived_unique_clones = pd.DataFrame(survived.groupby(['mouse_id', 'group'])\
-            .code.nunique()
-        ).reset_index().rename(columns={'code':'survived_num_codes'})
-
-        t_change_df = t1_unique_clones.merge(
-            survived_unique_clones,
-            on=['mouse_id', 'group'],
-            how='outer',
-            validate='1:1'
-        )
-        str_t_change = str(int(round(t1))) + ' to ' + str(int(round(t2)))
-        t_change_df['time_change'] = str_t_change
-        t_change_df['t1'] = t1
-        t_change_df['t2'] = t2
-        t_change_df['time_units'] = timepoint_col
-        t_change_df.loc[t_change_df.survived_num_codes.isna(), 'survived_num_codes'] = 0
-        t_change_df = t_change_df.assign(
-            percent_survival=lambda x: 100*x.survived_num_codes/x.t1_num_codes
-        )
-        clonal_survival_df = clonal_survival_df.append(t_change_df)
-    return clonal_survival_df
 
 def add_time_difference(
     lineage_bias_or_clonal_abundance_df: pd.DataFrame,
@@ -1397,10 +1414,6 @@ def define_bias_category(lineage_bias: float) -> str:
     balanced_value_max = sin(2 * (balanced_angle_max - (pi/4)))
     balanced_angle = pi/4
     
-    #if lineage_bias == -1:
-        #return 'LC'
-    #if lineage_bias == 1:
-        #return 'MC'
     if lineage_bias >= balanced_value_max:
         return 'MB'
     if lineage_bias <= balanced_value_min:
@@ -1473,7 +1486,11 @@ def add_avg_abundance_until_timepoint_clonal_abundance_df(
         timepoint_col: str,
     ) -> pd.DataFrame:
     output_df = pd.DataFrame()
-    for _, g_df in clonal_abundance_df.groupby(UNIQUE_CODE_COLS):
+    print('...Adding average abundance until each time point per clone/cell_type')
+    for _, g_df in progressbar.progressbar(clonal_abundance_df.groupby(UNIQUE_CODE_COLS + ['cell_type'])):
+        if len(g_df) > clonal_abundance_df[timepoint_col].nunique():
+            print(g_df)
+            raise ValueError('More time points than should exist for a unique clone/cell-type')
         sort_df = g_df.sort_values(by=timepoint_col).reset_index()
         for i in range(len(sort_df)):
             sort_df.loc[i, 'avg_abundance'] = sort_df.loc[:i, ['percent_engraftment']].sum(axis=1).mean()
@@ -1485,48 +1502,15 @@ def add_avg_abundance_until_timepoint(
         timepoint_col: str,
     ) -> pd.DataFrame:
     output_df = pd.DataFrame()
-    for _, g_df in lineage_bias_df.groupby(UNIQUE_CODE_COLS):
+    for _, g_df in progressbar.progressbar(lineage_bias_df.groupby(UNIQUE_CODE_COLS)):
         sort_df = g_df.sort_values(by=timepoint_col).reset_index()
         for i in range(len(sort_df)):
             sort_df.loc[i, 'accum_abundance'] = sort_df.loc[:i, ['myeloid_percent_abundance', 'lymphoid_percent_abundance']].sum(axis=1).mean()
-            sort_df.loc[i, 'myeloid_avg_abundance'] = sort_df.loc[:i, ['myeloid_percent_engraftment']].sum(axis=1).mean()
-            sort_df.loc[i, 'lymphoid_avg_abundance'] = sort_df.loc[:i, ['lymphoid_percent_engraftment']].sum(axis=1).mean()
+            sort_df.loc[i, 'myeloid_avg_abundance'] = sort_df.loc[:i, ['myeloid_percent_abundance']].sum(axis=1).mean()
+            sort_df.loc[i, 'lymphoid_avg_abundance'] = sort_df.loc[:i, ['lymphoid_percent_abundance']].sum(axis=1).mean()
         output_df = output_df.append(sort_df)
     return output_df
 
-def create_lineage_bias_survival_df(
-        lineage_bias_df: pd.DataFrame,
-        timepoint_col: str,
-    ) -> pd.DataFrame:
-
-    if timepoint_col == 'month':
-        lineage_bias_df = exhausted_clones_without_MPPs(
-            lineage_bias_df,
-            timepoint_col
-        )
-    with_abund_df = add_avg_abundance_until_timepoint(
-        lineage_bias_df,
-        timepoint_col
-    )
-    with_labels_df = add_lineage_bias_labels_for_survival(
-        with_abund_df,
-        timepoint_col
-    )
-
-    with_labels_df = with_labels_df.assign(
-        isLast=lambda x: x.total_time_change == x.time_change
-    )
-    if timepoint_col != 'month':
-        survived = pd.DataFrame()
-        not_survived = with_labels_df[with_labels_df.isLast].assign(
-            survived='Exhausted'
-        )
-        survived = with_labels_df[~with_labels_df.isLast].assign(
-            survived='Survived'
-        )
-        survival_df = survived.append(not_survived)
-        return survival_df
-    return with_labels_df
 
 def filter_bias_change_timepoint(
         bias_change_df: pd.DataFrame,
@@ -1565,7 +1549,6 @@ def filter_bias_change_timepoint(
 
 def calculate_survival_perc(
         clonal_survival_df: pd.DataFrame,
-        lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
     ) -> pd.DataFrame:
     """ Calculates percentage of clones
@@ -1597,7 +1580,7 @@ def calculate_survival_perc(
         exhausted_perc=lambda x: 100 * x.exhausted_count / (x.exhausted_count + x.survived_count),
         survived_perc=lambda x: 100 * x.survived_count / (x.exhausted_count + x.survived_count)
     )
-    first_time = lineage_bias_df[timepoint_col].min()
+    first_time = clonal_survival_df[timepoint_col].min()
     survival_perc = survival_perc.assign(
         last_time=lambda x: x.time_change + first_time
     )
@@ -1648,19 +1631,24 @@ def filter_first_last_by_mouse(
     return out_df
 
 def exhausted_clones_without_MPPs(
-        input_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
     ):
+    if 'percent_engraftment' not in clonal_abundance_df.columns:
+        print(clonal_abundance_df.columns)
+        raise ValueError('Cannot find "percent_engraftment" column. Input must be clonal abundance Dataframe')
+
     if timepoint_col != 'month':
         raise ValueError('Current Method Only Available for Time Course Data')
-    
+
+    present_clones_df = clonal_abundance_df[clonal_abundance_df.percent_engraftment > 0.01] 
     with_time_labels_df = filter_first_last_by_mouse(
-        input_df,
+        present_clones_df,
         timepoint_col,
         include_middle=True,
     )
     exhaustion_df = pd.DataFrame()
-    for _, g_df in with_time_labels_df.groupby(['code','mouse_id','group']):
+    for _, g_df in with_time_labels_df.groupby(['code', 'mouse_id', 'group']):
         if g_df[timepoint_col].nunique() < 2:
             continue
 
@@ -1935,7 +1923,14 @@ def filter_lineage_bias_cell_type_ratio_per_mouse(
 
     # Only use data from first time point to calculate ratio
     first_day = wbc_df['day'].min()
-    wbc_df = wbc_df[wbc_df['day'] == first_day]
+    first_day_per_mouse = pd.DataFrame(
+        wbc_df.groupby(['mouse_id']).day.min()
+        ).reset_index()
+    wbc_df = wbc_df.merge(
+        first_day_per_mouse,
+        how='inner',
+        validate='m:1'
+    )
 
     pivotted = wbc_df.pivot_table(
         index='mouse_id',
@@ -1955,7 +1950,7 @@ def filter_lineage_bias_cell_type_ratio_per_mouse(
     )
     filt_df = with_filters_df[
         (with_filters_df['myeloid_percent_abundance'] >= with_filters_df['m_filter']) |\
-        (with_filters_df['lymphoid_percent_engraftment'] >= with_filters_df['l_filter'])
+        (with_filters_df['lymphoid_percent_abundance'] >= with_filters_df['l_filter'])
     ]
     print('Length After Filtering: ', len(filt_df), '\n')
 
@@ -1985,6 +1980,8 @@ def fill_mouse_id_zeroes(
                     }
                 )
                 filled_df = filled_df.append(fill_vals)
+    if filled_df.empty:
+        return clonal_abundance_df
     with_info = filled_df.merge(
         clonal_abundance_df[info_cols + ['mouse_id']].drop_duplicates(),
         on=['mouse_id'],
@@ -2010,3 +2007,152 @@ def filter_low_abund_hsc(
     print('Length before filtering HSCs:', len(clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']))
     print('Length after filtering HSCs:', len(no_low_hsc[no_low_hsc.cell_type == 'hsc']))
     return no_low_hsc
+
+def remove_month_17(
+    input_df: pd.DataFrame,
+    timepoint_col,
+) -> pd.DataFrame:
+    if timepoint_col != 'month':
+        return input_df
+    if 17 in input_df[timepoint_col].unique():
+        print (Fore.YELLOW + '\t REMOVING MONTH 17 DATA')
+        return input_df[input_df.month != 17]
+    return input_df
+
+def remove_month_17_and_6(
+    input_df: pd.DataFrame,
+    timepoint_col,
+) -> pd.DataFrame:
+    if timepoint_col != 'month':
+        return input_df
+    months_in_data = []
+    if 17 in input_df[timepoint_col].unique():
+        months_in_data.append(17)
+    if 6 in input_df[timepoint_col].unique():
+        months_in_data.append(6)
+    if input_df[timepoint_col].max() == 6:
+        return input_df
+    if months_in_data:
+        print (Fore.YELLOW + '\t REMOVING MONTHS: ' + ', '.join([str(x) for x in months_in_data]))
+        filt_df = input_df[~input_df.month.isin([17, 6])]
+        return filt_df
+    else:
+        return input_df
+
+def label_exhausted_clones(
+        add_labels_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        only_last_gen: bool = False,
+    ) -> pd.DataFrame:
+    """ Add exhaustion/survival labels to clones
+    
+    Arguments:
+        add_labels_df {pd.DataFrame} -- Data frame to label,
+            if None labels clonal abundance dataframe
+        clonal_abundance_df {pd.DataFrame}
+        timepoint_col {str}
+    
+    Returns:
+        pd.DataFrame -- Labeled 'add_labels_df'
+    """
+    if add_labels_df is None:
+        add_labels_df = clonal_abundance_df
+
+    no_hsc_df = clonal_abundance_df[clonal_abundance_df.cell_type != 'hsc']
+    if timepoint_col == 'month':
+        unlabeled_exhaust_df = exhausted_clones_without_MPPs(
+            no_hsc_df,
+            timepoint_col
+        )
+    
+        abundance_with_time_difference = add_time_difference(
+            unlabeled_exhaust_df,
+            timepoint_col
+        )
+
+        exhaust_df = abundance_with_time_difference.assign(
+            isLast=lambda x: x.total_time_change == x.time_change
+        )
+    else:
+        exhaust_df = pd.DataFrame()
+        no_hsc_df = no_hsc_df[
+            no_hsc_df.percent_engraftment > 0.01
+        ]
+        abundance_with_time_difference = add_time_difference(
+            no_hsc_df,
+            timepoint_col
+        )
+
+        last_labeled_df = abundance_with_time_difference.assign(
+            isLast=lambda x: x.total_time_change == x.time_change
+        )
+        not_survived = last_labeled_df[last_labeled_df.isLast].assign(
+            survived='Exhausted'
+        )
+        survived = last_labeled_df[~last_labeled_df.isLast].assign(
+            survived='Survived'
+        )
+        exhaust_df = survived.append(not_survived)
+        if timepoint_col == 'gen':
+            exhaust_df.loc[exhaust_df.gen == 8, 'survived'] = 'Survived'
+            if only_last_gen:
+                print(Style.BRIGHT + 'Clones at Gen 8 set to Persistent')
+                survived_clones = last_labeled_df[last_labeled_df.gen == 8].code.unique()
+                survived = last_labeled_df[last_labeled_df.code.isin(survived_clones)].assign(
+                    survived='Survived'
+                )
+                exhausted = last_labeled_df[~last_labeled_df.code.isin(survived_clones)].assign(
+                    survived='Exhausted'
+                )
+                exhaust_df = survived.append(exhausted)
+                exhaust_df = exhaust_df[
+                    ['mouse_id', 'group', 'code', 'survived']
+                    ].drop_duplicates()
+                input_with_labels = add_labels_df.merge(
+                    exhaust_df,
+                    how='inner',
+                    validate='m:1'
+                )
+                print('\tLength before adding exhaustion labels:', len(add_labels_df))
+                print('\tLength after adding exhaustion labels:', len(input_with_labels))
+                return input_with_labels
+    
+    exhaust_df = exhaust_df[
+        ['mouse_id', 'group', 'code', timepoint_col, 'total_time_change', 'time_change', 'isLast', 'survived']
+        ].drop_duplicates()
+
+    input_with_labels = add_labels_df.merge(
+        exhaust_df,
+        how='inner',
+        validate='m:1'
+    )
+    print('\tLength before adding exhaustion labels:', len(add_labels_df))
+    print('\tLength after adding exhaustion labels:', len(input_with_labels))
+    return input_with_labels
+
+def remove_gen_8_5(
+    input_df: pd.DataFrame,
+    timepoint_col,
+) -> pd.DataFrame:
+    if timepoint_col != 'gen':
+        return input_df
+    gens_in_data = []
+    if 8.5 in input_df[timepoint_col].unique():
+        gens_in_data.append(8.5)
+    if gens_in_data:
+        print (Fore.YELLOW + '\t REMOVING GENS: ' + ', '.join([str(x) for x in gens_in_data]))
+        filt_df = input_df.copy()
+        filt_df = filt_df[~filt_df.gen.isin(gens_in_data)]
+        filt_df['gen'] = filt_df['gen'].astype(int)
+        return filt_df
+    else:
+        return input_df
+
+def add_short_group(input_df: pd.DataFrame):
+    SHORT_GROUP_MAP = {
+        'aging_phenotype': 'E',
+        'no_change': 'D'
+    }
+    input_df.loc[:,'group_short'] = input_df.group.map(SHORT_GROUP_MAP)
+    return input_df

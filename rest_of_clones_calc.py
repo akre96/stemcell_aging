@@ -42,7 +42,7 @@ def main():
     wbcs_df = WBC_df[WBC_df.cell_type == 'wbc']
 
     with_percent_df = pd.DataFrame()
-    for name, group in cells_df.groupby(['cell_type']):
+    for _, group in cells_df.groupby(['cell_type']):
         if len(group) != len(wbcs_df):
             print(group)
             print(wbcs_df)
@@ -80,7 +80,10 @@ def main():
     if args.baseline_timepoint == 'None':
         base_time_point = None
     elif args.baseline_timepoint:
-        base_time_point = int(args.baseline_timepoint)
+        if args.baseline_timepoint == 'by_mouse':
+            base_time_point = 'by_mouse'
+        else:
+            base_time_point = int(args.baseline_timepoint)
     else:
         base_time_point = input_df['day'].min()
 

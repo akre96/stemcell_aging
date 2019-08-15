@@ -23,7 +23,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from data_types import y_col_type, timepoint_type, change_type
-from lineage_bias import get_bias_change, parse_wbc_count_file
+from lineage_bias import parse_wbc_count_file
 from aggregate_functions import filter_threshold, \
     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
     find_top_percentile_threshold, find_clones_bias_range_at_time, \
@@ -80,15 +80,15 @@ def main():
         
 
     """
+    root_data_dir = '/home/sakre/Data/aging_and_10x'
     parser = argparse.ArgumentParser(description="Plot input data")
-    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default='~/Data/stemcell_aging/Ania_M_allAnia_percent-engraftment_052219_long.csv')
-    parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default='~/Data/stemcell_aging/rest_of_clones')
-    parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default='/home/sakre/Data/stemcell_aging/lineage_bias/lineage_bias_t0-0_from-counts.csv')
-    parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default='/home/sakre/Data/stemcell_aging/OT_2.0_WBCs_051818-modified.txt')
-    parser.add_argument('--gfp', dest='gfp', help='Path to txt containing FACS GFP data', default='/home/sakre/Data/stemcell_aging/OT_2.0_GFP_051818.txt')
-    parser.add_argument('--donor', dest='donor', help='Path to txt containing FACS Donor Chimerism data', default='/home/sakre/Data/stemcell_aging/OT_2.0_donor_051818.txt')
-    parser.add_argument('--bias-change', dest='bias_change', help='Path to csv containing lineage bias change', default='/home/sakre/Data/stemcell_aging/lineage_bias/bias_change_t0-0_from-counts.csv')
-    parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='/home/sakre/Data/stemcell_aging/Graphs')
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default=root_data_dir+'/Ania_M_all OT2.0 rerun_percent-engraftment_NO filter_080819_long.csv')
+    parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default=root_data_dir+'/rest_of_clones')
+    parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default=root_data_dir+'/lineage_bias/lineage_bias.csv')
+    parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default=root_data_dir+'/aging_10x_WBC.txt')
+    parser.add_argument('--gfp', dest='gfp', help='Path to txt containing FACS GFP data', default=root_data_dir+'/aging_10x_GFP.txt')
+    parser.add_argument('--donor', dest='donor', help='Path to txt containing FACS Donor Chimerism data', default=root_data_dir+'/aging_10x_Donor.txt')
+    parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default=root_data_dir+'/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
@@ -109,6 +109,7 @@ def main():
     parser.add_argument('--sum', dest='sum', help='Whether to plot sum abundance vs average abundance for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
     parser.add_argument('--by-count', dest='by_count', help='Whether to plot count of clones for certain graphs', action="store_true")
+    parser.add_argument('--by-average', dest='by_average', help='Whether to plot average until time point for certain graphs', action="store_true")
     parser.add_argument('--by-mouse', dest='by_mouse', help='Whether to plot mouse color instead of group for certain graphs', action="store_true")
     parser.add_argument('--plot-rest', dest='plot_rest', help='Whether to plot rest of clones instead of tracked clones', action="store_true")
     parser.add_argument('--by-gen', dest='by_gen', help='Plotting done on a generation by generation basis', action="store_true")
@@ -125,17 +126,14 @@ def main():
     options = args.options
     input_df = pd.read_csv(args.input)
     raw_lineage_bias_df = pd.read_csv(args.lineage_bias)
-    bias_change_df = pd.read_csv(args.bias_change)
 
     analyzed_cell_types = [args.myeloid_cell, args.lymphoid_cell]
     cell_count_df = parse_wbc_count_file(args.cell_count, [args.myeloid_cell, 'hsc', args.lymphoid_cell, 'wbc'])
 
-    min_hsc_per_mouse = calc_min_hsc_per_mouse(
-        args.cell_count,
-        args.gfp,
-        args.donor,
-        tenx_hsc_counts_file='~/Data/tenx_hsc_counts.csv'
-        )
+    presence_thresholds = {
+        'any': 0.01,
+    }
+
 
     if 'group' not in input_df.columns:
         print(Style.BRIGHT + Fore.YELLOW+ '\n !! Warning: No Groups !!')
@@ -148,17 +146,46 @@ def main():
             print(Fore.YELLOW+ '  Mouse ID(s): ' + ', '.join(input_df[~input_df.group.isin(phenotypic_groups)].mouse_id.unique()))
         for group in phenotypic_groups:
             print(str(group).title() + ' Mice: ' + str(input_df[input_df.group == group].mouse_id.nunique()))
+    
 
-    present_clones_df = filter_low_abund_hsc(
-        min_hsc_per_mouse,
+
+
+
+
+    present_clones_df = filter_clones_threshold_anytime(
         input_df,
+        presence_thresholds,
+        analyzed_cell_types=input_df.cell_type.unique(),
+        filter_exempt_cell_types=['hsc'],
+        filt_0_out_exempt=False
     )
+
+    #min_hsc_per_mouse = calc_min_hsc_per_mouse(
+        #args.cell_count,
+        #args.gfp,
+        #args.donor,
+        #tenx_hsc_counts_file='~/Data/tenx_hsc_counts.csv'
+        #)
+
+    lineage_bias_df = raw_lineage_bias_df
+    ## EXLCUDE MICE
+    excluded_mice = pd.read_csv('~/Data/exclude_mice.csv')
+    for mouse_id in excluded_mice.mouse_id.unique():
+        if not present_clones_df[present_clones_df.mouse_id == mouse_id].empty:
+            print(Fore.YELLOW + ' Excluding mouse: ' + mouse_id)
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.mouse_id != mouse_id]
+            present_clones_df = present_clones_df[present_clones_df.mouse_id != mouse_id]
+        if not lineage_bias_df[lineage_bias_df.mouse_id == mouse_id].empty:
+            print(Fore.YELLOW + ' Excluding mouse: ' + mouse_id)
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.mouse_id != mouse_id]
+            present_clones_df = present_clones_df[present_clones_df.mouse_id != mouse_id]
+
     graph_type = args.graph_type
     if graph_type == 'default':
         print(Style.BRIGHT + '\n -- Plotting Default Plot(s) -- \n')
     else:
         print(Style.BRIGHT + '\n -- Graph Type: ' + graph_type + ' -- \n')
-    
+
     if options != 'default':
         print(Style.BRIGHT + ' -- Extra Options Set: ' + options + ' -- \n')
 
@@ -167,7 +194,7 @@ def main():
         print(' - Group Filtering Set to: ' + args.group)
     if args.by_group:
         print(' - Plotting Each Phenotypic Group Individually')
-    
+
     if args.y_col:
         print(' - Plotting y_axis as: ' + args.y_col)
 
@@ -182,17 +209,16 @@ def main():
 
     if args.threshold:
         print(' - Threshold set to: ' + str(args.threshold))
-    
+
 
     if args.cache:
         print(' - Using Cached Data')
-    
+
 
     rest_of_clones_abundance_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_abundance_long.csv')
 
     rest_of_clones_bias_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_lineage_bias.csv')
 
-    lineage_bias_df = raw_lineage_bias_df
 
     if args.by_day:
         print(' - Time By Day Set \n')
@@ -206,7 +232,6 @@ def main():
         first_timepoint = 1
         timepoint_col = 'gen'
         lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
-        input_df = input_df.assign(gen=lambda x: day_to_gen(x.day))
         present_clones_df = present_clones_df.assign(gen=lambda x: day_to_gen(x.day))
         cell_count_df = cell_count_df.assign(gen=lambda x: day_to_gen(x.day))
         rest_of_clones_abundance_df = rest_of_clones_abundance_df.assign(gen=lambda x: day_to_gen(x.day))
@@ -214,10 +239,8 @@ def main():
         if args.limit_gen:
             print(' - ONLY CONSIDERING GENERATIONS 1-3 \n')
             lineage_bias_df = lineage_bias_df[lineage_bias_df.gen <= 3]
-            input_df = input_df[input_df.gen <= 3]
             present_clones_df = present_clones_df[present_clones_df.gen <= 3]
             cell_count_df = cell_count_df[cell_count_df.gen <= 3]
-            input_df = input_df[input_df.gen <= 3]
             rest_of_clones_abundance_df = rest_of_clones_abundance_df[rest_of_clones_abundance_df.gen <= 3]
             rest_of_clones_bias_df = rest_of_clones_bias_df[rest_of_clones_bias_df.gen <= 3]
     else:
@@ -225,7 +248,6 @@ def main():
         first_timepoint = 4
         timepoint_col = 'month'
         lineage_bias_df = lineage_bias_df.assign(month=lambda x: day_to_month(x.day))
-        input_df = input_df.assign(month=lambda x: day_to_month(x.day))
         present_clones_df = present_clones_df.assign(month=lambda x: day_to_month(x.day))
         cell_count_df = cell_count_df.assign(month=lambda x: day_to_month(x.day))
         rest_of_clones_abundance_df = rest_of_clones_abundance_df.assign(month=lambda x: day_to_month(x.day))
@@ -242,6 +264,29 @@ def main():
             lymphoid_cell=args.lymphoid_cell,
         )
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
+
+    if graph_type in ['abundance_bias_change_type_heatmap']:
+        save_path = args.output_dir + os.sep + 'abundance_by_change_heatmap' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+
+        plot_abundance_bias_change_type_heatmap(
+            lineage_bias_df,
+            present_clones_df,
+            timepoint_col,
+            mtd,
+            plot_average=args.by_average,
+            merge_type='inner',
+            change_type=args.change_type,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['abundance_changed_bygroup']:
         save_path = args.output_dir + os.sep + 'abundance_by_change' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
@@ -264,6 +309,19 @@ def main():
             save=args.save,
             save_path=save_path
         )
+    if graph_type in ['palette']:
+        save_path = args.output_dir + os.sep + 'palette'
+        if options != 'default':
+            palette = options
+        else:
+            palette = 'mouse_id'
+        plot_palette(
+            palette,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
     if graph_type in ['hsc_to_ct_bootstrap']:
         save_path = args.output_dir + os.sep + 'hsc_to_ct_bootstrap'
 
@@ -287,7 +345,6 @@ def main():
             plot_hsc_vs_cell_type_abundance_bootstrapped(
                 present_clones_df,
                 timepoint_col,
-                min_hsc_per_mouse,
                 by_group=args.by_group,
                 thresholds=thresholds,
                 cell_type=cell_type,
@@ -306,7 +363,6 @@ def main():
         plot_hsc_and_blood_clone_count(
             present_clones_df,
             timepoint_col,
-            min_hsc_per_mouse,
             exclude_timepoints=exclude_timepoints,
             by_group=args.by_group,
             save=args.save,
@@ -411,15 +467,15 @@ def main():
                 )
     if graph_type in ['exhaust_persist_abund']:
         save_path = args.output_dir + os.sep + 'exhausted_persist_abund'
-        if args.by_clone:
+        if args.by_count:
             exhaust_persist_abund(
-                lineage_bias_df,
                 present_clones_df,
                 timepoint_col,
                 cell_type='any',
                 by_sum=args.sum,
-                by_clone=args.by_clone,
+                by_count=args.by_count,
                 by_group=args.by_group,
+                plot_average=args.by_average,
                 save=args.save,
                 save_path=save_path,
                 save_format='png'
@@ -427,13 +483,13 @@ def main():
         else:
             for cell_type in ['gr', 'b']:
                 exhaust_persist_abund(
-                    lineage_bias_df,
                     present_clones_df,
                     timepoint_col,
                     cell_type=cell_type,
                     by_sum=args.sum,
-                    by_clone=args.by_clone,
+                    by_count=args.by_count,
                     by_group=args.by_group,
+                    plot_average=args.by_average,
                     save=args.save,
                     save_path=save_path,
                     save_format='png'
@@ -509,10 +565,8 @@ def main():
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
 
         exhaust_persist_hsc_abund(
-            lineage_bias_df,
             present_clones_df,
             timepoint_col,
-            min_hsc_per_mouse,
             by_sum=args.sum,
             by_clone=args.by_clone,
             by_count=args.by_count,
@@ -525,7 +579,6 @@ def main():
         save_path = args.output_dir + os.sep + 'hsc_blood_prod_over_time'
         heatmap_correlation_hsc_ct(
             present_clones_df,
-            min_hsc_per_mouse,
             timepoint_col,
             by_mouse=args.by_mouse,
             group=args.group,
@@ -540,7 +593,6 @@ def main():
 
         hsc_blood_prod_over_time(
             present_clones_df,
-            min_hsc_per_mouse,
             timepoint_col,
             group=args.group,
             save=args.save,
@@ -715,9 +767,6 @@ def main():
     if graph_type in ['clone_count_swarm_vs_ct']:
         save_path = args.output_dir + os.sep + 'clone_count_swarm_vs_cell-type'
 
-        if timepoint_col == 'gen':
-            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
-
         abundance_cutoff = 0.01
         thresholds = {'gr': 0.01, 'b': 0.01}
         if args.abundance_cutoff:
@@ -814,7 +863,6 @@ def main():
             present_clones_df,
             timepoint_col,
             mtd,
-            min_hsc_per_mouse,
             by_group=args.by_group,
             by_clone=args.by_clone,
             timepoint=args.timepoint,
@@ -870,10 +918,12 @@ def main():
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
 
         if timepoint_col == 'gen':
-            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5].assign(gen=lambda x: x.gen.astype(int))
+            present_clones_df = present_clones_df[present_clones_df.gen != 8.5].assign(gen=lambda x: x.gen.astype(int))
 
         plot_perc_survival_bias_heatmap(
             lineage_bias_df,
+            present_clones_df,
             timepoint_col,
             by_clone=args.by_clone,
             save=args.save,
@@ -974,9 +1024,9 @@ def main():
         save_path = args.output_dir + os.sep + 'not_survived_count_box' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
         if timepoint_col == 'gen':
-            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+            present_clones_df = present_clones_df[present_clones_df.gen != 8.5]
         plot_not_survived_count_box(
-            lineage_bias_df,
+            present_clones_df,
             timepoint_col,
             by_group=args.by_group,
             save=args.save,
@@ -985,11 +1035,11 @@ def main():
     if graph_type in ['not_survived_abund']:
         save_path = args.output_dir + os.sep + 'not_survived_abundance' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
-        if timepoint_col == 'gen':
-            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
         plot_not_survived_abundance(
-            lineage_bias_df,
+            present_clones_df,
             timepoint_col,
+            by_average=args.by_average,
             save=args.save,
             save_path=save_path
         )
@@ -1149,10 +1199,6 @@ def main():
             )
     if graph_type in ['bias_change_mean_dist_vs_group']:
         save_path = args.output_dir + os.sep + 'bias_distribution_mean_abund_vs_g'
-        if args.threshold:
-            threshold = args.threshold
-        else:
-            threshold = 0.01
 
         if args.options != 'default':
             mtd = int(args.options)
@@ -1163,7 +1209,6 @@ def main():
             lineage_bias_df,
             timepoint_col,
             change_status=args.change_type,
-            cutoff=threshold,
             mtd=mtd,
             timepoint=args.timepoint,
             y_col='sum_abundance',
@@ -1884,7 +1929,6 @@ def main():
             )
             change_marked_df.to_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv', index=False)
         group = args.group
-        percent_of_total = False
         timepoint = 'last'
         if args.timepoint:
             timepoint = args.timepoint
@@ -2065,7 +2109,6 @@ def main():
             timepoint_col=timepoint_col,
             timepoint=args.timepoint,
             abundance_cutoff=abundance_cutoff,
-            absolute_value=True,
             group=args.group,
             min_time_difference=min_time_difference,
             save=args.save,
