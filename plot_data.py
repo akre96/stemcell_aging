@@ -938,6 +938,7 @@ def main():
 
         plot_perc_survival_bias(
             lineage_bias_df,
+            present_clones_df,
             timepoint_col,
             by_clone=args.by_clone,
             save=args.save,
@@ -1211,7 +1212,7 @@ def main():
             change_status=args.change_type,
             mtd=mtd,
             timepoint=args.timepoint,
-            y_col='sum_abundance',
+            y_col=args.y_col,
             by_mouse=args.by_mouse,
             save=args.save,
             save_path=save_path,
@@ -1780,6 +1781,7 @@ def main():
                 abundance_cutoff=abundance_cutoff,
                 thresholds=thresholds,
                 by_group=args.by_group,
+                group=args.group,
                 timepoint_col=timepoint_col,
                 cell_type=cell_type,
                 save=args.save,
@@ -1925,7 +1927,6 @@ def main():
                 bias_change_df,
                 merge_type='inner',
                 min_time_difference=mtd,
-                timepoint=args.timepoint,
             )
             change_marked_df.to_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv', index=False)
         group = args.group
