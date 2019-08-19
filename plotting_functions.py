@@ -11,7 +11,7 @@ import json
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
-import statsmodels.api as sm
+import statsmodels.api as cm
 from statsmodels.formula.api import ols
 from statsmodels.sandbox.regression.predstd import wls_prediction_std
 from sklearn.svm import LinearSVC
@@ -3824,6 +3824,8 @@ def plot_hsc_abund_bias_at_last(
             'axes.labelsize': 20,
             'xtick.major.width': 5,
             'ytick.major.width': 5,
+            'ytick.minor.width': 5,
+            'ytick.minor.size': 5,
             'xtick.labelsize': 20,
             'ytick.labelsize': 20,
             'figure.titlesize': 'small',
@@ -3867,6 +3869,7 @@ def plot_hsc_abund_bias_at_last(
         plt.title(
             'HSC Abundance by Bias at Last Time Point'
             )
+        sns.despine()
 
         print(
             Fore.CYAN + Style.BRIGHT 
@@ -3899,7 +3902,7 @@ def plot_hsc_abund_bias_at_last(
         
         coords = np.arange(len(unique_cats)) + 1
         width = 0.8
-        fig, ax = plt.subplots(figsize=(12,8))
+        fig, ax = plt.subplots(figsize=(10, 8))
         ax.bar(
             x=coords,
             height=means,
@@ -3947,6 +3950,7 @@ def plot_hsc_abund_bias_at_last(
             context: str = a + ' vs ' + b
             stat_tests.print_p_value(context, p_value)
 
+        sns.despine()
         fname = save_path + os.sep \
             + 'abund_hsc_biased_at_last' \
             + '.' + save_format
@@ -4959,6 +4963,7 @@ def plot_clone_count_swarm(
                 data=c_df,
                 fliersize=0,
             )
+            sns.despine()
             c_times = c_df[timepoint_col].unique().tolist()
             c_times.sort()
             for mouse_id, m_df in c_df.groupby('mouse_id'):
@@ -7865,7 +7870,7 @@ def plot_abundance_change_changed_group_grid(
     )
     for ax in g.axes.flat:
         ax.tick_params(axis='y', labelleft=True)
-        #ax.axhline(y=0, color='gray', linestyle='dashed', linewidth=1, zorder=0)
+        ax.axhline(y=0, color='gray', linestyle='dashed', linewidth=1.5, zorder=0)
         ax.set_yscale('symlog', linthreshy=10e-2)
 
     medianprops = dict(
@@ -8043,7 +8048,7 @@ def plot_hsc_and_blood_clone_count(
     ).reset_index().assign(sample_type='Blood Last')
 
     counts = hsc_counts.append(blood_counts, ignore_index=True).append(last_blood_counts, ignore_index=True)
-    fig, ax = plt.subplots(figsize=(7,5))
+    fig, ax = plt.subplots(figsize=(6,5))
     ax = plt.gca()
     order=['HSC', 'Blood All']
     y_col = 'code'
@@ -8066,6 +8071,7 @@ def plot_hsc_and_blood_clone_count(
         overall_context='Blood vs HSC Clone Count',
         show_ns=show_ns,
     )
+    sns.despine()
 
     if by_group:
         desc_addon = '_by-group'
@@ -8350,6 +8356,8 @@ def plot_abundance_changed_bygroup(
         + '\nPerforming Ranksums Test Between Change Status '+ desc_add.title() + ' Abundance at each time point'
     )
     for (change_type, cell_type), c_df in change_marked_df.groupby([change_col, 'cell_type']):
+        if cell_type == 'hsc':
+            continue
         plt.figure(figsize=(7,5))
         plt.title(
             cell_type.title() + ' '
@@ -8396,6 +8404,7 @@ def plot_abundance_changed_bygroup(
             linewidth=0.5,
             zorder=0,
         )
+        sns.despine()
         plt.xlabel(timepoint_col.title())
         plt.ylabel(y_col_to_title(cell_type+'_percent_engraftment'))
         plt.legend().remove()
