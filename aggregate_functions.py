@@ -174,7 +174,6 @@ def find_n_to_last_clones(
         validate='m:1'
     )
     count_group = last_clones_with_data.groupby(['mouse_id', timepoint_col])
-    print('Remaining Codes Per Time points:', count_group.code.nunique())
 
     return last_clones_with_data
 

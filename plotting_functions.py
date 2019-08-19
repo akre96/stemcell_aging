@@ -1599,6 +1599,7 @@ def swamplot_abundance_cutoff(
         thresholds: Dict[str, float],
         timepoint_col: str,
         by_group: bool = False,
+        group: str = 'all',
         save: bool = False,
         save_path: str = '',
         save_format: str = 'png'
@@ -1658,69 +1659,60 @@ def swamplot_abundance_cutoff(
 
     unique_time = filtered_df[timepoint_col].unique()
     if by_group:
-        for group, g_df in filtered_df.groupby('group'):
-            print(
-                Fore.CYAN + Style.BRIGHT 
-                + '\nPerforming Wilcoxon test on ' + y_col_to_title(group)
-                + ' ' + cell_type.title() + ' Clone Abundance Across Time'
+        stat_tests.ranksums_test_group_time(
+            data=filtered_df,
+            test_col='percent_engraftment',
+            timepoint_col=timepoint_col,
+            overall_context=cell_type,
+            show_ns=False,
+        )
+        fig, ax = plt.subplots(figsize=(7, 7))
+        sns.despine()
+        plt.yscale('log')
+        if cell_type == 'gr':
+            ax.set_ylim([30e-6,5])
+        elif cell_type == 'b':
+            ax.set_ylim([30e-5,5])
+        ax = sns.swarmplot(
+            x=time_col,
+            y='percent_engraftment',
+            hue='group',
+            hue_order=['aging_phenotype', 'no_change'],
+            data=filtered_df,
+            palette=COLOR_PALETTES['group'],
+            dodge=True,
+            zorder=0,
+            linewidth=0.5,
             )
-            for (t1, t2) in combinations(unique_time, 2):
-                t1_df = g_df[g_df[timepoint_col] == t1]
-                t2_df = g_df[g_df[timepoint_col] == t2]
-                merged = t1_df.merge(
-                    t2_df[['mouse_id', 'code', 'percent_engraftment']],
-                    on=['mouse_id', 'code'],
-                    how='inner',
-                    validate='1:1',
-                    suffixes=['_1', '_2']
-                )
-                _, p_value = stats.wilcoxon(
-                    merged['percent_engraftment_1'],
-                    merged['percent_engraftment_2'],
-                )
-                context: str = timepoint_col.title() + ' ' + str(t1) \
-                + ' vs ' + str(t2) + ', ' + str(merged.code.nunique()) \
-                + ' ' + cell_type.title() + ' Clones'
-                stat_tests.print_p_value(context, p_value)
-                
-            plt.figure(figsize=(7, 7))
-            plt.yscale('symlog', linthreshy=10e-3)
-            pal = COLOR_PALETTES['mouse_id']
-            ax = sns.swarmplot(
-                x=time_col,
-                y='percent_engraftment',
-                hue='mouse_id',
-                data=g_df,
-                palette=pal,
-                zorder=0
-                )
-            sns.boxplot(
-                x=time_col,
-                y='percent_engraftment',
-                data=g_df,
-                boxprops={'facecolor': 'None'},
-                ax=ax,
-                fliersize=0,
-            )
+        sns.boxplot(
+            x=time_col,
+            y='percent_engraftment',
+            hue='group',
+            hue_order=['aging_phenotype', 'no_change'],
+            data=filtered_df,
+            boxprops={'facecolor': 'None'},
+            ax=ax,
+            fliersize=0,
+        )
 
-            
-            title = cell_type.capitalize() \
-                + ' > ' \
-                + str(round(thresholds[cell_type],2)) + '% WBC'
-            if abundance_cutoff != 0:
-                plt.suptitle(title)
-            plt.title('Group: ' + group.replace('_', ' ').title())
-            plt.xlabel(time_col.title())
-            plt.ylabel('Clone Abundance (% WBC)')
-            plt.legend().remove()
-            fname = save_path + os.sep + 'swamplot_abundance' \
-                    + '_' + cell_type + '_a' \
-                    + str(round(abundance_cutoff, 2)).replace('.','-') \
-                    + '_' + group \
-                    + '.' + save_format
-            save_plot(fname, save, save_format)
+        
+        title = cell_type.capitalize() \
+            + ' > ' \
+            + str(round(thresholds[cell_type],2)) + '% WBC'
+        if abundance_cutoff != 0:
+            plt.suptitle(title)
+        plt.xlabel(time_col.title())
+        plt.ylabel('Clone Abundance (% WBC)')
+        plt.legend().remove()
+        fname = save_path + os.sep + 'swamplot_abundance' \
+                + '_' + cell_type + '_a' \
+                + str(round(abundance_cutoff, 2)).replace('.','-') \
+                + '_by-group' \
+                + '.' + save_format
+        save_plot(fname, save, save_format)
     else:
-        group = 'all'
+        if group != 'all':        
+            filtered_df = filtered_df[filtered_df.group == group]
         print(
             Fore.CYAN + Style.BRIGHT 
             + '\nPerforming Wilcoxon test on ' + y_col_to_title(group)
@@ -1747,6 +1739,7 @@ def swamplot_abundance_cutoff(
 
         fig, ax = plt.subplots(figsize=(7, 7))
         plt.yscale('log')
+        sns.despine()
         pal = COLOR_PALETTES['mouse_id']
         if cell_type == 'gr':
             ax.set_ylim([30e-6,5])
@@ -1778,6 +1771,7 @@ def swamplot_abundance_cutoff(
         plt.ylabel('Clone Abundance (% WBC)')
         plt.legend().remove()
         fname = save_path + os.sep + 'swamplot_abundance' \
+                + '_' + group \
                 + '_' + cell_type + '_a' \
                 + str(round(abundance_cutoff, 2)).replace('.','-') \
                 + '.' + save_format
@@ -2965,7 +2959,7 @@ def plot_bias_dist_mean_abund_group_vs(
         timepoint: int,
         change_status: str,
         by_mouse: bool,
-        y_col: str = 'sum_abundance',
+        y_col: str,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -2997,23 +2991,32 @@ def plot_bias_dist_mean_abund_group_vs(
         timepoint=timepoint
     )
     bias_change_cutoff = cutoffs[0]
+    bias_change_df = bias_change_df.assign(
+        myeloid_change=lambda x: x.myeloid_percent_abundance_last - x.myeloid_percent_abundance_first,
+        lymphoid_change=lambda x: x.lymphoid_percent_abundance_last - x.lymphoid_percent_abundance_first,
+    )
     
     _, ax = plt.subplots(figsize=(7,6))
-    ax.set_yscale('symlog', linthreshy=50)
+    if not y_col:
+        ax.set_yscale('symlog', linthreshy=50)
 
     for gname, g_df in bias_change_df.groupby('group'):
         c = COLOR_PALETTES['group'][gname]
+        hist_kws = {
+            'histtype': 'step',
+            'linewidth': 3,
+            'alpha': .8,
+            'color': c
+        }
+        if y_col:
+            print('WEIGHTING BY Change IN', y_col)
+            hist_kws['weights'] = g_df[y_col.split('_')[0] + '_change']
         sns.distplot(
             g_df.bias_change,
             rug=False,
             kde=False,
             hist=True,
-            hist_kws={
-                'histtype': 'step',
-                'linewidth': 3,
-                'alpha': .8,
-                'color': c
-            },
+            hist_kws=hist_kws,
             color=c,
             ax=ax,
             label=NEW_GROUP_NAME_MAP[gname],
@@ -3021,7 +3024,7 @@ def plot_bias_dist_mean_abund_group_vs(
         )
 
         plt.xlabel('Change In Lineage Bias')
-        plt.ylabel('Number of Clones')
+        plt.ylabel(y_col.title())
         plt.xlim((-2,2))
         ## Shrink current axis's height by 10% on the bottom
         #ax = plt.gca()
@@ -3035,7 +3038,8 @@ def plot_bias_dist_mean_abund_group_vs(
 
     min_max_change = [bias_change_cutoff, -1 * bias_change_cutoff]
     ymin, ymax = plt.ylim()
-    plt.vlines(min_max_change, 0, ymax, linestyles='dashed')
+    plt.axvline(min_max_change[0], linestyle='dashed', c='k')
+    plt.axvline(min_max_change[1], linestyle='dashed', c='k')
     fname = save_path + os.sep +'bias_change_dist_vs_group_' \
         + y_col \
         + '_change-type-'+str(change_status) \
@@ -4127,6 +4131,7 @@ def plot_stable_abund_time_clones(
         save_plot(fname, save, save_format)
 def plot_perc_survival_bias(
         lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
         by_clone: bool,
         save: bool = False,
@@ -4159,31 +4164,35 @@ def plot_perc_survival_bias(
         y_label = 'Percent of Exhausted Clones Within Category'
         fname_prefix += 'perc_survive_bias_'
 
-    survival_df = create_lineage_bias_survival_df(
+
+    clonal_abundance_df = remove_month_17_and_6(
+        clonal_abundance_df,
+        timepoint_col
+    )
+    lineage_bias_df = remove_month_17_and_6(
         lineage_bias_df,
+        timepoint_col
+    )
+    with_bias_cats_df = add_bias_category(lineage_bias_df)
+    survival_df = label_exhausted_clones(
+        with_bias_cats_df,
+        clonal_abundance_df,
         timepoint_col
     )
 
 
-    cats = [
-        'LC',
-        'LB',
-        'B',
-        'MB',
-        'MC'
-    ]
-    cats = [MAP_LINEAGE_BIAS_CATEGORY[x] for x in cats]
-    colors = get_myeloid_to_lymphoid_colors(cats)
-    palette = dict(zip(cats, colors))
     survival_perc = calculate_survival_perc(
         survival_df,
-        lineage_bias_df,
         timepoint_col,
     )
-    survival_perc['bias_category'] = survival_perc.bias_category.apply(
-        lambda x: MAP_LINEAGE_BIAS_CATEGORY[x]
-    )
 
+    cats = [
+        'LB',
+        'B',
+        'MB'
+    ]
+
+    palette = COLOR_PALETTES['bias_category']
     for group, g_df in survival_perc.groupby('group'):
         plt.figure(figsize=(7,5))
         sns.barplot(
@@ -4214,8 +4223,7 @@ def plot_perc_survival_bias(
         palette=palette,
         data=survival_perc,
         capsize=.05,
-        saturation=1,
-        errwidth=.9,
+        errwidth=2,
     )
     plt.legend(title='')
     plt.title('Group: ' + y_col_to_title(group))
@@ -8037,7 +8045,7 @@ def plot_hsc_and_blood_clone_count(
     counts = hsc_counts.append(blood_counts, ignore_index=True).append(last_blood_counts, ignore_index=True)
     fig, ax = plt.subplots(figsize=(7,5))
     ax = plt.gca()
-    order=['HSC', 'Blood Last', 'Blood All']
+    order=['HSC', 'Blood All']
     y_col = 'code'
 
     show_ns = True
