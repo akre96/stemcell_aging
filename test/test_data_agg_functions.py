@@ -5,7 +5,9 @@ from ..aggregate_functions import filter_threshold, count_clones, find_enriched_
 
 TEST_DATA = pd.read_csv('test/test_data/test_all_long.csv')
 REAL_DATA = pd.read_csv('test/test_data/Ania_M_all_percent-engraftment_100818_long.csv')
-TIMEPOINT_COL='day'
+TIMEPOINT_COL = 'day'
+
+
 def test_filter_threshold():
     threshold = .021
     analyzed_cell_types = ['gr']
@@ -17,6 +19,7 @@ def test_filter_threshold():
     filt_df_with_b = filter_threshold(TEST_DATA, threshold, analyzed_cell_types_with_b)
     assert len(filt_df_with_b) == 18
     assert len(filt_df_with_b[filt_df_with_b.cell_type == 'b']) == 9
+
 
 def test_count_clones():
     threshold = .01

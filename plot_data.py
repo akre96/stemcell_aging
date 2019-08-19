@@ -80,7 +80,7 @@ def main():
         
 
     """
-    root_data_dir = '/home/sakre/Data/aging_and_10x'
+    root_data_dir = '/Users/akre96/Data/HSC_aging_project/aging_and_10x'
     parser = argparse.ArgumentParser(description="Plot input data")
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default=root_data_dir+'/Ania_M_all OT2.0 rerun_percent-engraftment_NO filter_080819_long.csv')
     parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default=root_data_dir+'/rest_of_clones')
@@ -169,7 +169,7 @@ def main():
 
     lineage_bias_df = raw_lineage_bias_df
     ## EXLCUDE MICE
-    excluded_mice = pd.read_csv('~/Data/exclude_mice.csv')
+    excluded_mice = pd.read_csv('~/Data/HSC_aging_project/exclude_mice.csv')
     for mouse_id in excluded_mice.mouse_id.unique():
         if not present_clones_df[present_clones_df.mouse_id == mouse_id].empty:
             print(Fore.YELLOW + ' Excluding mouse: ' + mouse_id)
