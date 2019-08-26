@@ -2132,7 +2132,8 @@ def label_exhausted_clones(
 
 def remove_gen_8_5(
     input_df: pd.DataFrame,
-    timepoint_col,
+    timepoint_col: str,
+    keep_hsc: bool,
 ) -> pd.DataFrame:
     if timepoint_col != 'gen':
         return input_df
@@ -2142,7 +2143,14 @@ def remove_gen_8_5(
     if gens_in_data:
         print (Fore.YELLOW + '\t REMOVING GENS: ' + ', '.join([str(x) for x in gens_in_data]))
         filt_df = input_df.copy()
-        filt_df = filt_df[~filt_df.gen.isin(gens_in_data)]
+        if keep_hsc:
+            print(Fore.YELLOW + '\t Keepig HSC data, setting generation of HSC data to 8')
+            filt_df.loc[filt_df.cell_type == 'hsc', timepoint_col] = 8
+            filt_df = filt_df[
+                (~filt_df.gen.isin(gens_in_data))
+                ]
+        else:
+            filt_df = filt_df[~filt_df.gen.isin(gens_in_data)]
         filt_df['gen'] = filt_df['gen'].astype(int)
         return filt_df
     else:

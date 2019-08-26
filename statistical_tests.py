@@ -309,9 +309,9 @@ def ranksums_test_group_time(
         overall_context: str,
         show_ns: bool,
         group_col: str = 'group'
-    ):
+):
     times = data[timepoint_col].unique()
-    groups = data[group_col].dropna().unique()
+    groups = data[group_col].unique()
     if len(groups) != 2:
         print(data.groupby(group_col).code.nunique())
         print(groups)

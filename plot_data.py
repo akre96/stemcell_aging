@@ -265,6 +265,16 @@ def main():
         )
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
 
+    if graph_type in ['balanced_at_second_to_last']:
+        save_path = args.output_dir + os.sep + 'balanced_s2l'
+        plot_balanced_at_second_to_last(
+                present_clones_df,
+                lineage_bias_df,
+                timepoint_col,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
     if graph_type in ['abundance_bias_change_type_heatmap']:
         save_path = args.output_dir + os.sep + 'abundance_by_change_heatmap' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
