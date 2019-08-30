@@ -1628,7 +1628,7 @@ def swamplot_abundance_cutoff(
         'paper',
         rc={
             'lines.linewidth': 4,
-            'axes.linewidth': 3,
+            'axes.linewidth': 4,
             'axes.labelsize': 24,
             'xtick.major.width': 5,
             'ytick.major.width': 5,
@@ -1778,6 +1778,15 @@ def swamplot_abundance_cutoff(
             boxprops={'facecolor': 'None'},
             ax=ax,
             fliersize=0,
+            showbox=False,
+            whiskerprops={
+                "alpha": 0
+            },
+            showcaps=False,
+            showmeans=True,
+            meanline=True,
+            meanprops=meanprops,
+            medianprops=medianprops,
         )
 
         title = cell_type.capitalize() \
@@ -3018,7 +3027,7 @@ def plot_bias_dist_mean_abund_group_vs(
     if not (y_col in ['lymphoid_percent_abundance', 'myeloid_percent_abundance']):
         y_col = 'count'
         ax.set_yscale('symlog', linthreshy=50)
-        ax.set_yticks([0, 25, 50, 100])
+        ax.set_yticks([0, 10, 25, 50, 100])
 
     for gname, g_df in bias_change_df.groupby('group'):
         c = COLOR_PALETTES['group'][gname]
@@ -5077,7 +5086,7 @@ def plot_swarm_violin_first_last_bias(
         )
     if by_group:
         for group, g_df in filt_df.groupby('group'):
-            plt.figure(figsize=(7,5))
+            plt.figure(figsize=(6,6))
             ax = sns.violinplot(
                 x='time_desc',
                 y='lineage_bias',
@@ -5086,6 +5095,8 @@ def plot_swarm_violin_first_last_bias(
                 data=g_df,
                 dodge=False,
                 cut=0,
+                linewidth=5,
+                edgecolor='black',
             )
             sns.swarmplot(
                 x='time_desc',
@@ -6316,14 +6327,18 @@ def exhaust_persist_abund(
     fig, ax = plt.subplots(figsize=(7,5))
 
     if by_group:
-        hue_col = 'group'
+        hue_col = 'survived'
         filename_addon += '_by-group'
-        hue_order = ['aging_phenotype', 'no_change']
-        palette = COLOR_PALETTES['group']
+        order = ['aging_phenotype', 'no_change']
+        hue_order = ['Exhausted', 'Survived']
+        x_col='group'
+        palette = COLOR_PALETTES[hue_col]
         dodge = True
     else:
         hue_col = None
         hue_order = None
+        x_col='survived'
+        order = ['Exhausted', 'Survived']
         palette = COLOR_PALETTES['survived']
         dodge = False
 
@@ -6339,9 +6354,9 @@ def exhaust_persist_abund(
         color='black'
     )
     sns.boxplot(
-        x='survived',
+        x=x_col,
         y=y_col,
-        order=['Exhausted', 'Survived'],
+        order=order,
         data=survival_cell_df,
         hue=hue_col,
         hue_order=hue_order,
@@ -6363,9 +6378,9 @@ def exhaust_persist_abund(
     if by_count or by_sum:
         for mouse_id, m_df in survival_cell_df.groupby('mouse_id'):
             sns.stripplot(
-                x='survived',
+                x=x_col,
                 y=y_col,
-                order=['Exhausted', 'Survived'],
+                order=order,
                 data=m_df,
                 hue=hue_col,
                 hue_order=hue_order,
@@ -6380,9 +6395,9 @@ def exhaust_persist_abund(
             )
     else:
         sns.swarmplot(
-            x='survived',
+            x=x_col,
             y=y_col,
-            order=['Exhausted', 'Survived'],
+            order=order,
             data=survival_cell_df,
             hue=hue_col,
             hue_order=hue_order,
@@ -6446,6 +6461,8 @@ def exhaust_persist_hsc_abund(
             'figure.titlesize': 'small',
         }
     )
+
+    save_labels = True
     clonal_abundance_df = remove_month_17_and_6(
         clonal_abundance_df,
         timepoint_col,
@@ -6470,7 +6487,14 @@ def exhaust_persist_hsc_abund(
         only_last_gen=last_only
     )
 
-
+    if save_labels:
+        labels_df = survival_with_hsc_df[['mouse_id', 'group', 'code', 'survived']].drop_duplicates()
+        labels_df.to_csv(
+            os.path.join(
+                save_path,
+                'exhaustion_labels.csv'
+            ),
+            index=False)
     
     filename_addon = ''
     y_col = 'hsc_percent_engraftment'
