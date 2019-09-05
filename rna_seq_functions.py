@@ -148,7 +148,7 @@ def generate_rna_seq_label_comparison_df(
         if filter_genes_path is None:
             raise ValueError('filter_genes_path not set, specify path or set filter_genes to False')
         print('Filtering Genes Using List From:', filter_genes_path)
-        filtered_genes = imp.filtered_numpy_gene_list(filter_genes_path)
+        filtered_genes = filtered_numpy_gene_list(filter_genes_path)
 
     start = time.process_time()
 
@@ -177,11 +177,13 @@ def generate_rna_seq_label_comparison_df(
         print('\t...Importing Data')
         rna_df = rna_seq_normalized_matrix_to_long(file_name)
         if filter_genes:
+            print('\t\t Before filtering genes:', len(rna_df))
             rna_df = rna_df.merge(
                 filtered_genes,
                 how='inner',
                 validate='m:1'
             )
+            print('\t\t After filtering genes: ', len(rna_df))
           
 
         # Select only those clones with labels (blood or bone biased)
@@ -392,3 +394,22 @@ def calculate_fpr_genes_vs_comparisons(
     exp_with_fpr_df.loc[exp_with_fpr_df[p_value_col + '_fpr'].isna(), p_value_col + '_fpr' ] = max_fpr
     exp_with_fpr_df['nlt_' + p_value_col] = -1 * np.log10(exp_with_fpr_df[p_value_col])
     return exp_with_fpr_df
+
+def filtered_numpy_gene_list(gene_list_path: str) -> pd.DataFrame:
+    """ Import numpy saved gene list (expects a .npy file)
+
+    Arguments:
+        gene_list_path {str}
+
+    Returns:
+        pd.DataFrame -- dataframe with column "gene_id"
+    """
+    if gene_list_path.split('.')[-1] != 'npy':
+        raise ValueError(
+            'ERROR: Expected .npy file extension when reading filtered gene list, was given: ' 
+            + gene_list_path.split('.')[-1]
+        )
+
+    filtered_gene_list = np.load(gene_list_path, allow_pickle=True)
+    filtered_gene_list = list(filtered_gene_list.tolist())
+    return pd.DataFrame(pd.Series(filtered_gene_list, name='gene_id').str.decode("utf-8"))
