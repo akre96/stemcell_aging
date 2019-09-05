@@ -1675,6 +1675,17 @@ def swamplot_abundance_cutoff(
             overall_context=cell_type,
             show_ns=False,
         )
+        stat_tests.signed_ranksum_test_group_time(
+            data=filtered_df,
+            group_col='group',
+            match_cols=['code', 'mouse_id'],
+            merge_type='inner',
+            fill_na=None,
+            test_col='percent_engraftment',
+            timepoint_col=timepoint_col,
+            overall_context=cell_type,
+            show_ns=False
+        )
         fig, ax = plt.subplots(figsize=(7, 7))
         sns.despine()
         plt.yscale('log')
@@ -1728,32 +1739,6 @@ def swamplot_abundance_cutoff(
                 + '.' + save_format
         save_plot(fname, save, save_format)
     else:
-        if group != 'all':        
-            filtered_df = filtered_df[filtered_df.group == group]
-        print(
-            Fore.CYAN + Style.BRIGHT 
-            + '\nPerforming Wilcoxon test on ' + y_col_to_title(group)
-            + ' ' + cell_type.title() + ' Clone Abundance Across Time'
-        )
-        for (t1, t2) in combinations(unique_time, 2):
-            t1_df = filtered_df[filtered_df[timepoint_col] == t1]
-            t2_df = filtered_df[filtered_df[timepoint_col] == t2]
-            merged = t1_df.merge(
-                t2_df[['mouse_id', 'code', 'percent_engraftment']],
-                on=['mouse_id', 'code'],
-                how='inner',
-                validate='1:1',
-                suffixes=['_1', '_2']
-            )
-            _, p_value = stats.wilcoxon(
-                merged['percent_engraftment_1'],
-                merged['percent_engraftment_2'],
-            )
-            context: str = timepoint_col.title() + ' ' + str(t1) \
-            + ' vs ' + str(t2) + ', ' + str(merged.code.nunique()) \
-            + ' ' + cell_type.title() + ' Clones'
-            stat_tests.print_p_value(context, p_value)
-
         fig, ax = plt.subplots(figsize=(7, 7))
         plt.yscale('log')
         sns.despine()
@@ -3971,6 +3956,7 @@ def plot_hsc_abund_bias_at_last(
         print(
             Fore.CYAN + Style.BRIGHT 
             + '\nPerforming Ranksums Test of HSC Abundance Between Bias Types\n'
+            + 'N-Mice: ' + str(myeloid_hsc_abundance_df.mouse_id.nunique())
         )
         for (a, b) in combinations(unique_cats,2):
             a_vals = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df['bias_category'] == a]
@@ -3979,8 +3965,10 @@ def plot_hsc_abund_bias_at_last(
                 a_vals.percent_engraftment,
                 b_vals.percent_engraftment,
             )
-            context: str = a + ' vs ' + b
-            stat_tests.print_p_value(context, p_value)
+            na = len(a_vals)
+            nb = len(b_vals)
+            context: str = a + ': ' + str(na) + ' vs ' + b + ': ' + str(nb)
+            stat_tests.print_p_value(context, p_value, show_ns=True)
 
         sns.despine()
         fname = save_path + os.sep \
@@ -5436,17 +5424,27 @@ def plot_clone_count_bar_first_last(
         )
 
     for cell_type, c_df in clone_counts.groupby(['cell_type']):
+        filled_counts = fill_mouse_id_zeroes(
+            c_df,
+            ['group'],
+            fill_col='code',
+            fill_cat_col='mouse_time_desc',
+            fill_cats=['First', 'Last'],
+            fill_val=0
+        )
         print(
             Fore.CYAN + Style.BRIGHT 
             + '\nPerforming Independent T-Test on ' 
             + ' ' + cell_type.title() + ' Clone Clone Counts Between Groups'
         )
-        for t1, t_df in c_df.groupby('mouse_time_desc'):
+        for t1, t_df in filled_counts.groupby('mouse_time_desc'):
             _, p_value = stats.ttest_ind(
                 t_df[t_df.group == 'aging_phenotype']['code'],
                 t_df[t_df.group == 'no_change']['code'],
             )
-            context: str = timepoint_col.title() + ' ' + str(t1) 
+            context: str = timepoint_col.title() + ' ' + str(t1)\
+                + 'E-MOLD Mice: ' + str(t_df[t_df.group == 'aging_phenotype'].mouse_id.nunique())\
+                + ', D-MOLD Mice: ' + str(t_df[t_df.group == 'no_change'].mouse_id.nunique())
             stat_tests.print_p_value(context, p_value, show_ns=True)
 
         coords = np.arange(2)
@@ -5461,12 +5459,13 @@ def plot_clone_count_bar_first_last(
             means[group]=[]
             colors[group]=[]
             sems[group] = [[], []]
-            g_df = c_df[c_df.group == group]
+            g_df = filled_counts[filled_counts.group == group]
             for time in times:
                 t_df = g_df[g_df['mouse_time_desc'] == time]
                 sems[group][0].append(0)
                 sems[group][1].append(t_df.code.sem())
                 colors[group].append(COLOR_PALETTES['group'][group])
+                means[group].append(t_df.code.mean())
         
             ax.bar(
                 x=coords + (i*width/2),
@@ -5489,6 +5488,7 @@ def plot_clone_count_bar_first_last(
             caps[0].set_marker('_')
             caps[0].set_markersize(0)
         sns.despine()
+        ax.set_xticks(coords)
 
         if abundance_cutoff == 50:
             plt.title(

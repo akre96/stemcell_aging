@@ -126,9 +126,11 @@ def ttest_1samp(
             popmean=null_mean,
             nan_policy=handle_nan,
         )
+        g_len = len(g_df)
         mean_val = g_df[value_var].mean()
         context: str = ' '.join(group_var).title() \
-            + ', Mean: ' + str(mean_val)
+            + ', Mean: ' + str(mean_val) + ', Count: ' + str(g_len) \
+            + ', Mice: ' + str(g_df.mouse_id.nunique())
         print_p_value(context, p_value, show_ns=show_ns)
 
 def ind_ttest_between_groups_at_each_time(
@@ -173,11 +175,21 @@ def ind_ttest_group_time(
     if len(groups) != 2:
         raise ValueError('Too many groups: ' + ', '.join(groups))
     for t1, t_df in data.groupby(timepoint_col):
+        g1_df = t_df[t_df[group_col] == groups[0]]
+        g2_df = t_df[t_df[group_col] == groups[1]]
+        
+        n1 = g1_df.mouse_id.nunique()
+        n2 = g2_df.mouse_id.nunique()
+
         _, p_value = stats.ttest_ind(
-            t_df[t_df[group_col] == groups[0]][test_col],
-            t_df[t_df[group_col] == groups[1]][test_col],
+            g1_df[test_col],
+            g2_df[test_col], 
         )
-        context: str = timepoint_col.title() + ' ' + str(t1) 
+        context = replace_underscore_dot(t1) + ' ' \
+            + replace_underscore_dot(group_col) + ' '\
+            + str(groups[0]) + ' Mice: ' + str(n1)\
+            + ' vs '\
+            + str(groups[1]) + ' Mice: ' + str(n2)
         print_p_value(context, p_value, show_ns=show_ns)
 
     print(
@@ -188,16 +200,21 @@ def ind_ttest_group_time(
     )
     for group, g_df in data.groupby(group_col):
         for (t1, t2) in combinations(times, 2):
-            t1_df = g_df[g_df[timepoint_col] == t1][test_col]
-            t2_df = g_df[g_df[timepoint_col] == t2][test_col]
+            t1_df = g_df[g_df[timepoint_col] == t1]
+            t2_df = g_df[g_df[timepoint_col] == t2]
+            
+            n1 = t1_df.mouse_id.nunique()
+            n2 = t2_df.mouse_id.nunique()
 
             stat, p_value = stats.ttest_ind(
-                t1_df,
-                t2_df, 
+                t1_df[test_col],
+                t2_df[test_col], 
             )
             context = replace_underscore_dot(group) + ' ' \
-                + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
-                + ' vs ' + str(t2)
+                + replace_underscore_dot(timepoint_col) + ' '\
+                + str(t1) + ' Mice: ' + str(n1)\
+                + ' vs '\
+                + str(t2) + ' Mice: ' + str(n2)
             print_p_value(context, p_value, show_ns=show_ns)
 
     group = 'all'
@@ -302,6 +319,95 @@ def rel_ttest_group_time(
             + ', n ' + match_col_str + ': ' + str(count)
         print_p_value(context, p_value, show_ns=show_ns)
 
+
+def signed_ranksum_test_group_time(
+        data: pd.DataFrame,
+        match_cols: List[str],
+        merge_type: str,
+        fill_na: Any,
+        test_col: str,
+        timepoint_col: str,
+        overall_context: str,
+        show_ns: bool,
+        group_col: str = 'group',
+    ):
+    times = data[timepoint_col].unique()
+    match_col_str = '-'.join(match_cols)
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Wilcoxon Signed Rank on ' 
+        + overall_context
+        + ' per ' + group_col + ' between ' + replace_underscore_dot(timepoint_col) + 's'
+    )
+    for group, g_df in data.groupby(group_col):
+        for (t1, t2) in combinations(times, 2):
+            t1_df = g_df[g_df[timepoint_col] == t1]
+            t2_df = g_df[g_df[timepoint_col] == t2]
+            merged = t1_df.merge(
+                t2_df,
+                on=match_cols,
+                how=merge_type,
+                validate='1:1',
+                suffixes=['_1', '_2']
+            )
+            if fill_na is not None:
+                merged = merged.fillna(
+                    value=fill_na,
+                )
+
+            count = len(merged)
+            if count <= 1:
+                p_value = 1
+            else:
+                stat, p_value = stats.wilcoxon(
+                    merged[test_col + '_1'],
+                    merged[test_col + '_2'],
+                )
+            
+            context: str = replace_underscore_dot(group) + ' ' \
+                + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
+                + ' vs ' + str(t2) \
+                + ', n ' + match_col_str + ': ' + str(count)
+            print_p_value(context, p_value, show_ns=show_ns)
+
+    group = 'all'
+    for (t1, t2) in combinations(times, 2):
+        t1_df = data[data[timepoint_col] == t1]
+        t2_df = data[data[timepoint_col] == t2]
+
+        merged = t1_df.merge(
+            t2_df,
+            on=match_cols,
+            how='inner',
+            validate='1:1',
+            suffixes=['_1', '_2']
+        )
+        merged = t1_df.merge(
+            t2_df,
+            on=match_cols,
+            how=merge_type,
+            validate='1:1',
+            suffixes=['_1', '_2']
+        )
+        if fill_na is not None:
+            merged = merged.fillna(
+                value=fill_na,
+            )
+        count = len(merged)
+        if count <= 1:
+            p_value = 1
+        else:
+            stat, p_value = stats.wilcoxon(
+                merged[test_col + '_1'],
+                merged[test_col + '_2'],
+            )
+        
+        context = replace_underscore_dot(group) + ' ' \
+            + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
+            + ' vs ' + str(t2) \
+            + ', n ' + match_col_str + ': ' + str(count)
+        print_p_value(context, p_value, show_ns=show_ns)
+
 def ranksums_test_group_time(
         data: pd.DataFrame,
         test_col: str,
@@ -331,9 +437,13 @@ def ranksums_test_group_time(
             t_df[t_df[group_col] == groups[0]][test_col],
             t_df[t_df[group_col] == groups[1]][test_col],
         )
+        n0 = len(t_df[t_df[group_col] == groups[0]][test_col])
+        n1 = len(t_df[t_df[group_col] == groups[1]][test_col])
         mean_diff = t_df[t_df[group_col] == groups[0]][test_col].mean() \
             - t_df[t_df[group_col] == groups[1]][test_col].mean()
-        context: str = timepoint_col.title() + ' ' + str(t1) 
+        context: str = timepoint_col.title() + ' ' + str(t1) \
+            + ', ' + groups[0] + ': ' + str(n0) \
+            + ', ' + groups[1] + ': ' + str(n1)
         print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
 
     print(
@@ -353,8 +463,9 @@ def ranksums_test_group_time(
             )
             mean_diff = t1_df.mean() - t2_df.mean()
             context = replace_underscore_dot(group) + ' ' \
-                + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
-                + ' vs ' + str(t2)
+                + replace_underscore_dot(timepoint_col) + ' ' \
+                + str(t1) +': ' + str(len(t1_df)) \
+                + ' vs ' + str(t2) + ': ' + str(len(t2_df))
             print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
 
     group = 'all'
@@ -368,6 +479,7 @@ def ranksums_test_group_time(
         )
         mean_diff = t1_df.mean() - t2_df.mean()
         context = replace_underscore_dot(group) + ' ' \
-            + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
-            + ' vs ' + str(t2)
+            + replace_underscore_dot(timepoint_col) + ' '\
+            + str(t1) +': ' + str(len(t1_df)) \
+            + ' vs ' + str(t2) + ': ' + str(len(t2_df))
         print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
