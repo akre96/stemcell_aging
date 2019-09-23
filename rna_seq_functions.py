@@ -21,12 +21,12 @@ def rna_seq_normalized_matrix_to_long(rnaseq_file_path: str) -> pd.DataFrame:
           expression
     """
     rna_df = pd.read_csv(os.path.join(rnaseq_file_path))\
-        .drop(columns=['CBC', 'n'])\
+        .drop(columns=['n'])\
         .rename(columns={'TBC': 'code'})
       
     gene_cols = [c for c in rna_df.columns if c[0] == 'E']
-    rna_df = rna_df[['code'] + gene_cols]
-    return rna_df.melt(id_vars=['code'], var_name='gene_id', value_name='expression')
+    rna_df = rna_df[['CBC', 'code'] + gene_cols]
+    return rna_df.melt(id_vars=['code', 'CBC'], var_name='gene_id', value_name='expression')
 
 def compare_gene_expression_vs_labels(
         data: pd.DataFrame,
@@ -124,8 +124,8 @@ def generate_rna_seq_label_comparison_df(
     Arguments:
         tenx_data_dir {str} -- Directory containing tenx_data with file_names: [replicate]_[experiment_type]_subset-matrix.csv
         replicates {List[str]} -- List of runs to look at
-        labels_df {pd.DataFrame} -- Dataframe with columns ['code', label_int', 'label_name'],
-            if patient sample required must have columns ['code', label_int', 'label_name', 'patient_sample']
+        labels_df {pd.DataFrame} -- Dataframe with columns ['code', 'label_int', 'label_name'],
+            if patient sample required must have columns ['code', 'label_int', 'label_name', 'patient_sample']
         label_comparisons {List[Tuple[str, str]]} -- List of labels to compare. Each tuple must be of length two, which each member
             corresponding to a label
     
