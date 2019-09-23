@@ -1666,25 +1666,26 @@ def swamplot_abundance_cutoff(
         linewidth=3,
         color='black'
     )
-    unique_time = filtered_df[timepoint_col].unique()
     if by_group:
+        for group, g_df in filtered_df.groupby('group'):
+            stat_tests.friedman_wilcoxonSignedRank(
+                data=g_df,
+                timepoint_col=timepoint_col,
+                id_col='code',
+                value_col='percent_engraftment',
+                overall_context=' '.join([group, cell_type]),
+                show_ns=True,
+                match_cols=['mouse_id', 'code'],
+                merge_type='inner',
+                fill_na=0,
+                aggfunc=np.mean,
+            )
         stat_tests.ranksums_test_group_time(
             data=filtered_df,
             test_col='percent_engraftment',
             timepoint_col=timepoint_col,
             overall_context=cell_type,
             show_ns=False,
-        )
-        stat_tests.signed_ranksum_test_group_time(
-            data=filtered_df,
-            group_col='group',
-            match_cols=['code', 'mouse_id'],
-            merge_type='inner',
-            fill_na=None,
-            test_col='percent_engraftment',
-            timepoint_col=timepoint_col,
-            overall_context=cell_type,
-            show_ns=False
         )
         fig, ax = plt.subplots(figsize=(7, 7))
         sns.despine()
@@ -1747,6 +1748,18 @@ def swamplot_abundance_cutoff(
             ax.set_ylim([30e-6,5])
         elif cell_type == 'b':
             ax.set_ylim([30e-5,5])
+        stat_tests.friedman_wilcoxonSignedRank(
+            data=filtered_df,
+            timepoint_col=timepoint_col,
+            id_col='code',
+            value_col='percent_engraftment',
+            overall_context=cell_type,
+            show_ns=True,
+            match_cols=['mouse_id', 'code'],
+            merge_type='inner',
+            fill_na=0,
+            aggfunc=np.mean,
+        )
         sns.swarmplot(
             x=time_col,
             y='percent_engraftment',
@@ -3768,6 +3781,14 @@ def plot_not_survived_count_box(
     count_df = pd.DataFrame(not_survived_df.groupby(
         ['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
         ).reset_index().sort_values(by='time_change')
+    count_df = fill_mouse_id_zeroes(
+        count_df,
+        info_cols=['group'],
+        fill_col='code',
+        fill_cat_col='last_timepoint',
+        fill_cats=count_df.last_timepoint.unique(),
+        fill_val=0,
+    )
     plt.figure(figsize=(8,6))
     file_name_addon =''
     if by_group:
@@ -3789,19 +3810,13 @@ def plot_not_survived_count_box(
             data=count_df,
             palette=COLOR_PALETTES[timepoint_col]
         )
-    stat_tests.ind_ttest_group_time(
-        data=count_df,
-        test_col='code',
-        timepoint_col='last_timepoint',
-        overall_context='Exhausted Clone Count',
-        show_ns=False
-    )
-    stat_tests.rel_ttest_group_time(
+    stat_tests.one_way_ANOVArm(
         data=count_df,
         match_cols=['mouse_id'],
+        id_col='mouse_id',
         merge_type='outer',
         fill_na=0,
-        test_col='code',
+        value_col='code',
         timepoint_col='last_timepoint',
         overall_context='Exhausted Clone Count',
         show_ns=False,
@@ -3958,17 +3973,13 @@ def plot_hsc_abund_bias_at_last(
             + '\nPerforming Ranksums Test of HSC Abundance Between Bias Types\n'
             + 'N-Mice: ' + str(myeloid_hsc_abundance_df.mouse_id.nunique())
         )
-        for (a, b) in combinations(unique_cats,2):
-            a_vals = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df['bias_category'] == a]
-            b_vals = myeloid_hsc_abundance_df[myeloid_hsc_abundance_df['bias_category'] == b]
-            stat, p_value = stats.ranksums(
-                a_vals.percent_engraftment,
-                b_vals.percent_engraftment,
-            )
-            na = len(a_vals)
-            nb = len(b_vals)
-            context: str = a + ': ' + str(na) + ' vs ' + b + ': ' + str(nb)
-            stat_tests.print_p_value(context, p_value, show_ns=True)
+        stat_tests.ranksums_test_group(
+            myeloid_hsc_abundance_df,
+            'percent_engraftment',
+            'HSC Abundance',
+            show_ns=True,
+            group_col='bias_category'
+        )
 
         sns.despine()
         fname = save_path + os.sep \
@@ -4906,19 +4917,18 @@ def plot_clone_count_swarm(
     for cell_type, c_df in clone_counts.groupby(['cell_type']):
         print(
             Fore.CYAN + Style.BRIGHT 
-            + '\nPerforming T-Test vs Groups for ' + cell_type.title()
+            + '\nPerforming One Way Repeated Measurement ANOVA for ' + cell_type.title()
         )
-        times = c_df[timepoint_col].unique()
-
-        stat_tests.rel_ttest_group_time(
+        stat_tests.one_way_ANOVArm(
             data=c_df,
+            timepoint_col=timepoint_col,
+            id_col='mouse_id',
+            value_col='code',
+            overall_context=cell_type,
+            show_ns=True,
             match_cols=['mouse_id'],
             merge_type='inner',
-            fill_na=False,
-            test_col='code',
-            timepoint_col=timepoint_col,
-            overall_context=cell_type,
-            show_ns=False,
+            fill_na=0,
         )
 
         plt.figure(figsize=(6,5))
@@ -5453,7 +5463,7 @@ def plot_clone_count_bar_first_last(
         means={}
         times = ['First', 'Last']
         colors={}
-        fig, ax = plt.subplots(figsize=(6,5))
+        _, ax = plt.subplots(figsize=(6,5))
         i = -1
         for group in ['aging_phenotype', 'no_change']:
             means[group]=[]
@@ -5537,6 +5547,7 @@ def plot_clone_count_swarm_vs_cell_type(
     if timepoint_col == 'gen':
         clonal_abundance_df = clonal_abundance_df[clonal_abundance_df[timepoint_col] != 8.5]
         clonal_abundance_df[timepoint_col] = clonal_abundance_df[timepoint_col].astype(int)
+
     threshold_df = filter_cell_type_threshold(
         clonal_abundance_df,
         thresholds, 
@@ -5544,7 +5555,6 @@ def plot_clone_count_swarm_vs_cell_type(
     )
         
     clone_counts = count_clones(threshold_df, timepoint_col)
-
     plt.figure(figsize=(10,6))
     medianprops = dict(
         linewidth=0,
@@ -5574,13 +5584,30 @@ def plot_clone_count_swarm_vs_cell_type(
     )
     times = clone_counts[timepoint_col].unique().tolist()
     times.sort()
+    stat_tests.ind_ttest_between_groups_at_each_time(
+        data=clone_counts[clone_counts.cell_type.isin(analyzed_cell_types)],
+        test_col='code',
+        timepoint_col=timepoint_col,
+        overall_context='count',
+        show_ns=True,
+        group_col='cell_type'
+    )
     for cell_type, c_df in clone_counts.groupby('cell_type'):
-        stat_tests.rel_ttest_group_time(
-            data=c_df,
+        filled_c = fill_mouse_id_zeroes(
+            c_df,
+            info_cols=['cell_type'],
+            fill_col='code',
+            fill_cat_col=timepoint_col,
+            fill_cats=clone_counts[timepoint_col].unique(),
+            fill_val=0
+        )
+        stat_tests.one_way_ANOVArm(
+            data=filled_c,
             match_cols=['mouse_id', 'cell_type'],
+            id_col='mouse_id',
             merge_type='inner',
             fill_na=0,
-            test_col='code',
+            value_col='code',
             timepoint_col=timepoint_col,
             overall_context=cell_type + ' Counts',
             show_ns=False,
@@ -6320,6 +6347,14 @@ def exhaust_persist_abund(
             y_desc,
             show_ns=show_ns
         )
+        stat_tests.ranksums_test_group_time(
+            survival_cell_df,
+            y_col,
+            'group',
+            y_desc,
+            show_ns=show_ns,
+            group_col='survived'
+        )
     
 
 
@@ -6594,6 +6629,13 @@ def exhaust_persist_hsc_abund(
         )
     else:
         markers=True
+        stat_tests.ranksums_test_group(
+            survival_hsc_df,
+            y_col,
+            y_desc,
+            group_col='survived',
+            show_ns=show_ns
+        )
         stat_tests.ranksums_test_group_time(
             survival_hsc_df,
             y_col,
@@ -7615,6 +7657,27 @@ def plot_hsc_abundance_by_change(
             'HSC Abundance',
             show_ns=show_ns
         )
+        if by_group:
+            for group, g_df in hsc_data.groupby('group'):
+                stat_tests.ranksums_test_group(
+                    g_df,
+                    group_col='change_type',
+                    test_col=y_col,
+                    overall_context=group + ' HSC Abundance',
+                    show_ns=show_ns,
+                )
+        else:
+            stat_tests.one_way_ANOVArm(
+                hsc_data,
+                timepoint_col='change_type',
+                id_col='code',
+                value_col=y_col,
+                overall_context='HSC Abundance',
+                show_ns=show_ns,
+                match_cols=['mouse_id', 'code'],
+                merge_type='inner',
+                fill_na=0
+            )
 
     fig, ax = plt.subplots(figsize=(7,5))
     sns.despine()
@@ -8021,7 +8084,7 @@ def plot_violin_mean(x, y, **kwargs):
         zorder=2,
     )
 
-def plot_hsc_and_blood_clone_count(
+def plot_wamsc_and_blood_clone_count(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
         exclude_timepoints: List[Any],
@@ -8550,6 +8613,18 @@ def plot_abundance_changed_bygroup(
             + '\n  - Change-Status: ' + change_type.replace('_', ' ').title()
             + '  Cell Type: ' + cell_type.title()
         )
+        for group, g_df in c_df.groupby('group'):
+            stat_tests.friedman_wilcoxonSignedRank(
+                data=g_df,
+                timepoint_col=timepoint_col,
+                id_col='code',
+                value_col='percent_engraftment',
+                overall_context=group + ' ' + cell_type.title(),
+                show_ns=False,
+                match_cols=['mouse_id', 'code'],
+                merge_type='inner',
+                fill_na=0,
+            )
         stat_tests.ranksums_test_group_time(
             data=c_df,
             test_col='percent_engraftment',
@@ -8770,3 +8845,294 @@ def plot_balanced_at_second_to_last(
             + '_' + filename_addon \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_hsc_abund_bias_at_last_change(
+        lineage_bias_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        by_group: bool,
+        mtd: int,
+        merge_type: str,
+        save: bool,
+        save_path: str,
+        save_format: str='png',
+    ) -> None:
+
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 20,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'ytick.minor.width': 5,
+            'ytick.minor.size': 5,
+            'xtick.labelsize': 20,
+            'ytick.labelsize': 20,
+            'figure.titlesize': 'small',
+        }
+
+        )
+    if clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].empty:
+        raise ValueError('No HSC Cells in Clonal Abundance Data')
+    bias_change_df = calculate_first_last_bias_change(
+        lineage_bias_df,
+        timepoint_col,
+        by_mouse=False
+    )
+    change_marked_df = mark_changed(
+        lineage_bias_df,
+        bias_change_df,
+        min_time_difference=mtd,
+        merge_type=merge_type,
+    )
+
+    last_clones = find_last_clones(
+        change_marked_df,
+        timepoint_col
+    )
+    labeled_last_clones = add_bias_category(
+        last_clones
+    )
+    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']
+    
+    myeloid_hsc_abundance_df = hsc_data.merge(
+        labeled_last_clones[['code','mouse_id','bias_category', 'change_status']],
+        on=['code','mouse_id'],
+        how='inner',
+        validate='m:m'
+    )
+    unique_cats=['LB', 'B', 'MB']
+    sems={}
+    means={}
+    colors={}
+    coords = np.arange(len(unique_cats)) + 1
+    width = 0.4
+    _, ax = plt.subplots(figsize=(6, 5))
+    i = -1
+
+    for change_status, c_df in myeloid_hsc_abundance_df.groupby('change_status'):
+        means[change_status] = []
+        sems[change_status] = [[],[]]
+        colors[change_status] = []
+        for bias_cat in unique_cats:
+            cats_df = c_df[c_df.bias_category == bias_cat]
+            sems[change_status][0].append(0)
+            sems[change_status][1].append(cats_df.percent_engraftment.sem())
+            means[change_status].append(cats_df.percent_engraftment.mean())
+            colors[change_status].append(COLOR_PALETTES['change_status'][change_status])
+    
+        ax.bar(
+            x=coords + (i*width/2),
+            height=means[change_status],
+            width=width,
+            tick_label=unique_cats,
+            color=colors[change_status],
+            log=True,
+        )
+        _, caps, _ = ax.errorbar(
+            coords + (i * width/2),
+            means[change_status],
+            yerr=sems[change_status],
+            color='black',
+            capsize=10,
+            capthick=2,
+            ls='none',
+            )
+        i = i * -1
+        caps[0].set_marker('_')
+        caps[0].set_markersize(0)
+    stat_tests.ranksums_test_group_time(
+        data=myeloid_hsc_abundance_df,
+        test_col='percent_engraftment',
+        timepoint_col='bias_category',
+        overall_context='HSC Abundance',
+        show_ns=True,
+        group_col='change_status',
+    )
+    plt.xlabel('')
+    plt.ylabel('HSC Abundance (% HSCs)')
+    plt.title(
+        'HSC Abundance by Bias at Last Time Point'
+        )
+
+    sns.despine()
+    fname = save_path + os.sep \
+        + 'abund_hsc_biased_at_last_change' \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+
+def plot_balanced_clone_abundance(
+        clonal_abundance_df: pd.DataFrame,
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        group: str,
+        save: bool,
+        save_path: str,
+        save_format: str='png',
+) -> None:
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 2,
+            'lines.markersize': 3,
+            'lines.markeredgecolor': 'white',
+            'axes.linewidth': 3,
+            'axes.labelsize': 25,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 22,
+            'ytick.labelsize': 22,
+            'figure.titlesize': 'small',
+        }
+    )
+    if group != 'all':
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.group == group]
+        lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
+
+    clonal_abundance_df = remove_month_17(
+        clonal_abundance_df,
+        timepoint_col
+    )
+    lineage_bias_df = remove_month_17_and_6(
+        lineage_bias_df,
+        timepoint_col
+    )
+    with_bias_cats = add_bias_category(lineage_bias_df)
+    balanced_clones = with_bias_cats[with_bias_cats.bias_category == 'B']
+    balanced_at_dfs = []
+    for time, t_df in balanced_clones.groupby(timepoint_col):
+        balanced_at_time_df = clonal_abundance_df.merge(
+            t_df[['code', 'mouse_id']].drop_duplicates(),
+            how='inner',
+            validate='m:1',
+        )
+        balanced_at_time_df['balance_time'] = time
+        balanced_at_dfs.append(balanced_at_time_df)
+    balanced_df = pd.concat(balanced_at_dfs).sort_values(by=timepoint_col)
+
+    for (cell, balance_time), g_df in balanced_df.groupby(['cell_type', 'balance_time']):
+        if cell == 'hsc' :
+            continue
+        _, ax = plt.subplots(figsize=(4,4))
+        if cell == 'gr':
+            ax.set_yscale('symlog', linthreshy=10e-4)
+        else:
+            ax.set_yscale('symlog', linthreshy=10e-3)
+        plt.title(group + ' ' + cell + ' ' + str(balance_time))
+        sns.lineplot(
+            x=timepoint_col,
+            y='percent_engraftment',
+            hue='mouse_id',
+            units='code',
+            estimator=None,
+            palette=COLOR_PALETTES['mouse_id'],
+            data=g_df,
+            ax=ax
+        )
+        ax.legend().remove()
+        sns.despine()
+        fname = save_path + os.sep + 'balanced_clone_abundance' \
+            + '_' + group + '_' + cell + '_' + str(balance_time) \
+            + '.' + save_format
+        save_plot(fname, save, save_format)    
+
+def plot_lymphoid_committed_vs_bias_hsc(
+        clonal_abundance_df: pd.DataFrame,
+        lineage_bias_df: pd.DataFrame,
+        timepoint_col: str,
+        max_myeloid_abundance: float,
+        save: bool,
+        save_path: str,
+        save_format: str='png',
+    ) -> None:
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 4,
+            'axes.labelsize': 20,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'ytick.minor.width': 5,
+            'ytick.minor.size': 5,
+            'xtick.labelsize': 20,
+            'ytick.labelsize': 20,
+            'figure.titlesize': 'small',
+        }
+
+        )
+    if clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc'].empty:
+        raise ValueError('No HSC Cells in Clonal Abundance Data')
+
+    hsc_data = clonal_abundance_df[clonal_abundance_df.cell_type == 'hsc']
+    labeled_bias = label_lymphoid_comitted(lineage_bias_df, max_myeloid_abundance)
+    labeled_hsc_abundance = hsc_data.merge(
+        labeled_bias[
+            ['code', 'mouse_id', timepoint_col, 'bias_category']
+        ].drop_duplicates(),
+        how='inner',
+        validate='1:1'
+    )
+    sems=[[],[]]
+    means=[]
+    colors=[]
+    unique_cats=['LC', 'LB', 'B', 'MB']
+    for bias_cat in unique_cats:
+        cats_df = labeled_hsc_abundance[labeled_hsc_abundance.bias_category == bias_cat]
+        sems[0].append(0)
+        sems[1].append(cats_df.percent_engraftment.sem())
+        means.append(cats_df.percent_engraftment.mean())
+        colors.append(COLOR_PALETTES['bias_category'][bias_cat])
+    
+    coords = np.arange(len(unique_cats)) + 1
+    width = 0.8
+    _, ax = plt.subplots(figsize=(6, 5))
+    ax.bar(
+        x=coords,
+        height=means,
+        width=width,
+        tick_label=unique_cats,
+        color=colors,
+        log=True,
+    )
+    _, caps, _ = ax.errorbar(
+        coords,
+        means,
+        yerr=sems,
+        color='black',
+        capsize=10,
+        capthick=3,
+        ls='none',
+        )
+    caps[0].set_marker('_')
+    caps[0].set_markersize(0)
+    plt.xlabel('')
+    plt.ylabel('HSC Abundance (% HSCs)')
+    plt.title(
+        'HSC Abundance by Bias at Last Time Point' 
+        )
+
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Ranksums Test of HSC Abundance Between Bias Types\n'
+        + 'N-Mice: ' + str(labeled_hsc_abundance.mouse_id.nunique())
+    )
+    stat_tests.ranksums_test_group(
+        labeled_hsc_abundance,
+        'percent_engraftment',
+        'HSC Abundance',
+        show_ns=True,
+        group_col='bias_category'
+    )
+
+    sns.despine()
+    fname = save_path + os.sep \
+        + 'abund_hsc_biased_at_last_lymphoid_comitted' \
+        + 'max_myel_' + str(max_myeloid_abundance).replace('.', '-') \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+

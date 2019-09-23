@@ -265,6 +265,33 @@ def main():
         )
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
 
+    if graph_type in ['hsc_abund_bias_last_LC']:
+        save_path = args.output_dir + os.sep + 'hsc_abund_bias_lat'
+        max_myeloid_abundance = 0.001
+        if args.options != 'default':
+            max_myeloid_abundance = float(args.options)
+        plot_lymphoid_committed_vs_bias_hsc(
+            present_clones_df,
+            lineage_bias_df,
+            timepoint_col,
+            max_myeloid_abundance=max_myeloid_abundance,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )        
+    if graph_type in ['balanced_clone_abundance']:
+        save_path = args.output_dir + os.sep + 'balanced_clone_abundance'
+
+        plot_balanced_clone_abundance(
+            present_clones_df,
+            lineage_bias_df,
+            timepoint_col,
+            args.group,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )        
+        
     if graph_type in ['balanced_at_second_to_last']:
         save_path = args.output_dir + os.sep + 'balanced_s2l'
         plot_balanced_at_second_to_last(
@@ -1016,6 +1043,24 @@ def main():
         
 
 
+    if graph_type in ['hsc_abund_bias_last_change']:
+        save_path = args.output_dir + os.sep + 'hsc_abund_bias_last_change' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+        mtd=0
+        if args.options != 'default':
+            mtd = int(args.options)
+        plot_hsc_abund_bias_at_last_change(
+            lineage_bias_df,
+            present_clones_df,
+            timepoint_col,
+            by_group=args.by_group,
+            mtd=mtd,
+            merge_type='inner',
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['hsc_abund_bias_last']:
         save_path = args.output_dir + os.sep + 'hsc_abund_bias_last' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')

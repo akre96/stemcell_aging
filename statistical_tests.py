@@ -3,6 +3,8 @@ from itertools import combinations
 import pandas as pd
 import numpy as np
 import scipy.stats as stats
+from statsmodels.stats.anova import AnovaRM
+from statsmodels.stats.multitest import multipletests
 from colorama import init, Fore, Back, Style
 
 init(autoreset=True)
@@ -106,6 +108,7 @@ def ttest_1samp(
         + '\nPerforming 1 Sample T-Test on '
         + overall_context
         + ' difference from ' + str(null_mean)
+        + ' with Bonferroni adjustment at 0.05'
     )
     if handle_inf == 'omit':
         len_inf = len(data[
@@ -120,6 +123,9 @@ def ttest_1samp(
         len_nan = len(data[data[value_var].isnull()])
         print (Fore.YELLOW + ' Ignoring NaN Values T-Test, n = ' + str(len_nan))
     
+    raw_p_vals = []
+    comparisons = []
+    means = []
     for group_var, g_df in data.groupby(group_vars):
         _, p_value = stats.ttest_1samp(
             g_df[value_var],
@@ -128,10 +134,27 @@ def ttest_1samp(
         )
         g_len = len(g_df)
         mean_val = g_df[value_var].mean()
-        context: str = ' '.join(group_var).title() \
+        context: str = '\t' + ' '.join(group_var).title() \
             + ', Mean: ' + str(mean_val) + ', Count: ' + str(g_len) \
             + ', Mice: ' + str(g_df.mouse_id.nunique())
-        print_p_value(context, p_value, show_ns=show_ns)
+        raw_p_vals.append(p_value)
+        comparisons.append(context)
+        means.append(mean_val)
+    
+    corr_vals = multipletests(
+        raw_p_vals,
+        alpha=0.05,
+        method='bonferroni'
+        )[1]
+    comp_p = zip(comparisons, corr_vals, means)
+    for (comp, p, mean) in comp_p:
+        print_p_value(
+            comp,
+            p,
+            mean=mean,
+            show_ns=show_ns
+
+        )
 
 def ind_ttest_between_groups_at_each_time(
         data: pd.DataFrame,
@@ -139,22 +162,52 @@ def ind_ttest_between_groups_at_each_time(
         timepoint_col: str,
         overall_context: str,
         show_ns: bool,
+        group_col: str = 'group',
     ):
-    times = data[timepoint_col].unique()
     print(
         Fore.CYAN + Style.BRIGHT 
         + '\nPerforming Independent T-Test on ' 
         + overall_context
-        + ' between groups at each ' + replace_underscore_dot(timepoint_col)
+        + ' between ' + group_col.title() + 's at each ' + replace_underscore_dot(timepoint_col)
     )
-    for t1, t_df in data.groupby(timepoint_col):
-        _, p_value = stats.ttest_ind(
-            t_df[t_df.group == 'aging_phenotype'][test_col],
-            t_df[t_df.group == 'no_change'][test_col],
-        )
-        context: str = timepoint_col.title() + ' ' + str(t1) 
-        print_p_value(context, p_value, show_ns=show_ns)
 
+    groups = data[group_col].unique()
+    raw_p_vals = []
+    comparisons = []
+    means = []
+    for time, t_df in data.groupby(timepoint_col):
+        for g1, g2 in combinations(groups, 2):
+            g1_df = t_df[t_df[group_col] == g1]
+            g2_df = t_df[t_df[group_col] == g2]
+            _, p_value = stats.ttest_ind(
+                g1_df[test_col],
+                g2_df[test_col],
+            )
+            n0 = len(g1_df)
+            n1 = len(g2_df)
+            mean_diff = g1_df[test_col].mean() \
+                - g2_df[test_col].mean()
+            context: str = '\t' + timepoint_col.title() + str(time) + ' '\
+                + g1 + ': ' + str(n0) \
+                + ', ' + g2 + ': ' + str(n1)
+            raw_p_vals.append(p_value)
+            comparisons.append(context)
+            means.append(mean_diff)
+    
+    corr_vals = multipletests(
+        raw_p_vals,
+        alpha=0.05,
+        method='bonferroni'
+        )[1]
+    comp_p = zip(comparisons, corr_vals, means)
+    for (comp, p, mean) in comp_p:
+        print_p_value(
+            comp,
+            p,
+            mean=mean,
+            show_ns=show_ns
+
+        )
 
 def ind_ttest_group_time(
         data: pd.DataFrame,
@@ -408,6 +461,56 @@ def signed_ranksum_test_group_time(
             + ', n ' + match_col_str + ': ' + str(count)
         print_p_value(context, p_value, show_ns=show_ns)
 
+def ranksums_test_group(
+        data: pd.DataFrame,
+        test_col: str,
+        overall_context: str,
+        show_ns: bool,
+        group_col: str = 'group'
+):
+    groups = data[group_col].unique()
+
+    print(
+        Fore.CYAN + Style.BRIGHT 
+        + '\nPerforming Bonferonni Corrected Ranksums Test on ' 
+        + overall_context
+        + ' between ' + group_col 
+    )
+    raw_p_vals = []
+    comparisons = []
+    means = []
+    for g1, g2 in combinations(groups, 2):
+        g1_df = data[data[group_col] == g1]
+        g2_df = data[data[group_col] == g2]
+        _, p_value = stats.ranksums(
+            g1_df[test_col],
+            g2_df[test_col],
+        )
+        n0 = len(g1_df)
+        n1 = len(g2_df)
+        mean_diff = g1_df[test_col].mean() \
+            - g2_df[test_col].mean()
+        context: str = '\t'\
+            + g1 + ': ' + str(n0) \
+            + ', ' + g2 + ': ' + str(n1)
+        raw_p_vals.append(p_value)
+        comparisons.append(context)
+        means.append(mean_diff)
+    
+    corr_vals = multipletests(
+        raw_p_vals,
+        alpha=0.05,
+        method='bonferroni'
+        )[1]
+    comp_p = zip(comparisons, corr_vals, means)
+    for (comp, p, mean) in comp_p:
+        print_p_value(
+            comp,
+            p,
+            mean=mean,
+            show_ns=show_ns
+
+        )
 def ranksums_test_group_time(
         data: pd.DataFrame,
         test_col: str,
@@ -428,10 +531,13 @@ def ranksums_test_group_time(
 
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Ranksums Test on ' 
+        + '\nPerforming Bonferonni Corrected Ranksums Test on ' 
         + overall_context
         + ' between ' + group_col + ' at each ' + replace_underscore_dot(timepoint_col)
     )
+    raw_p_vals = []
+    comparisons = []
+    means = []
     for t1, t_df in data.groupby(timepoint_col):
         _, p_value = stats.ranksums(
             t_df[t_df[group_col] == groups[0]][test_col],
@@ -441,45 +547,178 @@ def ranksums_test_group_time(
         n1 = len(t_df[t_df[group_col] == groups[1]][test_col])
         mean_diff = t_df[t_df[group_col] == groups[0]][test_col].mean() \
             - t_df[t_df[group_col] == groups[1]][test_col].mean()
-        context: str = timepoint_col.title() + ' ' + str(t1) \
+        context: str = '\t' + timepoint_col.title() + ' ' + str(t1) \
             + ', ' + groups[0] + ': ' + str(n0) \
             + ', ' + groups[1] + ': ' + str(n1)
-        print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
+        raw_p_vals.append(p_value)
+        comparisons.append(context)
+        means.append(mean_diff)
+    
+    corr_vals = multipletests(
+        raw_p_vals,
+        alpha=0.05,
+        method='bonferroni'
+        )[1]
+    comp_p = zip(comparisons, corr_vals, means)
+    for (comp, p, mean) in comp_p:
+        print_p_value(
+            comp,
+            p,
+            mean=mean,
+            show_ns=show_ns
 
+        )
+
+
+def one_way_ANOVArm(
+    data: pd.DataFrame,
+    timepoint_col: str,
+    id_col: str,
+    value_col: str,
+    overall_context: str,
+    show_ns: bool,
+    match_cols: List[str],
+    merge_type: str,
+    fill_na: Any,
+) -> None:
+    model = AnovaRM(data, value_col, id_col, within=[timepoint_col])
+    res = model.fit()
+    p_value = res.anova_table['Pr > F'].tolist()
+    if len(p_value) > 1:
+        raise ValueError('Too many p values found: ' + str(p_value))
+
+        print(
+            Fore.CYAN + Style.BRIGHT
+            + '\nPerforming One Way Repeated Measurement ANOVA and bonferroni adjusted Paired T-Test for ' + overall_context.title()
+        )
+    print_p_value(
+        context='ANOVA ' + overall_context,
+        p_value=p_value[0],
+        show_ns=show_ns,
+    )
+    times = data[timepoint_col].unique()
+    if (p_value[0] < 0.05) or show_ns:
+        raw_p_vals = []
+        comparisons = []
+        for (t1, t2) in combinations(times, 2):
+            t1_df = data[data[timepoint_col] == t1]
+            t2_df = data[data[timepoint_col] == t2]
+            merged = t1_df.merge(
+                t2_df,
+                on=match_cols,
+                how=merge_type,
+                validate='1:1',
+                suffixes=['_1', '_2']
+            )
+            if fill_na is not None:
+                merged = merged.fillna(
+                    value=fill_na,
+                )
+
+            count = len(merged)
+            if count <= 1:
+                p_value = 1
+            else:
+                stat, p_value = stats.ttest_rel(
+                    merged[value_col + '_1'],
+                    merged[value_col + '_2'],
+                )
+            raw_p_vals.append(p_value)
+            n_counts = (
+                len(t1_df[match_cols].drop_duplicates()),
+                len(t2_df[match_cols].drop_duplicates()),
+                )
+            comp = str(t1) + '(n=' + str(n_counts[0]) + ')' +\
+                ' vs ' + str(t2) + '(n=' + str(n_counts[1]) + ')'
+            comparisons.append(comp)
+
+        corr_vals = multipletests(
+            raw_p_vals,
+            alpha=0.05,
+            method='bonferroni'
+            )[1]
+        comp_p = zip(comparisons, corr_vals)
+        for (comp, p) in comp_p:
+            print_p_value(
+                '\t' + overall_context + ' ' + comp,
+                p,
+                show_ns=show_ns
+
+            )
+
+def friedman_wilcoxonSignedRank(
+    data: pd.DataFrame,
+    timepoint_col: str,
+    id_col: str,
+    value_col: str,
+    overall_context: str,
+    show_ns: bool,
+    match_cols: List[str],
+    merge_type: str,
+    fill_na: Any,
+    aggfunc: Any = np.mean,
+) -> None:
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Ranksums Test on ' 
-        + overall_context
-        + ' per ' + group_col + ' between ' + replace_underscore_dot(timepoint_col) + 's'
+        + '\nPerforming Friedman Chi-squared and bonferroni adjusted Wilcoxon Signed Rank Test for ' + overall_context.title()
     )
-    for group, g_df in data.groupby(group_col):
+    measurements = data.pivot_table(
+        values=value_col,
+        index=id_col,
+        columns=timepoint_col,
+        aggfunc=aggfunc,
+        fill_value=fill_na
+    )
+    measure_array = [measurements[col] for col in measurements.columns]
+    p_value = stats.friedmanchisquare(*measure_array)[1]
+    print_p_value(
+        context='Friedman ' + overall_context,
+        p_value=p_value,
+        show_ns=show_ns,
+    )
+    times = data[timepoint_col].unique()
+    if (p_value < 0.05) or show_ns:
+        raw_p_vals = []
+        comparisons = []
         for (t1, t2) in combinations(times, 2):
-            t1_df = g_df[g_df[timepoint_col] == t1][test_col]
-            t2_df = g_df[g_df[timepoint_col] == t2][test_col]
-
-            _, p_value = stats.ranksums(
-                t1_df,
+            t1_df = data[data[timepoint_col] == t1]
+            t2_df = data[data[timepoint_col] == t2]
+            merged = t1_df.merge(
                 t2_df,
+                on=match_cols,
+                how=merge_type,
+                validate='1:1',
+                suffixes=['_1', '_2']
             )
-            mean_diff = t1_df.mean() - t2_df.mean()
-            context = replace_underscore_dot(group) + ' ' \
-                + replace_underscore_dot(timepoint_col) + ' ' \
-                + str(t1) +': ' + str(len(t1_df)) \
-                + ' vs ' + str(t2) + ': ' + str(len(t2_df))
-            print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
+            if fill_na is not None:
+                merged = merged.fillna(
+                    value=fill_na,
+                )
 
-    group = 'all'
-    for (t1, t2) in combinations(times, 2):
-        t1_df = data[data[timepoint_col] == t1][test_col]
-        t2_df = data[data[timepoint_col] == t2][test_col]
+            count = len(merged)
+            if count <= 1:
+                p_value = 1
+            else:
+                _, p_value = stats.wilcoxon(
+                    merged[value_col + '_1'],
+                    merged[value_col + '_2'],
+                )
+            raw_p_vals.append(p_value)
+            comp = str(t1) +\
+                ' vs ' + str(t2) + '(n=' + str(count) + ')'
+            comparisons.append(comp)
 
-        stat, p_value = stats.ranksums(
-            t1_df,
-            t2_df, 
-        )
-        mean_diff = t1_df.mean() - t2_df.mean()
-        context = replace_underscore_dot(group) + ' ' \
-            + replace_underscore_dot(timepoint_col) + ' '\
-            + str(t1) +': ' + str(len(t1_df)) \
-            + ' vs ' + str(t2) + ': ' + str(len(t2_df))
-        print_p_value(context, p_value, mean=mean_diff, show_ns=show_ns)
+        corr_vals = multipletests(
+            raw_p_vals,
+            alpha=0.05,
+            method='bonferroni'
+            )[1]
+        comp_p = zip(comparisons, corr_vals)
+        for (comp, p) in comp_p:
+            print_p_value(
+                '\t' + overall_context + ' ' + comp,
+                p,
+                show_ns=show_ns
+
+            )
+

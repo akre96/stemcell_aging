@@ -167,7 +167,6 @@ def find_n_to_last_clones(
     time_cols = input_df[['mouse_id', timepoint_col]].drop_duplicates()
     grouped_df = time_cols.sort_values(by=['mouse_id', timepoint_col], ascending=False).groupby(['mouse_id'])
     max_time_df = pd.DataFrame(grouped_df.nth(n=n-1)[timepoint_col]).reset_index()
-    print(max_time_df)
     last_clones_with_data = input_df.merge(
         max_time_df,
         how='inner',
@@ -2163,3 +2162,17 @@ def add_short_group(input_df: pd.DataFrame):
     }
     input_df.loc[:,'group_short'] = input_df.group.map(SHORT_GROUP_MAP)
     return input_df
+
+def label_lymphoid_comitted(
+    lineage_bias_df: pd.DataFrame,
+    max_myeloid_abundance: float,
+    ) -> pd.DataFrame:
+    labeled_bias_df = add_bias_category(lineage_bias_df)
+    labeled_bias_df.loc[
+        (
+            (labeled_bias_df.bias_category == 'LB') &\
+            (labeled_bias_df.myeloid_percent_abundance <= max_myeloid_abundance)
+        ),
+        'bias_category'
+    ] = 'LC'
+    return labeled_bias_df
