@@ -17,7 +17,7 @@ from statsmodels.sandbox.regression.predstd import wls_prediction_std
 from sklearn.svm import LinearSVC
 from sklearn.cluster import KMeans
 import matplotlib as mpl
-mpl.use('Qt5Agg')
+#mpl.use('Qt5Agg')
 import matplotlib.ticker as ticker
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -1017,7 +1017,7 @@ def plot_lineage_bias_violin(lineage_bias_df: pd.DataFrame,
     save_plot(fname, save, save_format)
 
 def plot_contributions(
-        contributions_df: pd.DataFrame,
+        clonal_abundance_df: pd.DataFrame,
         cell_type: str,
         timepoint_col: str,
         save: bool = False,
@@ -1044,15 +1044,15 @@ def plot_contributions(
 
     sns.set_context(
         'paper',
-        font_scale=2,
+        font_scale=3,
         rc={
-            'lines.linewidth': 3,
+            'lines.linewidth': 5,
             'axes.linewidth': 4,
-            'axes.labelsize': 25,
+            'axes.labelsize': 30,
             'xtick.major.width': 5,
             'ytick.major.width': 5,
-            'xtick.labelsize': 28,
-            'ytick.labelsize': 22,
+            'xtick.labelsize': 30,
+            'ytick.labelsize': 30,
             'figure.titlesize': 'small',
         }
 
@@ -1060,28 +1060,22 @@ def plot_contributions(
 
 
     plt.figure(figsize=(8,8))
-    if timepoint_col == 'gen':
-        contributions_df = contributions_df[contributions_df[timepoint_col] != 8.5]
-
-    timepoints = np.sort(contributions_df[timepoint_col].unique()).tolist()
-    timepoints = [str(int(t)) for t in timepoints]
-
-    contributions_df[timepoint_col] = contributions_df[timepoint_col].astype(int)
-
-    first_timepoint_cont_df = contributions_df[contributions_df[timepoint_col] == contributions_df[timepoint_col].min()]
-    exp_x, exp_y = find_intersect(first_timepoint_cont_df, 50)
-
-    contributions_df[timepoint_col] = contributions_df[timepoint_col].astype(str)
+    first_time_df = find_first_clones_in_mouse(
+        clonal_abundance_df,
+        timepoint_col
+    )
+    first_time_df[timepoint_col] = 'first'
+    contributions = percentile_sum_engraftment(first_time_df, timepoint_col, cell_type=cell_type)
+    exp_x, exp_y = find_intersect(
+        data=contributions,
+        y=50.0,
+    )
     plot = sns.lineplot(
         x='percentile',
         y='percent_sum_abundance',
-        hue=timepoint_col,
-        hue_order=timepoints,
-        data=contributions_df,
-        palette=COLOR_PALETTES[timepoint_col]
+        data=contributions,
+        color=COLOR_PALETTES['time_desc']['first']
     )
-    legend = plt.legend()
-    legend.texts[0].set_text(timepoint_col.title())
     plt.xlabel('Percentile by Abundance')
     plt.ylabel('% ' + cell_type.title() + ' Abundance')
     plt.title('Cumulative Abundance at Percentiles for ' + cell_type)
@@ -1089,7 +1083,8 @@ def plot_contributions(
 
     plt.vlines(exp_x, -5, exp_y + 5, linestyles='dashed')
     plt.hlines(exp_y, 0, exp_x + 5, linestyles='dashed')
-    plt.text(5, 52, 'Expanded Clones: (' + str(round(exp_x, 2)) + ', ' + str(round(exp_y, 2)) + ')')
+    plt.text(0, 52, 'Expanded: (' + str(round(exp_x, 2)) + ', ' + str(round(exp_y, 2)) + ')')
+    sns.despine()
 
 
     fname = save_path + os.sep + 'percentile_abundance_contribution_' + cell_type + '.' + save_format
@@ -1099,6 +1094,9 @@ def plot_change_contributions(
         changed_marked_df: pd.DataFrame,
         timepoint_col: str,
         timepoint: Any,
+        gfp_donor: pd.DataFrame,
+        gfp_donor_thresh: float,
+        force_order: bool,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -1142,21 +1140,34 @@ def plot_change_contributions(
         percent_of_total=percent_of_total
     )
     changed_sum_df = changed_sum_df[changed_sum_df.cell_type.isin(['gr', 'b'])]
+    changed_sum_with_gxd = changed_sum_df.merge(
+        gfp_donor,
+        how='inner',
+        validate='m:1'
+    )
     timepoint_df = get_clones_at_timepoint(
-        changed_sum_df,
+        changed_sum_with_gxd,
         timepoint_col,
         timepoint,
         by_mouse=True,
     )
+    filt_gxd = timepoint_df[timepoint_df.gfp_x_donor >= gfp_donor_thresh]
+    print('Pre-filt gxd mice:', timepoint_df.mouse_id.nunique())
+    print('Post-filt gxd mice:', filt_gxd.mouse_id.nunique())
 
+    filt_gxd = filt_gxd.assign(total=100)
+    filt_gxd = filt_gxd.sort_values(by='percent_engraftment', ascending=False)
 
-    timepoint_df = timepoint_df.assign(total=100)
-    timepoint_df = timepoint_df.sort_values(by='percent_engraftment', ascending=False)
-
-
-    for group, g_df in timepoint_df.groupby('group'):
-        temp_df = pd.DataFrame()
-        for (m, cell_type), m_df in g_df.groupby(['mouse_id', 'cell_type']):
+    for group, g_df in filt_gxd.groupby('group'):
+        avg_per_group = pd.DataFrame(
+            g_df.groupby(
+            ['change_type', 'cell_type']
+            ).percent_engraftment.sum()/g_df.mouse_id.nunique()
+        ).reset_index()
+        avg_per_group['total'] = 100
+        avg_per_group['mouse_id'] = 'Average'
+        group_df = g_df.append(avg_per_group, sort=False)
+        for (m, cell_type), m_df in group_df.groupby(['mouse_id', 'cell_type']):
             lymph = m_df[m_df.change_type == 'Lymphoid']
             if lymph.empty:
                 temp_row = pd.DataFrame()
@@ -1166,7 +1177,7 @@ def plot_change_contributions(
                 temp_row['total'] = 100
                 temp_row['percent_engraftment'] = 0
                 lymph = temp_row
-                g_df = g_df.append(temp_row)
+                group_df = group_df.append(temp_row, sort=False)
             elif len(lymph) > 1:
                 print('Lymph > 1')
                 print(m, cell_type, len(lymph))
@@ -1180,7 +1191,7 @@ def plot_change_contributions(
                 temp_row['percent_engraftment'] = 0
                 temp_row['total'] = 100
                 myl = temp_row
-                g_df = g_df.append(temp_row)
+                group_df = group_df.append(temp_row, sort=False)
             elif len(myl) > 1:
                 print('Myeloid > 1')
                 print(m, cell_type, len(myl))
@@ -1194,34 +1205,67 @@ def plot_change_contributions(
                 temp_row['percent_engraftment'] = 0
                 temp_row['total'] = 100
                 unk = temp_row
-                g_df = g_df.append(temp_row)
+                group_df = group_df.append(temp_row, sort=False)
             elif len(unk) > 1:
                 print('Unknown > 1')
                 print(m, cell_type, len(unk))
 
-            pd.options.mode.chained_assignment = None
-            g_df[
-                (g_df.mouse_id == m) &\
-                (g_df.change_type == 'Myeloid') &\
-                (g_df.cell_type == cell_type)
-            ].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment
-
-            g_df[
-                (g_df.mouse_id == m) &\
-                (g_df.change_type == 'Unknown') &\
-                (g_df.cell_type == cell_type)
-            ].percent_engraftment = myl.percent_engraftment + lymph.percent_engraftment + unk.percent_engraftment
-            temp_df['mouse_id'] = [m]
+            #pd.options.mode.chained_assignment = None
+            myeloid_mouse_bool = (
+                (group_df.mouse_id == m) &
+                (group_df.change_type == 'Myeloid') &
+                (group_df.cell_type == cell_type),
+            )
+            group_df.loc[
+                (group_df.mouse_id == m) &
+                (group_df.change_type == 'Myeloid') &
+                (group_df.cell_type == cell_type),
+                'percent_engraftment'
+            ] = myl.percent_engraftment.values[0] + lymph.percent_engraftment.values[0]
+            group_df.loc[
+                (group_df.mouse_id == m) &\
+                (group_df.change_type == 'Unknown') &\
+                (group_df.cell_type == cell_type),
+                'percent_engraftment'
+            ] = myl.percent_engraftment.values[0] + lymph.percent_engraftment.values[0] + unk.percent_engraftment.values[0]
             pd.options.mode.chained_assignment = 'warn'
+        if force_order:
+            if timepoint_col != 'month':
+                raise ValueError('Cannot force order if not using aging study data')
+            print(Fore.YELLOW + 'FORCING ORDER BASED ON HARD CODED VALUES')
+            if group == 'aging_phenotype':
+                force_order = ['M3003', 'M3007', 'M3010', 'M3013', 'M3015', 'M3011', 'M2012', 'M2059', 'M3012', 'M3025', 'M3016']
+            elif group == 'no_change':
+                force_order = ['M3022', 'M3008', 'M3019', 'M3023', 'M2061', 'M3009', 'M190', 'M3028', 'M3018', 'M3001', 'M3000', 'M3017']
+            else:
+                raise ValueError('Group not identified, order not forcable')
+                
+            order = [m for m in force_order if m in group_df.mouse_id.unique()]
+        else: 
+            order = list(
+                pd.DataFrame(
+                    group_df[
+                        (group_df.change_type != 'Unchanged') &
+                        (group_df.mouse_id != 'Average')
+                    ].groupby(
+                        ['mouse_id']
+                    ).percent_engraftment.sum()
+                ).reset_index().sort_values(
+                by='percent_engraftment',
+                ascending=False,
+                ).mouse_id.unique()
+            )
 
+        order.append('Average')
         plt.figure(figsize=(7,10))
-        print(y_col_to_title(group) + ' Mice: ' + str(g_df.mouse_id.nunique()))
+        print(y_col_to_title(group) + ' Mice: ' + str(group_df.mouse_id.nunique()))
         ax = sns.barplot(
             x='total',
             y='mouse_id',
+            order=order,
             hue='cell_type',
             hue_order=['gr', 'b'],
-            data=g_df,
+            data=group_df,
             palette=[COLOR_PALETTES['change_type']['Unchanged']]*2,
             saturation=1,
             #label="Unchanged"
@@ -1230,8 +1274,9 @@ def plot_change_contributions(
             x='percent_engraftment',
             y='mouse_id',
             hue='cell_type',
+            order=order,
             hue_order=['gr', 'b'],
-            data=g_df[g_df.change_type == 'Unknown'],
+            data=group_df[group_df.change_type == 'Unknown'],
             palette=[COLOR_PALETTES['change_type']['Unknown']]*2,
             saturation=1,
             ax=ax,
@@ -1240,8 +1285,9 @@ def plot_change_contributions(
             x='percent_engraftment',
             y='mouse_id',
             hue='cell_type',
+            order=order,
             hue_order=['gr', 'b'],
-            data=g_df[g_df.change_type == 'Myeloid'],
+            data=group_df[group_df.change_type == 'Myeloid'],
             palette=[COLOR_PALETTES['change_type']['Myeloid']]*2,
             saturation=1,
             #label='Myeloid',
@@ -1251,8 +1297,9 @@ def plot_change_contributions(
             x='percent_engraftment',
             y='mouse_id',
             hue='cell_type',
+            order=order,
             hue_order=['gr', 'b'],
-            data=g_df[g_df.change_type == 'Lymphoid'],
+            data=group_df[group_df.change_type == 'Lymphoid'],
             palette=[COLOR_PALETTES['change_type']['Lymphoid']]*2,
             saturation=1,
             #label='Lymphoid',
@@ -3033,13 +3080,14 @@ def plot_bias_dist_mean_abund_group_vs(
             'histtype': 'step',
             'linewidth': 3,
             'alpha': .8,
-            'color': c
+            'color': c,
         }
         if y_col != 'count':
             print('WEIGHTING BY Change IN', y_col)
             hist_kws['weights'] = g_df[y_col.split('_')[0] + '_change']
         sns.distplot(
             g_df.bias_change,
+            bins=20,
             rug=False,
             kde=False,
             hist=True,
@@ -3052,7 +3100,7 @@ def plot_bias_dist_mean_abund_group_vs(
 
         plt.xlabel('Change In Lineage Bias')
         plt.ylabel(y_col.title())
-        plt.xlim((-2,2))
+        plt.xlim((-2,2.02))
         ## Shrink current axis's height by 10% on the bottom
         #ax = plt.gca()
         #box = ax.get_position()
@@ -3643,11 +3691,16 @@ def plot_not_survived_abundance(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
         by_average: bool,
+        group: str,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
     ):
     
+    if group != 'all':
+        print('Filtering for group:', group)
+        clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.group == group]
+
     print('...Removing gen 8.5 if it exists')
     clonal_abundance_df = remove_gen_8_5(
         clonal_abundance_df,
@@ -3730,7 +3783,6 @@ def plot_not_survived_abundance(
             timepoint_col.title()
         )
         plt.legend().remove()
-        group = 'all'
         sns.despine()
         fname = save_path + os.sep \
             + 'abundance_not_survived' \
@@ -3802,6 +3854,18 @@ def plot_not_survived_count_box(
             palette=COLOR_PALETTES['group']
         )
         file_name_addon ='_by_group'
+        for group, g_df in count_df.groupby('group'):
+            stat_tests.one_way_ANOVArm(
+                data=g_df,
+                match_cols=['mouse_id'],
+                id_col='mouse_id',
+                merge_type='outer',
+                fill_na=0,
+                value_col='code',
+                timepoint_col='last_timepoint',
+                overall_context=group.title() + ' Exhausted Clone Count',
+                show_ns=False,
+            )
     else:
         ax = sns.boxplot(
             x='last_timepoint',
@@ -3810,17 +3874,17 @@ def plot_not_survived_count_box(
             data=count_df,
             palette=COLOR_PALETTES[timepoint_col]
         )
-    stat_tests.one_way_ANOVArm(
-        data=count_df,
-        match_cols=['mouse_id'],
-        id_col='mouse_id',
-        merge_type='outer',
-        fill_na=0,
-        value_col='code',
-        timepoint_col='last_timepoint',
-        overall_context='Exhausted Clone Count',
-        show_ns=False,
-    )
+        stat_tests.one_way_ANOVArm(
+            data=count_df,
+            match_cols=['mouse_id'],
+            id_col='mouse_id',
+            merge_type='outer',
+            fill_na=0,
+            value_col='code',
+            timepoint_col='last_timepoint',
+            overall_context='Exhausted Clone Count',
+            show_ns=False,
+        )
     _, max_codes = plt.ylim()
     ax.set_ylim(0, max_codes)
     ax.set_ylabel('# Of Exhausted Clones')
@@ -3954,14 +4018,7 @@ def plot_hsc_abund_bias_at_last(
             )
         caps[0].set_marker('_')
         caps[0].set_markersize(0)
-        #ax = sns.barplot(
-            #y='percent_engraftment',
-            #x='bias_category',
-            #order=unique_cats,
-            #data=myeloid_hsc_abundance_df,
-            #palette=COLOR_PALETTES['bias_category'],
-            #yerr=sems,
-        #)
+
         plt.xlabel('')
         plt.ylabel('HSC Abundance (% HSCs)')
         plt.title(
@@ -4919,17 +4976,6 @@ def plot_clone_count_swarm(
             Fore.CYAN + Style.BRIGHT 
             + '\nPerforming One Way Repeated Measurement ANOVA for ' + cell_type.title()
         )
-        stat_tests.one_way_ANOVArm(
-            data=c_df,
-            timepoint_col=timepoint_col,
-            id_col='mouse_id',
-            value_col='code',
-            overall_context=cell_type,
-            show_ns=True,
-            match_cols=['mouse_id'],
-            merge_type='inner',
-            fill_na=0,
-        )
 
         plt.figure(figsize=(6,5))
         if line:
@@ -4952,11 +4998,32 @@ def plot_clone_count_swarm(
         else:
             if by_group:
                 hue_col='group'
-                hue_order=['aging_phenotype', 'no_change'],
+                hue_order=['aging_phenotype', 'no_change']
                 dodge=True
                 box_hue = 'group'
                 box_palette = COLOR_PALETTES[hue_col]
                 desc = 'by_group_'
+                for group, g_df in c_df.groupby('group'):
+                    stat_tests.one_way_ANOVArm(
+                        data=g_df,
+                        timepoint_col=timepoint_col,
+                        id_col='mouse_id',
+                        value_col='code',
+                        overall_context=cell_type + ' ' + group,
+                        show_ns=False,
+                        match_cols=['mouse_id'],
+                        merge_type='inner',
+                        fill_na=0,
+                    )
+                stat_tests.ind_ttest_between_groups_at_each_time(
+                    c_df,
+                    'code',
+                    timepoint_col,
+                    cell_type,
+                    show_ns=False,
+                    group_col='group'
+                )
+
             else:
                 hue_col='mouse_id'
                 hue_order=None
@@ -4964,6 +5031,17 @@ def plot_clone_count_swarm(
                 box_palette=None
                 dodge=False
                 desc = ''
+                stat_tests.one_way_ANOVArm(
+                    data=c_df,
+                    timepoint_col=timepoint_col,
+                    id_col='mouse_id',
+                    value_col='code',
+                    overall_context=cell_type,
+                    show_ns=True,
+                    match_cols=['mouse_id'],
+                    merge_type='inner',
+                    fill_na=0,
+                )
 
             medianprops = dict(
                 linewidth=0,
@@ -4996,7 +5074,7 @@ def plot_clone_count_swarm(
             sns.despine()
             c_times = c_df[timepoint_col].unique().tolist()
             c_times.sort()
-            for mouse_id, m_df in c_df.groupby('mouse_id'):
+            for mouse_id, m_df in c_df.groupby(['mouse_id']):
                 sns.stripplot(
                     x=timepoint_col,
                     y='code',
@@ -6292,10 +6370,10 @@ def exhaust_persist_abund(
     if not by_count:
         survival_df = survival_df[survival_df['cell_type'] == cell_type]
     if by_sum:
-        y_desc = cell_type.title() + ' Accumulated Abundance (% WBC)'
-        filename_addon='sum'
+        y_desc = cell_type.title() + ' Mean Abundance (% WBC)'
+        filename_addon='mean'
         survival_sum_per_mouse = pd.DataFrame(
-            survival_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])[y_col].sum()
+            survival_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])[y_col].mean()
             )[y_col].unstack(
                     fill_value=0
                 ).stack().reset_index(name=y_col)
@@ -7396,6 +7474,7 @@ def plot_dist_bias_at_time_vs_group_facet_grid(
         timepoint_col: str,
         bins: int,
         change_type: str = None,
+        change_status: str = None,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png'
@@ -7427,7 +7506,7 @@ def plot_dist_bias_at_time_vs_group_facet_grid(
         timepoint_col
     )
     desc_addon = ''
-    if change_type is not None:
+    if change_status is not None:
         bias_change_df = calculate_first_last_bias_change(
             lineage_bias_df,
             timepoint_col,
@@ -7440,10 +7519,14 @@ def plot_dist_bias_at_time_vs_group_facet_grid(
             min_time_difference=3,
             merge_type='inner'
         )
-        if change_type.lower() == 'changed':
+        if change_status.lower() == 'changed':
             desc_addon = 'changed_clones_'
             lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] != 'Unchanged']
-        elif change_type.lower() == 'unchanged':
+            if change_type in ['Lymphoid', 'Myeloid']:
+                print('Filtering on change_type:', change_type)
+                lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] == change_type]
+                desc_addon += change_type+ '_'
+        elif change_status.lower() == 'unchanged':
             desc_addon = 'unchanged_clones_'
             lineage_bias_df = lineage_bias_df[lineage_bias_df['change_type'] == 'Unchanged']
 
@@ -7506,11 +7589,24 @@ def plot_dist_bias_at_time_vs_group_facet_grid(
             )
         hist_df = hist_df.append(m_row, ignore_index=True)
 
+    for y_col in y_cols:
+        for time, t_df in hist_df.groupby('time_desc'):
+            temp_df = t_df.copy()
+            temp_df.loc[temp_df.group == 'no_change', 'lineage_bias'] = temp_df.loc[temp_df.group == 'no_change', 'lineage_bias'] - dodge_amount
+            stat_tests.ind_ttest_group_time(
+                data=temp_df,
+                test_col=y_col,
+                timepoint_col='lineage_bias',
+                overall_context=desc_addon + ' ' + time + ' ' + y_col,
+                show_ns=False
+            )
+
     hist_df = pd.melt(
         hist_df,
         id_vars=['mouse_id', 'group', 'lineage_bias', 'time_desc'],
         value_vars=y_cols,
         )
+
     g = sns.FacetGrid(
         hist_df,
         col="time_desc",
@@ -7546,6 +7642,7 @@ def plot_hsc_abundance_by_change(
         by_group: bool,
         timepoint: Any = None,
         by_sum: bool = False,
+        by_mean: bool = False,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
@@ -7586,6 +7683,7 @@ def plot_hsc_abundance_by_change(
     y_col = 'percent_engraftment'
     y_desc = 'HSC Abundance (%HSC)'
     hsc_data = change_marked_df[change_marked_df.cell_type == 'hsc']
+    mouse_markers=False
     if by_sum:
         hsc_data = pd.DataFrame(
             hsc_data.groupby([
@@ -7607,6 +7705,29 @@ def plot_hsc_abundance_by_change(
             fill_val=0
         )
         desc_add = 'sum'
+        mouse_markers = True
+    elif by_mean:
+        hsc_data = pd.DataFrame(
+            hsc_data.groupby([
+                'mouse_id',
+                'group',
+                'cell_type',
+                'change_type',
+                timepoint_col,
+            ]).percent_engraftment.mean()
+        )[y_col].unstack(
+                fill_value=0
+            ).stack().reset_index(name=y_col)
+        hsc_data = fill_mouse_id_zeroes(
+            hsc_data,
+            info_cols=['group'],
+            fill_col=y_col,
+            fill_cat_col='change_type',
+            fill_cats=['Unchanged', 'Lymphoid', 'Myeloid'],
+            fill_val=0
+        )
+        desc_add = 'mean'
+        mouse_markers = True
     elif by_clone:
         hsc_data = hsc_data[hsc_data.percent_engraftment > 0]
         y_col = 'code'
@@ -7623,29 +7744,32 @@ def plot_hsc_abundance_by_change(
             ).stack().reset_index(name=y_col)
         desc_add = 'count'
         y_desc = '# Of HSC Clones'
+        mouse_markers = True
 
     print(
         Fore.CYAN + Style.BRIGHT 
         + '\nPerforming Tests On: '+ desc_add.title() 
     )
     show_ns = False
-    if by_sum or by_clone:
+    if mouse_markers:
         match_cols = ['mouse_id']
-        stat_tests.rel_ttest_group_time(
+        for group, g_df in hsc_data.groupby('group'):
+            stat_tests.one_way_ANOVArm(
+                data=g_df,
+                timepoint_col='change_type',
+                id_col='mouse_id',
+                value_col=y_col,
+                overall_context=group + ' ' + y_desc,
+                show_ns=show_ns,
+                match_cols=['mouse_id', 'group'],
+                merge_type='inner',
+                fill_na=0
+            )
+        stat_tests.ind_ttest_between_groups_at_each_time(
             hsc_data,
-            match_cols=match_cols,
-            merge_type='outer',
-            fill_na=0,
             test_col=y_col,
             timepoint_col='change_type',
             overall_context=y_desc,
-            show_ns=show_ns
-        )
-        stat_tests.ind_ttest_group_time(
-            hsc_data,
-            y_col,
-            'change_type',
-            y_desc,
             show_ns=show_ns
         )
     else:
@@ -7724,7 +7848,7 @@ def plot_hsc_abundance_by_change(
         medianprops=medianprops,
         fliersize=0,
     )
-    if by_sum or by_clone:
+    if mouse_markers:
         for mouse_id, m_df in hsc_data.groupby('mouse_id'):
             sns.stripplot(
                 x='change_type',
@@ -7906,9 +8030,10 @@ def plot_abundance_change_changed_group_grid(
     Returns:
         None
     """
-    
+    change_param = 'change_type'
+    #change_param = 'change_status
     y_cols =  ['myeloid_change', 'lymphoid_change']
-    group_cols = ['mouse_id', 'group', 'change_status']
+    group_cols = ['mouse_id', 'group', change_param]
 
     if by_mouse:
         group_desc = 'by-mouse'
@@ -7966,10 +8091,13 @@ def plot_abundance_change_changed_group_grid(
             id_vars=['code'] + group_cols,
             value_vars=y_cols
         )
-    melt_df['change_status'] = melt_df['change_status'].str[0]
+    melt_df[change_param] = melt_df[change_param].str[0]
     melt_df['group_first'] = melt_df['group'].str[0]
-    melt_df['change-group'] = melt_df['change_status'].str.cat(melt_df['group_first'], sep='-')
-    col_order = ['U-a', 'U-n', 'C-a', 'C-n']
+    melt_df['change-group'] = melt_df[change_param].str.cat(melt_df['group_first'], sep='-')
+    if change_param == 'change_status':
+        col_order = ['U-a', 'U-n', 'C-a', 'C-n']
+    elif change_param == 'change_type':
+        col_order = ['U-a', 'U-n', 'L-a', 'L-n', 'M-a', 'M-n']
 
     # Find sig difference
     nan_inf_handle = 'propagate'
@@ -7990,7 +8118,7 @@ def plot_abundance_change_changed_group_grid(
         stat_tests.ranksums_test_group_time(
             data=v_df,
             test_col='value',
-            timepoint_col='change_status',
+            timepoint_col=change_param,
             overall_context=var,
             group_col='group',
             show_ns=show_ns,
@@ -8058,7 +8186,8 @@ def plot_abundance_change_changed_group_grid(
 
 
     fname = save_path + os.sep \
-        + 'face_grid_abundance_change_change-type' \
+        + 'face_grid_abundance_change_' \
+        + change_param \
         + '_' + math_desc \
         + '_' + group_desc \
         + '.' + save_format
@@ -8084,7 +8213,7 @@ def plot_violin_mean(x, y, **kwargs):
         zorder=2,
     )
 
-def plot_wamsc_and_blood_clone_count(
+def plot_hsc_and_blood_clone_count(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
         exclude_timepoints: List[Any],
@@ -8450,6 +8579,73 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
                 linewidths=2,
                 edgecolors='#d63031'
             )
+    totals = pd.DataFrame(
+        with_boundary_df.groupby(
+            ['mouse_id', 'group']
+        ).code.nunique()
+    )
+    totals = totals.reset_index().rename(columns={'code':'total'})
+    totals_in_out = pd.DataFrame(
+        with_boundary_df.groupby(
+            ['mouse_id', 'group', 'in_boundary']
+        ).code.nunique()
+    ).reset_index()
+    if by_group:
+        totals_in_out = fill_mouse_id_zeroes(
+            totals_in_out,
+            info_cols=['group'],
+            fill_col='code',
+            fill_cat_col='in_boundary',
+            fill_cats=[0, 1],
+            fill_val=0
+        )
+
+        percent_in = totals_in_out.merge(
+            totals,
+            how='inner',
+            validate='m:1'
+        ).assign(perc_bound=lambda x: 100* x.code/x.total)
+        percent_in['bound_desc'] = percent_in.in_boundary.map(
+            {
+                0: 'Normal',
+                1: 'Lower Right'
+            }
+        )
+        stat_tests.ind_ttest_between_groups_at_each_time(
+            data=percent_in[percent_in.in_boundary == 1],
+            test_col='perc_bound',
+            timepoint_col='bound_desc',
+            overall_context=cell_type + ' in Boundary',
+            show_ns=True
+        )
+    else:
+        totals_in_out = fill_mouse_id_zeroes(
+            totals_in_out,
+            info_cols=['group'],
+            fill_col='code',
+            fill_cat_col='in_boundary',
+            fill_cats=[0, 1],
+            fill_val=0
+        )
+
+        percent_in = totals_in_out.merge(
+            totals,
+            how='inner',
+            validate='m:1'
+        ).assign(perc_bound=lambda x: 100* x.code/x.total)
+        percent_in['bound_desc'] = percent_in.in_boundary.map(
+            {
+                0: 'Normal',
+                False: 'Normal',
+                1: 'Lower Right',
+                True: 'Lower Right',
+            }
+        )
+        print('\n',cell_type.title())
+        #print(percent_in[percent_in.in_boundary==1][['mouse_id', 'bound_desc', 'perc_bound']])
+        print(list(percent_in[percent_in.in_boundary==1]['perc_bound'].values))
+
+
     ticks = ticker.FuncFormatter(
         lambda x, pos: r'$10^{' + r'{0:g}'.format(x - 3) + r'}$'
     )
@@ -8488,6 +8684,7 @@ def plot_abundance_changed_bygroup(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
         mtd: int,
+        by_mouse: bool,
         merge_type: str,
         timepoint: Any = None,
         sum: bool = False,
@@ -8495,7 +8692,7 @@ def plot_abundance_changed_bygroup(
         save_path: str = './output',
         save_format: str = 'png',
     ):
-    change_col = 'change_status'
+    change_col = 'change_type'
     hue_order = ['aging_phenotype', 'no_change']
 
     sns.set_context(
@@ -8534,6 +8731,9 @@ def plot_abundance_changed_bygroup(
         + '_mtd' + str(mtd) \
         + 'merge-' + merge_type
     desc_add = ''
+    if sum and by_mouse:
+        raise ValueError('Cannot set both by_mouse (average) and sum flags, pick one')
+
     if sum:
         change_marked_df = pd.DataFrame(
             change_marked_df.groupby([
@@ -8545,10 +8745,21 @@ def plot_abundance_changed_bygroup(
             ]).percent_engraftment.sum()
         ).reset_index()
         desc_add = 'sum'
+    elif by_mouse:
+        change_marked_df = pd.DataFrame(
+            change_marked_df.groupby([
+                'mouse_id',
+                'group',
+                'cell_type',
+                change_col,
+                timepoint_col,
+            ]).percent_engraftment.mean()
+        ).reset_index()
+        desc_add = 'mean'
     
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Ranksums Test Between Change Status '+ desc_add.title() + ' Abundance at each time point'
+        + '\nPerforming Ranksums Test Between ' + change_col.title() + desc_add.title() + ' Abundance at each time point'
     )
     for (change_type, cell_type), c_df in change_marked_df.groupby([change_col, 'cell_type']):
         if cell_type == 'hsc':
@@ -8587,18 +8798,38 @@ def plot_abundance_changed_bygroup(
         )
         min_val = c_df[c_df.percent_engraftment > 0].percent_engraftment.min()
         ax.set_yscale('symlog', linthreshy=min_val*10)
-        sns.swarmplot(
-            x=timepoint_col,
-            y='percent_engraftment',
-            data=c_df,
-            hue='group',
-            hue_order=hue_order,
-            palette=COLOR_PALETTES['group'],
-            ax=ax,
-            dodge=True,
-            linewidth=0.5,
-            zorder=0,
-        )
+        if (sum or by_mouse):
+            times = c_df.sort_values(by=timepoint_col)[timepoint_col].unique()
+            for mouse_id, m_df in c_df.groupby('mouse_id'):
+                sns.stripplot(
+                    x=timepoint_col,
+                    y='percent_engraftment',
+                    order=times,
+                    hue='group',
+                    hue_order=hue_order,
+                    palette=COLOR_PALETTES['group'],
+                    dodge=True,
+                    ax=ax,
+                    data=m_df,
+                    marker=MARKERS['mouse_id'][mouse_id],
+                    size=12,
+                    linewidth=.8,
+                    alpha=0.8,
+                    zorder=0,
+                )
+        else:
+            sns.swarmplot(
+                x=timepoint_col,
+                y='percent_engraftment',
+                data=c_df,
+                hue='group',
+                hue_order=hue_order,
+                palette=COLOR_PALETTES['group'],
+                ax=ax,
+                dodge=True,
+                linewidth=0.5,
+                zorder=0,
+            )
         sns.despine()
         plt.xlabel(timepoint_col.title())
         plt.ylabel(y_col_to_title(cell_type+'_percent_engraftment'))
@@ -8613,25 +8844,47 @@ def plot_abundance_changed_bygroup(
             + '\n  - Change-Status: ' + change_type.replace('_', ' ').title()
             + '  Cell Type: ' + cell_type.title()
         )
-        for group, g_df in c_df.groupby('group'):
-            stat_tests.friedman_wilcoxonSignedRank(
-                data=g_df,
+        if (sum or by_mouse):
+            show_ns=False
+            for group, g_df in c_df.groupby('group'):
+                stat_tests.one_way_ANOVArm(
+                    data=g_df,
+                    timepoint_col=timepoint_col,
+                    id_col='mouse_id',
+                    value_col='percent_engraftment',
+                    overall_context=group + ' ' + cell_type.title(),
+                    show_ns=show_ns,
+                    match_cols=['mouse_id', 'group'],
+                    merge_type='inner',
+                    fill_na=0
+                )
+            stat_tests.ind_ttest_between_groups_at_each_time(
+                data=c_df,
+                test_col='percent_engraftment',
                 timepoint_col=timepoint_col,
-                id_col='code',
-                value_col='percent_engraftment',
-                overall_context=group + ' ' + cell_type.title(),
-                show_ns=False,
-                match_cols=['mouse_id', 'code'],
-                merge_type='inner',
-                fill_na=0,
+                overall_context=cell_type.title() + ' ' + change_type.title(),
+                show_ns=show_ns,
             )
-        stat_tests.ranksums_test_group_time(
-            data=c_df,
-            test_col='percent_engraftment',
-            timepoint_col=timepoint_col,
-            overall_context=cell_type.title() + ' ' + change_type.title(),
-            show_ns=False,
-        )
+        else:
+            for group, g_df in c_df.groupby('group'):
+                stat_tests.friedman_wilcoxonSignedRank(
+                    data=g_df,
+                    timepoint_col=timepoint_col,
+                    id_col='code',
+                    value_col='percent_engraftment',
+                    overall_context=group + ' ' + cell_type.title(),
+                    show_ns=False,
+                    match_cols=['mouse_id', 'code'],
+                    merge_type='inner',
+                    fill_na=0,
+                )
+            stat_tests.ranksums_test_group_time(
+                data=c_df,
+                test_col='percent_engraftment',
+                timepoint_col=timepoint_col,
+                overall_context=cell_type.title() + ' ' + change_type.title(),
+                show_ns=False,
+            )
 
 
 def plot_abundance_bias_change_type_heatmap(
@@ -8968,6 +9221,7 @@ def plot_balanced_clone_abundance(
         clonal_abundance_df: pd.DataFrame,
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
+        thresholds: Dict[str, float],
         group: str,
         save: bool,
         save_path: str,
@@ -9004,8 +9258,12 @@ def plot_balanced_clone_abundance(
     balanced_clones = with_bias_cats[with_bias_cats.bias_category == 'B']
     balanced_at_dfs = []
     for time, t_df in balanced_clones.groupby(timepoint_col):
+        filt_t_df = filter_lineage_bias_thresholds(
+            t_df,
+            thresholds,
+        )
         balanced_at_time_df = clonal_abundance_df.merge(
-            t_df[['code', 'mouse_id']].drop_duplicates(),
+            filt_t_df[['code', 'mouse_id']].drop_duplicates(),
             how='inner',
             validate='m:1',
         )
@@ -9034,8 +9292,12 @@ def plot_balanced_clone_abundance(
         )
         ax.legend().remove()
         sns.despine()
+        thresh_str = '_'.join(
+            [str(key) + '-' + str(round(value,2)) for key, value in thresholds.items()]
+        )
         fname = save_path + os.sep + 'balanced_clone_abundance' \
             + '_' + group + '_' + cell + '_' + str(balance_time) \
+            + '_' + thresh_str \
             + '.' + save_format
         save_plot(fname, save, save_format)    
 
@@ -9136,3 +9398,470 @@ def plot_lymphoid_committed_vs_bias_hsc(
     save_plot(fname, save, save_format)
 
 
+def plot_abundance_clones_per_mouse(
+    clonal_abundance_df: pd.DataFrame,
+    timepoint_col: str,
+    cell_type: str,
+    thresholds: Dict[str, float],
+    by_group: bool,
+    save: bool,
+    save_path: str,
+    save_format: str = 'png',
+    ) -> None:
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 4,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+
+    if by_group:
+        group_col = 'group'
+    else:
+        raise ValueError('Not implemented plotting if its not by group')
+
+    filtered_df = remove_month_17_and_6(
+        clonal_abundance_df,
+        timepoint_col
+    )
+    filtered_df = filter_cell_type_threshold(
+        filtered_df,
+        thresholds,
+        analyzed_cell_types=[cell_type]
+    )
+
+    nunique_time = filtered_df[timepoint_col].nunique()
+    filtered_df = filter_mice_with_n_timepoints(
+        filtered_df,
+        nunique_time
+    )
+    medianprops = dict(
+        linewidth=0,
+    )
+    meanprops = dict(
+        linestyle='solid',
+        linewidth=3,
+        color='black'
+    )
+    fig, ax = plt.subplots(figsize=(5, 5))
+    sns.despine()
+    plt.yscale('log')
+    if cell_type == 'gr':
+        ax.set_ylim([60e-6,5])
+    elif cell_type == 'b':
+        ax.set_ylim([30e-5,5])
+    
+    agg_df = pd.DataFrame(
+        filtered_df.groupby(
+            ['mouse_id', group_col, timepoint_col]
+        ).percent_engraftment.mean()
+    ).reset_index()
+    times = agg_df.sort_values(by=timepoint_col)[timepoint_col].unique()
+    for mouse_id, m_df in agg_df.groupby('mouse_id'):
+        sns.stripplot(
+            x=timepoint_col,
+            order=times,
+            y='percent_engraftment',
+            hue=group_col,
+            hue_order=['aging_phenotype', 'no_change'],
+            palette=COLOR_PALETTES[group_col],
+            dodge=True,
+            ax=ax,
+            data=m_df,
+            marker=MARKERS['mouse_id'][mouse_id],
+            size=12,
+            linewidth=.8,
+            alpha=0.8,
+            zorder=0,
+        )
+    sns.boxplot(
+        x=timepoint_col,
+        y='percent_engraftment',
+        hue=group_col,
+        hue_order=['aging_phenotype', 'no_change'],
+        data=agg_df,
+        ax=ax,
+        fliersize=0,
+        showbox=False,
+        whiskerprops={
+            "alpha": 0
+        },
+        showcaps=False,
+        showmeans=True,
+        meanline=True,
+        meanprops=meanprops,
+        medianprops=medianprops,
+    )
+    ax.set_title(cell_type)
+    ax.legend().remove()
+    for group, g_df in agg_df.groupby('group'):
+        stat_tests.one_way_ANOVArm(
+            data=g_df,
+            timepoint_col=timepoint_col,
+            id_col='mouse_id',
+            value_col='percent_engraftment',
+            overall_context=cell_type + ' ' + group,
+            show_ns=True,
+            match_cols=['mouse_id', 'group'],
+            merge_type='inner',
+            fill_na=0
+        )
+    stat_tests.ind_ttest_between_groups_at_each_time(
+        agg_df,
+        'percent_engraftment',
+        timepoint_col,
+        overall_context=cell_type,
+        show_ns=True,
+        group_col=group_col,
+    )
+
+    fname = save_path + os.sep \
+        + 'swarmplot_abundance_by-mouse' \
+        + '_' + cell_type \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+
+def plot_percent_balanced_expanded(
+    clonal_abundance_df: pd.DataFrame,
+    lineage_bias_df: pd.DataFrame,
+    timepoint_col: str,
+    thresholds: Dict[str, float],
+    by_group: bool,
+    bias_cat: str,
+    save: bool,
+    save_path: str,
+    save_format: str = 'png',
+    ) -> None:
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 4,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+
+    filt_time_abundance = remove_month_17(clonal_abundance_df, timepoint_col)
+
+    mouse_time = filt_time_abundance[['mouse_id', timepoint_col, 'group']].drop_duplicates()
+    expanded_clones = filter_cell_type_threshold(
+        filt_time_abundance,
+        thresholds,
+        analyzed_cell_types=thresholds.keys(),
+    )
+    bias_cat_df = add_bias_category(lineage_bias_df)
+    expanded_bias_df = bias_cat_df.merge(
+        expanded_clones[['code', 'mouse_id', timepoint_col]].drop_duplicates(),
+        how='inner',
+        validate='1:1'
+    )
+    bias_counts = pd.DataFrame(
+        expanded_bias_df \
+            .groupby(['mouse_id', timepoint_col, 'group', 'bias_category']) \
+            .code.nunique()
+    ).reset_index().rename(
+        columns={'code': '# of Expanded Clones'}
+    )
+    totals = pd.DataFrame(
+        bias_counts.groupby(['mouse_id', timepoint_col])\
+            ['# of Expanded Clones'].sum()
+    ).reset_index().rename(
+        columns={'# of Expanded Clones': 'total'}
+    )
+    bias_counts_total = bias_counts.merge(
+        totals,
+        how='inner',
+        validate='m:1'
+    )
+    bias_counts_total['Percent Expanded Clones'] = \
+        100*bias_counts_total['# of Expanded Clones']/bias_counts_total['total']
+
+    _, ax = plt.subplots(figsize=(8,8))
+    # Uncomment to look at just balanced clones
+    balanced_percent = bias_counts_total[bias_counts_total.bias_category == bias_cat]
+    balanced_percent_zero = balanced_percent.merge(
+        mouse_time,
+        how='outer',
+        validate='1:1',
+    ).fillna(0)
+    stripplot_mouse_markers_with_mean(
+        balanced_percent_zero,
+        timepoint_col,
+        'Percent Expanded Clones',
+        ax,
+        'group',
+        ['aging_phenotype', 'no_change']
+    )
+    stat_tests.ind_ttest_between_groups_at_each_time(
+        balanced_percent_zero,
+        'Percent Expanded Clones',
+        timepoint_col,
+        overall_context=bias_cat,
+        show_ns=True,
+        group_col='group',
+    )
+
+    fname = save_path + os.sep \
+        + 'percent_expanded_by-group_by-mouse' \
+        + '_' + bias_cat \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+    
+def stripplot_mouse_markers_with_mean(
+    agg_df: pd.DataFrame,
+    timepoint_col: str,
+    y_col: str,
+    ax,
+    hue_col: str = 'group',
+    hue_order: List[str] = ['aging_phenotype', 'no_change'],
+    ):
+
+    times = agg_df.sort_values(by=timepoint_col)[timepoint_col].unique()
+    for mouse_id, m_df in agg_df.groupby('mouse_id'):
+        sns.stripplot(
+            x=timepoint_col,
+            order=times,
+            y=y_col,
+            hue=hue_col,
+            hue_order=hue_order,
+            palette=COLOR_PALETTES[hue_col],
+            dodge=True,
+            ax=ax,
+            data=m_df,
+            marker=MARKERS['mouse_id'][mouse_id],
+            size=12,
+            linewidth=.8,
+            alpha=0.8,
+            zorder=0,
+        )
+
+    medianprops = dict(
+        linewidth=0,
+    )
+    meanprops = dict(
+        linestyle='solid',
+        linewidth=3,
+        color='black'
+    )
+
+    sns.boxplot(
+        x=timepoint_col,
+        y=y_col,
+        order=times,
+        hue=hue_col,
+        hue_order=hue_order,
+        data=agg_df,
+        ax=ax,
+        fliersize=0,
+        showbox=False,
+        whiskerprops={
+            "alpha": 0
+        },
+        showcaps=False,
+        showmeans=True,
+        meanline=True,
+        meanprops=meanprops,
+        medianprops=medianprops,
+    )
+    sns.despine()
+    ax.legend().remove()
+
+def plot_count_biased_changing_at_time(
+    lineage_bias_df: pd.DataFrame,
+    timepoint_col: str,
+    by_group: bool,
+    mtd: int,
+    timepoint: int,
+    save: bool,
+    save_path: str,
+    save_format: str = 'png',
+    ):
+
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 4,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+    filt_df = remove_month_17_and_6(
+        lineage_bias_df,
+        timepoint_col
+    )
+
+
+    bias_change_df = calculate_first_last_bias_change(
+        lineage_bias_df,
+        timepoint_col,
+        by_mouse=False
+    )
+    change_marked_df = mark_changed(
+        lineage_bias_df,
+        bias_change_df,
+        min_time_difference=mtd,
+        merge_type='inner',
+    )
+    with_bias_cat = add_bias_category(change_marked_df)
+
+    count_df = pd.DataFrame(with_bias_cat.groupby(
+        ['mouse_id', 'group', timepoint_col, 'bias_category_short', 'change_type']
+        ).code.nunique()
+    ).reset_index().rename(columns={
+        'code': '# of Clones'
+    })
+    count_at_time = count_df[count_df[timepoint_col] == timepoint]
+    _, axes = plt.subplots(ncols=2, figsize=(16,8))
+    cats = ['Lymphoid', 'Myeloid']
+    print(timepoint_col, timepoint)
+    for i in range(2):
+        cat = cats[i]
+        ax = axes[i]
+        cat_df = count_at_time[count_at_time.change_type == cat]
+        cat_zero_df = fill_mouse_id_zeroes(
+            cat_df,
+            info_cols=['group'],
+            fill_col='# of Clones',
+            fill_cat_col='bias_category_short',
+            fill_cats=['Balanced', 'Ly Biased', 'My Biased'],
+            fill_val=0,
+        )
+        stripplot_mouse_markers_with_mean(
+            cat_zero_df,
+            'bias_category_short',
+            '# of Clones',
+            ax,
+            'group',
+            ['aging_phenotype', 'no_change']
+        )
+        ax.set_title(cat)
+        stat_tests.ind_ttest_between_groups_at_each_time(
+            data=cat_zero_df,
+            test_col='# of Clones',
+            timepoint_col='bias_category_short',
+            overall_context=cat,
+            show_ns=True,
+            group_col='group'
+        )
+
+    fname = save_path + os.sep \
+        + 'count_biased_per_mouse' \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
+
+def cell_type_expanded_hsc_vs_group(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        thresholds: Dict[str, float],
+        cell_type: str,
+        timepoint: int,
+        save: bool,
+        save_path: str,
+        save_format: str = 'png',
+    ):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 4,
+            'axes.linewidth': 4,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+    filt_df = remove_month_17_and_6(
+        clonal_abundance_df,
+        timepoint_col
+    )
+    timepoint_df = get_clones_at_timepoint(
+        filt_df,
+        timepoint_col,
+        timepoint,
+        by_mouse=True,
+    )
+    expanded_at_time_df = filter_threshold(
+        timepoint_df,
+        thresholds[cell_type],
+        [cell_type],
+    )
+    if expanded_at_time_df.cell_type.nunique() != 1:
+        print(expanded_at_time_df.cell_type.unique())
+        raise ValueError('Too many cell types found')
+    if expanded_at_time_df[timepoint_col].nunique() != 1:
+        print('Timepoints:', expanded_at_time_df[timepoint_col].unique())
+
+    hsc_data = filt_df[filt_df.cell_type == 'hsc'] 
+
+    expanded_time_clones = expanded_at_time_df[['mouse_id', 'code']].drop_duplicates()
+
+    expanded_time_hsc = hsc_data.merge(
+        expanded_time_clones,
+        how='inner',
+        validate='1:1'
+    )
+
+    hsc_abundance_per_mouse = pd.DataFrame(
+        expanded_time_hsc.groupby(['mouse_id', 'group'])\
+            .percent_engraftment\
+            .sum()
+    ).reset_index()
+    mice_with_data = hsc_data[['mouse_id', 'group']].drop_duplicates()
+    zero_filled = hsc_abundance_per_mouse.merge(
+        mice_with_data,
+        how='outer',
+        validate='1:1'
+    ).fillna(0)
+    zero_filled['time'] = timepoint
+
+
+    _, ax = plt.subplots(figsize=(6,5))
+
+    stripplot_mouse_markers_with_mean(
+        zero_filled,
+        'time',
+        'percent_engraftment',
+        ax,
+        'group',
+        ['aging_phenotype', 'no_change']
+    )
+
+    ax.set_ylabel('Mean HSC Abundance')
+
+    sns.despine()
+
+    stat_tests.ind_ttest_between_groups_at_each_time(
+        data=zero_filled,
+        test_col='percent_engraftment',
+        timepoint_col='time',
+        overall_context='mean hsc abundance'.title(),
+        show_ns=True,
+    )
+    
+    
+    fname = save_path + os.sep \
+        + cell_type \
+        + '_' + timepoint_col[0] + str(timepoint)  \
+        + '_expanded_hsc_vs_group' \
+        + '.' + save_format
+    save_plot(fname, save, save_format)

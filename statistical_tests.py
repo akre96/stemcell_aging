@@ -187,7 +187,7 @@ def ind_ttest_between_groups_at_each_time(
             n1 = len(g2_df)
             mean_diff = g1_df[test_col].mean() \
                 - g2_df[test_col].mean()
-            context: str = '\t' + timepoint_col.title() + str(time) + ' '\
+            context: str = '\t' + timepoint_col.title() + ' ' + str(time) + ' '\
                 + g1 + ': ' + str(n0) \
                 + ', ' + g2 + ': ' + str(n1)
             raw_p_vals.append(p_value)
@@ -245,44 +245,6 @@ def ind_ttest_group_time(
             + str(groups[1]) + ' Mice: ' + str(n2)
         print_p_value(context, p_value, show_ns=show_ns)
 
-    print(
-        Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Independent T-Test on ' 
-        + overall_context
-        + ' per group between ' + replace_underscore_dot(timepoint_col) + 's'
-    )
-    for group, g_df in data.groupby(group_col):
-        for (t1, t2) in combinations(times, 2):
-            t1_df = g_df[g_df[timepoint_col] == t1]
-            t2_df = g_df[g_df[timepoint_col] == t2]
-            
-            n1 = t1_df.mouse_id.nunique()
-            n2 = t2_df.mouse_id.nunique()
-
-            stat, p_value = stats.ttest_ind(
-                t1_df[test_col],
-                t2_df[test_col], 
-            )
-            context = replace_underscore_dot(group) + ' ' \
-                + replace_underscore_dot(timepoint_col) + ' '\
-                + str(t1) + ' Mice: ' + str(n1)\
-                + ' vs '\
-                + str(t2) + ' Mice: ' + str(n2)
-            print_p_value(context, p_value, show_ns=show_ns)
-
-    group = 'all'
-    for (t1, t2) in combinations(times, 2):
-        t1_df = data[data[timepoint_col] == t1][test_col]
-        t2_df = data[data[timepoint_col] == t2][test_col]
-
-        stat, p_value = stats.ttest_ind(
-            t1_df,
-            t2_df, 
-        )
-        context = replace_underscore_dot(group) + ' ' \
-            + replace_underscore_dot(timepoint_col) + ' ' + str(t1) \
-            + ' vs ' + str(t2)
-        print_p_value(context, p_value, show_ns=show_ns)
 
 
 def rel_ttest_group_time(
@@ -581,6 +543,21 @@ def one_way_ANOVArm(
     merge_type: str,
     fill_na: Any,
 ) -> None:
+    if fill_na is not None:
+        index_cols = list(set([id_col] + match_cols))
+        times = data[timepoint_col].unique()
+        data = data.pivot_table(
+            values=value_col,
+            index=index_cols,
+            columns=timepoint_col,
+            fill_value=fill_na,
+        )
+        data = data.reset_index().melt(
+            id_vars=index_cols,
+            value_vars=times,
+            value_name=value_col
+        )
+
     model = AnovaRM(data, value_col, id_col, within=[timepoint_col])
     res = model.fit()
     p_value = res.anova_table['Pr > F'].tolist()

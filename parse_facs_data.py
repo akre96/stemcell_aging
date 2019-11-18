@@ -2,7 +2,7 @@ from typing import List
 import re
 import pandas as pd
 
-def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b'], sep: str = '\t') -> pd.DataFrame:
+def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str] = ['gr', 'b'], sep: str = '\t', data_type: str = 'cell_count') -> pd.DataFrame:
     """ Parses white blood cell count file to format as dataframe
 
     Arguments:
@@ -41,13 +41,13 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
             if not any(cell_type_col_name):
                 continue
 
-            cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id','day','month','cell_type','cell_count'])
+            cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id','day','month','cell_type',data_type])
             cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]].str.replace(" ", "")
             cell_type_timepoint_data['day'] = day
             cell_type_timepoint_data['month'] = month
             cell_type_timepoint_data['cell_type'] = cell_type.lower()
             cell_type_col = one_timepoint_cols[cell_type_col_name]
-            cell_type_timepoint_data['cell_count'] = one_timepoint_data[cell_type_col]
+            cell_type_timepoint_data[data_type] = one_timepoint_data[cell_type_col]
             parsed_timepoint_data = parsed_timepoint_data.append(cell_type_timepoint_data, ignore_index=True)
 
         if parsed_timepoint_data.empty:

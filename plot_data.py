@@ -22,7 +22,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from data_types import y_col_type, timepoint_type, change_type
+from data_types import y_col_type, timepoint_type, change_type, change_status
 from lineage_bias import parse_wbc_count_file
 from aggregate_functions import filter_threshold, \
     clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
@@ -93,7 +93,7 @@ def main():
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
     parser.add_argument('-p', '--options', dest='options', help='Graph Options', default='default')
     parser.add_argument('-d', '--by-day', dest='by_day', help='Plotting done on a day by day basis', action="store_true")
-    parser.add_argument('-t', '--threshold', dest='threshold', help='Set threshold for filtering', type=float, required=False)
+    parser.add_argument('-t', '--threshold', dest='threshold', help='Set threshold for filtering', type=float, required=False, default=0.0)
     parser.add_argument('-a', '--abundance-cutoff', dest='abundance_cutoff', help='Set threshold based on abundance cutoff', type=float, required=False)
     parser.add_argument('-b', '--bias-cutoff', dest='bias_cutoff', help='Cutoff for extreme bias', type=float, required=False)
     parser.add_argument('--invert', dest='invert', help='Invert the selection being done while filtering', action='store_true')
@@ -103,7 +103,9 @@ def main():
     parser.add_argument('--lymphoid-cell', dest='lymphoid_cell', help='cell used for lymphoid lineage', type=str, required=False, default='b')
     parser.add_argument('--time-change', dest='time_change', help='Set time change to across or between for certain graphs', type=str, required=False, default='between')
     parser.add_argument('--timepoint', dest='timepoint', help='Set timepoint to inspect for certain graphs', type=timepoint_type, required=False)
-    parser.add_argument('--change-type', dest='change_type', help='Set type of lineage bias changed clones to inspect for certain graphs', type=change_type, required=False)
+    parser.add_argument('--change-status', dest='change_status', help='Set status (Changed/Unchanged) of lineage bias changed clones to inspect for certain graphs', type=change_status, required=False)
+    parser.add_argument('--change-type', dest='change_type', help='Set type (Lymphoid/Myeloid) of lineage bias changed clones to inspect for certain graphs', type=change_type, required=False)
+    parser.add_argument('--bias-type', dest='bias_type', help='Set type [LC, LB, B, MB, MC] of lineage bias to inspect for certain graphs', required=False)
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--sum', dest='sum', help='Whether to plot sum abundance vs average abundance for certain graphs', action="store_true")
@@ -263,13 +265,65 @@ def main():
             myeloid_cell=args.myeloid_cell,
             lymphoid_cell=args.lymphoid_cell,
         )
+        print('Mice found in lineage bias data:', ', '.join(lineage_bias_df.mouse_id.unique()))
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
+
+    if graph_type in ['cell_type_expanded_hsc_vs_group']:
+        save_path = args.output_dir + os.sep + 'cell_type_expanded_hsc_vs_group'
+
+        abundance_cutoff = args.abundance_cutoff
+        _, thresholds = calculate_thresholds_sum_abundance(
+            present_clones_df,
+            abundance_cutoff=50,
+            timepoint_col=timepoint_col,
+            analyzed_cell_types=['gr', 'b']
+        )
+        timepoint = 'last'
+        if args.timepoint:
+            timepoint = args.timepoint
+        for cell_type in ['gr', 'b']:
+            cell_type_expanded_hsc_vs_group(
+                present_clones_df,
+                timepoint_col,
+                thresholds,
+                cell_type=cell_type,
+                timepoint=timepoint,
+                save=args.save,
+                save_path=save_path,
+                save_format='png',
+            )
+
+    if graph_type in ['count_biased_changing_at_time']:
+        save_path = args.output_dir + os.sep + 'count_biased_changing_at_time' 
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+        
+        timepoint = lineage_bias_df[timepoint_col].min()
+        if args.timepoint:
+            timepoint = args.timepoint
+
+        plot_count_biased_changing_at_time(
+            lineage_bias_df,
+            timepoint_col,
+            by_group=args.by_group,
+            mtd=mtd,
+            timepoint=int(timepoint),
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
 
     if graph_type in ['hsc_abund_bias_last_LC']:
         save_path = args.output_dir + os.sep + 'hsc_abund_bias_lat'
         max_myeloid_abundance = 0.001
         if args.options != 'default':
             max_myeloid_abundance = float(args.options)
+
         plot_lymphoid_committed_vs_bias_hsc(
             present_clones_df,
             lineage_bias_df,
@@ -279,13 +333,51 @@ def main():
             save_path=save_path,
             save_format='png'
         )        
+    if graph_type in ['percent_balanced_expanded']:
+        save_path = args.output_dir + os.sep + 'percent_balanced_expanded'
+
+        thresholds = {'gr': 0.0, 'b': 0.0}
+
+        if args.abundance_cutoff:
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=args.abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=[args.myeloid_cell, args.lymphoid_cell]
+            )
+        if not args.bias_type:
+            bias_type = 'B'
+        else:
+            bias_type = args.bias_type
+        plot_percent_balanced_expanded(
+            present_clones_df,
+            lineage_bias_df,
+            timepoint_col,
+            thresholds,
+            args.by_group,
+            bias_type,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )        
     if graph_type in ['balanced_clone_abundance']:
         save_path = args.output_dir + os.sep + 'balanced_clone_abundance'
+
+        thresholds = {'gr': 0.0, 'b': 0.0}
+
+        if args.abundance_cutoff:
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=args.abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=[args.myeloid_cell, args.lymphoid_cell]
+            )
 
         plot_balanced_clone_abundance(
             present_clones_df,
             lineage_bias_df,
             timepoint_col,
+            thresholds,
             args.group,
             save=args.save,
             save_path=save_path,
@@ -340,6 +432,7 @@ def main():
             present_clones_df,
             timepoint_col,
             mtd,
+            by_mouse=args.by_mouse,
             timepoint=args.timepoint,
             merge_type='inner',
             sum=args.sum,
@@ -442,6 +535,7 @@ def main():
             timepoint_col,
             bins=bins,
             change_type=args.change_type,
+            change_status=args.change_status,
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -902,6 +996,7 @@ def main():
             mtd,
             by_group=args.by_group,
             by_clone=args.by_clone,
+            by_mean=args.by_average,
             timepoint=args.timepoint,
             by_sum=args.sum,
             save=args.save,
@@ -1096,6 +1191,7 @@ def main():
             present_clones_df,
             timepoint_col,
             by_average=args.by_average,
+            group=args.group,
             save=args.save,
             save_path=save_path
         )
@@ -1816,32 +1912,45 @@ def main():
             'b': 0
         }
 
-        if args.abundance_cutoff:
-            abundance_cutoff = args.abundance_cutoff
+        if args.by_mouse:
+            for cell_type in ['gr', 'b']:
+                plot_abundance_clones_per_mouse(
+                    present_clones_df,
+                    timepoint_col=timepoint_col,
+                    cell_type=cell_type,
+                    thresholds=thresholds,
+                    by_group=args.by_group,
+                    save=args.save,
+                    save_path=args.output_dir + os.sep + 'swarmplot_abundance',
 
-            _, thresholds = calculate_thresholds_sum_abundance(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                timepoint_col=timepoint_col
-            )
+                )
+        else:
+            if args.abundance_cutoff:
+                abundance_cutoff = args.abundance_cutoff
 
-        if abundance_cutoff == 0:
-            print('\n ~~ Cutoff set to 0, due to number of clones plotting will take some time ~~ \n')
+                _, thresholds = calculate_thresholds_sum_abundance(
+                    present_clones_df,
+                    abundance_cutoff=abundance_cutoff,
+                    timepoint_col=timepoint_col
+                )
 
-        cell_type = 'gr'
-        for cell_type in ['gr', 'b']:
-            print('Plotting for ' + cell_type.title() + ' Cells')
-            swamplot_abundance_cutoff(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                thresholds=thresholds,
-                by_group=args.by_group,
-                group=args.group,
-                timepoint_col=timepoint_col,
-                cell_type=cell_type,
-                save=args.save,
-                save_path=args.output_dir + os.sep + 'swarmplot_abundance',
-            )
+            if abundance_cutoff == 0:
+                print('\n ~~ Cutoff set to 0, due to number of clones plotting will take some time ~~ \n')
+
+            cell_type = 'gr'
+            for cell_type in ['gr', 'b']:
+                print('Plotting for ' + cell_type.title() + ' Cells')
+                swamplot_abundance_cutoff(
+                    present_clones_df,
+                    abundance_cutoff=abundance_cutoff,
+                    thresholds=thresholds,
+                    by_group=args.by_group,
+                    group=args.group,
+                    timepoint_col=timepoint_col,
+                    cell_type=cell_type,
+                    save=args.save,
+                    save_path=args.output_dir + os.sep + 'swarmplot_abundance',
+                )
 
     if graph_type in ['avg_abund_by_sum']:
         save_path = args.output_dir + os.sep + 'Average_Abundance'
@@ -1983,17 +2092,41 @@ def main():
                 merge_type='inner',
                 min_time_difference=mtd,
             )
-            change_marked_df.to_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv', index=False)
         group = args.group
         timepoint = 'last'
         if args.timepoint:
             timepoint = args.timepoint
 
-        print('Change Cutoff:')
-        print(change_marked_df.change_cutoff.unique())
+        gfp_donor = parse_wbc_count_file(
+            args.donor,
+            [args.myeloid_cell, args.lymphoid_cell],
+            sep='\t',
+            data_type='donor_perc'
+        ).merge(
+            parse_wbc_count_file(
+                args.gfp,
+                [args.myeloid_cell, args.lymphoid_cell],
+                sep='\t',
+                data_type='gfp_perc'
+            ),
+            how='inner',
+            validate='1:1'
+        )
+        gfp_donor['gfp_x_donor'] = gfp_donor['gfp_perc'] * gfp_donor['donor_perc'] / (100 * 100)
+        gfp_donor = gfp_donor[['mouse_id', timepoint_col, 'gfp_x_donor']].drop_duplicates()
+        gfp_donor = pd.DataFrame(
+            gfp_donor.groupby(['mouse_id', timepoint_col]).gfp_x_donor.max()
+            ).reset_index()
+        print('Change Cutoff:', change_marked_df.change_cutoff.unique()[0])
+        force_order = False
+        if timepoint_col == 'month':
+            force_order = True
         plot_change_contributions(change_marked_df,
             timepoint_col=timepoint_col,
             timepoint=timepoint,
+            gfp_donor=gfp_donor,
+            gfp_donor_thresh=args.threshold,
+            force_order=force_order,
             save=args.save,
             save_path=save_path,
             save_format='png',
@@ -2003,15 +2136,10 @@ def main():
         save_path = args.output_dir + os.sep + 'abundance_at_percentile'
         num_points = 200
         
-        for cell_type in ['gr', 'b', 'hsc']:
-            contributions = percentile_sum_engraftment(
-                present_clones_df,
-                timepoint_col=timepoint_col,
-                cell_type=cell_type,
-                num_points=num_points,
-            )
+        for cell_type in ['b', 'gr']:
+            print(cell_type)
             plot_contributions(
-                contributions,
+                present_clones_df,
                 cell_type=cell_type,
                 timepoint_col=timepoint_col,
                 save=args.save,

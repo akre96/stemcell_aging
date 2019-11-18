@@ -82,8 +82,8 @@ def compare_gene_expression_vs_labels(
     _, p_val_greater = stats.mannwhitneyu(l0_exp, l1_exp, alternative='greater')
     _, p_val_less = stats.mannwhitneyu(l0_exp, l1_exp, alternative='less')
     
-    fold_change = l0_mean/l1_mean
-    log2fc = np.log2(fold_change)
+    log2fc = l0_mean - l1_mean
+    fold_change = 2**l0_mean/2**l1_mean
 
     return pd.DataFrame.from_dict(
         {

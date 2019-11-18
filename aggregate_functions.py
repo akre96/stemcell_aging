@@ -699,7 +699,7 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, timepoint_col: str, cell_
     time_col = timepoint_col
     percentile_range = np.linspace(0, 100, num_points)
     cell_type_df = input_df.loc[input_df.cell_type == cell_type]
-    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', time_col, 'time_str', 'cell_type']
+    contribution_df_cols = ['percentile', 'percent_sum_abundance', 'total_abundance', time_col, 'cell_type']
     contribution_df = pd.DataFrame(columns=contribution_df_cols)
     for percentile in percentile_range:
         for time_point in cell_type_df[time_col].unique():
@@ -708,7 +708,6 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, timepoint_col: str, cell_
             contribution_row.percentile = [percentile]
             contribution_row.cell_type = [cell_type]
             contribution_row.quantile = [time_df.quantile(percentile/100)]
-            contribution_row.time_str = [time_col.title() + ': ' + str(time_point)]
             contribution_row[time_col] = [time_point]
             contribution_row.total_abundance = [time_df.percent_engraftment.sum()]
             sum_top = time_df.loc[
@@ -934,7 +933,6 @@ def calculate_thresholds_sum_abundance(
         + str(abundance_cutoff) + ' -- \n'
     )
     for cell_type in analyzed_cell_types:
-        first_day = input_df[timepoint_col].min()
         month_4_cell_df = find_first_clones_in_mouse(
             input_df,
             timepoint_col
@@ -946,6 +944,7 @@ def calculate_thresholds_sum_abundance(
                 input_df,
                 timepoint_col
             )
+        month_4_cell_df[timepoint_col] = 'first'
 
         contributions = percentile_sum_engraftment(month_4_cell_df, timepoint_col, cell_type=cell_type)
         percentile, _ = find_intersect(
@@ -1271,6 +1270,7 @@ def calculate_first_last_bias_change(
         bias_change=lambda x: x.lineage_bias_last - x.lineage_bias_first,
         time_change=lambda x: x[timepoint_col+'_last'] - x[timepoint_col+'_first'],
     )
+    print(bias_change_df[bias_change_df.mouse_id == 'M3026'][['bias_change', 'time_change']].drop_duplicates())
     bias_change_df = bias_change_df[bias_change_df['time_change'] != 0]
     return bias_change_df
 def calculate_first_last_bias_change_with_avg_data(
@@ -1411,7 +1411,12 @@ def define_bias_category(lineage_bias: float) -> str:
     balanced_angle_max = 3*pi/8
     balanced_value_max = sin(2 * (balanced_angle_max - (pi/4)))
     balanced_angle = pi/4
+    comit_val = 1
     
+    #if lineage_bias >= comit_val:
+        #return 'MC'
+    #if lineage_bias <= -comit_val:
+        #return 'LC'
     if lineage_bias >= balanced_value_max:
         return 'MB'
     if lineage_bias <= balanced_value_min:
@@ -2093,29 +2098,24 @@ def label_exhausted_clones(
         )
         exhaust_df = survived.append(not_survived)
         if timepoint_col == 'gen':
-            exhaust_df.loc[exhaust_df.gen == 8, 'survived'] = 'Survived'
-            if only_last_gen:
-                print(Style.BRIGHT + 'Clones at Gen 8 set to Persistent')
-                survived_clones = last_labeled_df[last_labeled_df.gen == 8].code.unique()
-                survived = last_labeled_df[last_labeled_df.code.isin(survived_clones)].assign(
-                    survived='Survived'
-                )
-                exhausted = last_labeled_df[~last_labeled_df.code.isin(survived_clones)].assign(
-                    survived='Exhausted'
-                )
-                exhaust_df = survived.append(exhausted)
-                exhaust_df = exhaust_df[
-                    ['mouse_id', 'group', 'code', 'survived']
-                    ].drop_duplicates()
-                input_with_labels = add_labels_df.merge(
-                    exhaust_df,
-                    how='inner',
-                    validate='m:1'
-                )
-                print('\tLength before adding exhaustion labels:', len(add_labels_df))
-                print('\tLength after adding exhaustion labels:', len(input_with_labels))
-                return input_with_labels
-    
+            last_two_time_points = no_hsc_df[no_hsc_df['gen'].isin([7, 8])]
+            in_both = pd.DataFrame(
+                last_two_time_points.groupby(
+                    ['mouse_id', 'code']
+                )[timepoint_col].nunique()
+            ).reset_index()
+            survived_clones = in_both[in_both[timepoint_col] == 2]\
+                [['mouse_id', 'code']].drop_duplicates()\
+                .assign(survived='Survived')
+            exhaust_df = last_labeled_df.merge(
+                survived_clones,
+                how='left',
+                validate='m:1'
+            ).fillna('Exhausted')
+
+
+
+
     exhaust_df = exhaust_df[
         ['mouse_id', 'group', 'code', timepoint_col, 'total_time_change', 'time_change', 'isLast', 'survived']
         ].drop_duplicates()

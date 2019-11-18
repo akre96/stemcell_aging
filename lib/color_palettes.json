@@ -103,6 +103,9 @@
         "Host Clones": "#e84118",
         "Total Clones": "#2f3640"
     },
+    "time_desc": {
+        "first": "#F79F1F"
+    },
     "month": {
         "4": "#F79F1F",
         "6": "#A3CB38",
