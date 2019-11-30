@@ -286,6 +286,8 @@ def main():
                 present_clones_df,
                 timepoint_col,
                 thresholds,
+                by_mouse=args.by_mouse,
+                by_count=args.by_count,
                 cell_type=cell_type,
                 timepoint=timepoint,
                 save=args.save,
@@ -1191,6 +1193,7 @@ def main():
             present_clones_df,
             timepoint_col,
             by_average=args.by_average,
+            by_mouse=args.by_mouse,
             group=args.group,
             save=args.save,
             save_path=save_path
