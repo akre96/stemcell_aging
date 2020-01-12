@@ -268,6 +268,73 @@ def main():
         print('Mice found in lineage bias data:', ', '.join(lineage_bias_df.mouse_id.unique()))
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
 
+    if graph_type in ['survival_line']:
+        save_path = args.output_dir + os.sep + 'survival_line'
+        plot_survival_line(
+            present_clones_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
+    if graph_type in ['compare_change_contrib']:
+        save_path = args.output_dir + os.sep + 'changed_contribution'
+        if args.options != 'default':
+            mtd = int(args.options)
+        if args.cache:
+            change_marked_df = pd.read_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv')
+        else:
+            bias_change_df = calculate_first_last_bias_change(
+                lineage_bias_df,
+                timepoint_col=timepoint_col,
+                by_mouse=False,
+            )
+            change_marked_df = mark_changed(
+                present_clones_df,
+                bias_change_df,
+                merge_type='inner',
+                min_time_difference=mtd,
+            )
+        group = args.group
+        timepoint = 'last'
+        if args.timepoint:
+            timepoint = args.timepoint
+
+        gfp_donor = parse_wbc_count_file(
+            args.donor,
+            [args.myeloid_cell, args.lymphoid_cell],
+            sep='\t',
+            data_type='donor_perc'
+        ).merge(
+            parse_wbc_count_file(
+                args.gfp,
+                [args.myeloid_cell, args.lymphoid_cell],
+                sep='\t',
+                data_type='gfp_perc'
+            ),
+            how='inner',
+            validate='1:1'
+        )
+        gfp_donor['gfp_x_donor'] = gfp_donor['gfp_perc'] * gfp_donor['donor_perc'] / (100 * 100)
+        gfp_donor = gfp_donor[['mouse_id', timepoint_col, 'gfp_x_donor']].drop_duplicates()
+        gfp_donor = pd.DataFrame(
+            gfp_donor.groupby(['mouse_id', timepoint_col]).gfp_x_donor.max()
+            ).reset_index()
+        print('Change Cutoff:', change_marked_df.change_cutoff.unique()[0])
+        force_order = False
+        if timepoint_col == 'month':
+            force_order = True
+        plot_compare_change_contrib(
+            change_marked_df,
+            timepoint_col=timepoint_col,
+            timepoint=timepoint,
+            gfp_donor=gfp_donor,
+            gfp_donor_thresh=args.threshold,
+            save=args.save,
+            save_path=save_path,
+            save_format='png',
+        )
     if graph_type in ['cell_type_expanded_hsc_vs_group']:
         save_path = args.output_dir + os.sep + 'cell_type_expanded_hsc_vs_group'
 
@@ -872,7 +939,7 @@ def main():
             save_format='png'
         )
     if graph_type in ['clone_count_first_last']:
-        save_path = args.output_dir + os.sep + 'clone_count_bar'
+        save_path = args.output_dir + os.sep + 'clone_count_swarm'
 
         if timepoint_col == 'gen':
             lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
@@ -887,7 +954,7 @@ def main():
                 timepoint_col=timepoint_col,
             )
             
-        plot_clone_count_bar_first_last(
+        plot_clone_count_swarm_mean_first_last(
             present_clones_df,
             timepoint_col,
             thresholds,
@@ -949,6 +1016,37 @@ def main():
             save_format='png'
         )
 
+    if graph_type in ['shannon_time']:
+        save_path = args.output_dir + os.sep + 'shannon_at_time'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        plot_diversity_index(
+            present_clones_df,
+            timepoint_col,
+            timepoint=args.timepoint,
+            save=args.save,
+            save_path=save_path
+        )
+    if graph_type in ['n_most_abund_time']:
+        save_path = args.output_dir + os.sep + 'n_most_abund_time'
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        n = 5
+        if options != 'default':
+            n = int(options)
+
+        plot_n_most_abundant_at_time(
+            present_clones_df,
+            timepoint_col,
+            n,
+            timepoint=args.timepoint,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['n_most_abund']:
         save_path = args.output_dir + os.sep + 'n_most_abund_contrib'
 
@@ -980,6 +1078,27 @@ def main():
                 save_path=save_path,
             )
 
+    if graph_type in ['count_by_change']:
+        save_path = args.output_dir + os.sep + 'count_by_change' \
+            + os.sep + str(args.filter_bias_abund).replace('.', '-')
+
+        if timepoint_col == 'gen':
+            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
+
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+
+        plot_count_by_change(
+            lineage_bias_df,
+            present_clones_df,
+            timepoint_col,
+            mtd,
+            by_group=args.by_group,
+            timepoint=args.timepoint,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['hsc_abundance_by_change']:
         save_path = args.output_dir + os.sep + 'hsc_abundance_by_change' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
@@ -1163,11 +1282,15 @@ def main():
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
         if timepoint_col == 'gen':
             lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
-
+        mtd=3
+        if args.options != 'default':
+            mtd = int(args.options)
         plot_hsc_abund_bias_at_last(
             lineage_bias_df,
             present_clones_df,
             timepoint_col,
+            mtd=mtd,
+            change_type=args.change_type,
             by_group=args.by_group,
             save=args.save,
             save_path=save_path

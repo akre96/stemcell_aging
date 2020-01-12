@@ -2,12 +2,76 @@ import os
 import time
 import pandas as pd
 import scipy.stats as stats
+import matplotlib.pyplot as plt
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import itertools
 import multiprocessing as mp
+import pyensembl
+import plot_formatters as fmt
+import seaborn as sns
 
 
+
+def add_mouse_gene_names(experiment_with_fpr_df: pd.DataFrame):
+    ensembl = pyensembl.EnsemblRelease(species='mus musculus')
+    gene_names = []
+    for gene_id in experiment_with_fpr_df.gene_id:
+            try:
+                gene_names.append(ensembl.gene_by_id(gene_id).gene_name)
+            except ValueError:
+                gene_names.append(gene_id)
+
+    experiment_with_fpr_df['gene_name'] = gene_names
+    return experiment_with_fpr_df
+
+def plot_false_positive_scores(
+        experiment_with_fpr_df: pd.DataFrame,
+        linewidth: int = 3,
+        s: int = 200,
+    ):
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 8))
+    plt.subplots_adjust(wspace=0.4)
+    i = 0
+    for direction in ['less', 'greater']:
+        ax = axes.flatten()[i]
+        i += 1
+        sns.scatterplot(
+            x='nlt_p_value_'+direction,
+            y='p_value_' + direction + '_fpr',
+            data=experiment_with_fpr_df,
+            s=s,
+            alpha=0.8,
+            ax=ax,
+        )
+        ax.axhline(y=0.05, linestyle='dashed', c='gray', linewidth=linewidth)
+        ax.axvline(x=-1 * np.log10(0.05), linestyle='dashed', c='gray', linewidth=linewidth)
+
+        ax.set_ylabel('False Positive Rate')
+        ax.set_xlabel('-Log10(P-Value)')
+        fmt.add_grid_despine_linewidth(ax, linewidth=linewidth, grid=False)
+        fmt.tick_at_end_of_axis(ax, n_ticks=3, round_tick_end=False, hide_min=False, round_ticks=True, round_base=0.1)    
+        ax.set_title(direction, fontsize=25)
+    return fig, axes
+
+def filt_false_positive_p(
+        experiment_with_fpr_df: pd.DataFrame,
+        fps: float = 0.05,
+        p: float = 0.05
+    ):
+    pass_fpr_and_p_df = experiment_with_fpr_df[
+        (
+            (
+                (experiment_with_fpr_df.p_value_greater < p) &
+                (experiment_with_fpr_df.p_value_greater_fpr < p)
+            ) |
+            (
+                (experiment_with_fpr_df.p_value_less < fps) &
+                (experiment_with_fpr_df.p_value_less_fpr < fps)
+            )
+        )
+    ]
+    return pass_fpr_and_p_df
 
 def rna_seq_normalized_matrix_to_long(rnaseq_file_path: str) -> pd.DataFrame:
     """ Returns long form rna-seq data from the normalized matrix format
@@ -185,7 +249,6 @@ def generate_rna_seq_label_comparison_df(
             )
             print('\t\t After filtering genes: ', len(rna_df))
           
-
         # Select only those clones with labels (blood or bone biased)
         labeled_rna_df = rna_df.merge(
             labels_df,
@@ -213,9 +276,12 @@ def generate_rna_seq_label_comparison_df(
 
                 # Run comparison using all available CPUs
                 with mp.Pool() as pool:
-                    comp_results = pool.starmap(compare_gene_expression_vs_labels, inputs)
-                    comp_df = pd.concat(comp_results) # Dataframe for one experiment-replicate-comparison
-
+                    comp_results = pool.starmap(
+                        compare_gene_expression_vs_labels,
+                        inputs
+                        )
+                    # Dataframe for one experiment-replicate-comparison
+                    comp_df = pd.concat(comp_results)
 
             two_labels = two_labels_df['label_name'].unique()
             if len(two_labels) != 2:
@@ -395,6 +461,31 @@ def calculate_fpr_genes_vs_comparisons(
     exp_with_fpr_df['nlt_' + p_value_col] = -1 * np.log10(exp_with_fpr_df[p_value_col])
     return exp_with_fpr_df
 
+def calc_fpr_both_directions(comparison_df: pd.DataFrame, p_value_cutoff = 0.1):
+    start = time.process_time()
+
+    experiment_with_greater_fpr_df = calculate_fpr_genes_vs_comparisons(
+        comparison_df=comparison_df,
+        isolate_gene_cols=['experiment_type', 'comparison'],
+        p_value_col='p_value_greater',
+        p_value_cutoff=0.1,
+    )
+    experiment_with_less_fpr_df = calculate_fpr_genes_vs_comparisons(
+        comparison_df=comparison_df,
+        isolate_gene_cols=['experiment_type', 'comparison'],
+        p_value_col='p_value_less',
+        p_value_cutoff=0.1,
+    )
+    experiment_with_fpr_df = experiment_with_greater_fpr_df.merge(
+        experiment_with_less_fpr_df,
+        how='outer',
+        validate='1:1'
+    )
+    stop = time.process_time()
+
+    print('Time Elapsed:', stop - start, 'seconds')
+    return experiment_with_fpr_df
+
 def filtered_numpy_gene_list(gene_list_path: str) -> pd.DataFrame:
     """ Import numpy saved gene list (expects a .npy file)
 
@@ -413,3 +504,74 @@ def filtered_numpy_gene_list(gene_list_path: str) -> pd.DataFrame:
     filtered_gene_list = np.load(gene_list_path, allow_pickle=True)
     filtered_gene_list = list(filtered_gene_list.tolist())
     return pd.DataFrame(pd.Series(filtered_gene_list, name='gene_id').str.decode("utf-8"))
+
+def plot_sig_genes(sig_gene_expression: pd.DataFrame, comp: List, palette: Dict, linewidth: float = 4):
+    l1_l2_df = sig_gene_expression[sig_gene_expression.label_name.isin(comp)]
+    order = l1_l2_df.gene_name.unique()
+    _, ax = plt.subplots(figsize=(2 * l1_l2_df.gene_id.nunique(), 8))
+    sns.violinplot(
+        y='expression',
+        x='gene_name',
+        order=order,
+        hue='label_name',
+        hue_order=comp,
+        data=l1_l2_df,
+        ax=ax,
+        palette=palette,
+        dodge=True,
+        zorder=0,
+        cut=0
+
+    )
+    medianprops = dict(
+        linewidth=0,
+    )
+    meanprops = dict(
+        linestyle='solid',
+        linewidth=4,
+        color='#353b48'
+    )
+
+
+    sns.boxplot(
+        y='expression',
+        x='gene_name',
+        hue='label_name',
+        hue_order=comp,
+        order=order,
+        data=l1_l2_df,
+        ax=ax,
+        fliersize=0,
+        showbox=False,
+        whiskerprops={
+            "alpha": 0
+        },
+        dodge=True,
+        showcaps=False,
+        showmeans=True,
+        meanline=True,
+        meanprops=meanprops,
+        medianprops=medianprops,
+    )
+    med_df = pd.DataFrame(
+        l1_l2_df.groupby(['gene_name', 'label_name']).expression.median()
+    ).reset_index()
+    sns.stripplot(
+        y='expression',
+        x='gene_name',
+        order=order,
+        hue='label_name',
+        hue_order=comp,  
+        palette=['white', 'white'],
+        ax=ax,
+        dodge=True,
+        jitter=False,
+        data=med_df,
+        linewidth=1,
+        edgecolor='#353b48',
+        s=13,
+    )
+    ax.legend().remove()
+    sns.despine()
+    fmt.change_axis_linewidth(ax, linewidth)
+    ax.set_xlabel('')

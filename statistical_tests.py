@@ -5,6 +5,7 @@ import numpy as np
 import scipy.stats as stats
 from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from colorama import init, Fore, Back, Style
 
 init(autoreset=True)
@@ -22,19 +23,19 @@ def print_p_value(context: str, p_value: float, mean: float = None, show_ns: boo
     text = context \
             + ' P-Value: ' + str(p_value)
     if mean is not None:
-        text += ' Mean: ' + str(mean)
+        text += ' Mean Difference: ' + str(mean)
 
     if p_value < 0.001:
         print(
-            Fore.WHITE + Back.CYAN + Style.BRIGHT + text
+            Fore.WHITE + Back.CYAN + Style.BRIGHT + text + ' ***'
         )
     elif p_value < 0.01:
         print(
-            Fore.CYAN + Style.BRIGHT + text
+            Fore.CYAN + Style.BRIGHT + text + ' **'
         )
     elif p_value < 0.05:
         print(
-            Fore.CYAN + text
+            Fore.CYAN + text + ' *'
         )
     elif show_ns:
         print(
@@ -699,3 +700,13 @@ def friedman_wilcoxonSignedRank(
 
             )
 
+def anova_oneway(
+    data: pd.DataFrame,
+    category_col: str,
+    value_col: str,
+    overall_context: str,
+    show_ns: bool,
+) -> None:
+    comp = pairwise_tukeyhsd(data[value_col], data[category_col])
+    print(overall_context)
+    print(comp)

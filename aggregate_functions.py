@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from colorama import init, Fore, Back, Style
+from skbio.diversity import alpha_diversity
 from intersection.intersection import intersection
 from data_types import timepoint_type
 from parse_facs_data import parse_wbc_count_file
@@ -1565,9 +1566,10 @@ def calculate_survival_perc(
     """
     survival_counts = pd.DataFrame(
         clonal_survival_df.groupby(
-            ['survived', 'time_change', 'bias_category', 'mouse_id', 'group']
+            ['survived', 'time_change', 'bias_category', timepoint_col, 'mouse_id', 'group']
         ).code.nunique()
     ).reset_index()
+    print(survival_counts)
     survived = survival_counts[survival_counts['survived'] == 'Survived'].rename(
         columns={'code': 'survived_count'}
     )
@@ -1576,7 +1578,7 @@ def calculate_survival_perc(
     )
     survival_perc = survived.merge(
         exhausted,
-        on=['mouse_id', 'bias_category', 'time_change', 'group'],
+        on=['mouse_id', 'bias_category', 'time_change', timepoint_col, 'group'],
         how='inner',
         validate='1:1'
     ).assign(
@@ -2099,22 +2101,36 @@ def label_exhausted_clones(
         exhaust_df = survived.append(not_survived)
         if timepoint_col == 'gen':
             last_two_time_points = no_hsc_df[no_hsc_df['gen'].isin([7, 8])]
-            in_both = pd.DataFrame(
+
+            # Count number times clone in last 2 gens
+            last_gens_count = pd.DataFrame(
                 last_two_time_points.groupby(
                     ['mouse_id', 'code']
                 )[timepoint_col].nunique()
             ).reset_index()
-            survived_clones = in_both[in_both[timepoint_col] == 2]\
+
+            # Clones not in last two time points are exhausted
+            not_last_two_time_points = no_hsc_df[~no_hsc_df.code.isin(last_two_time_points.code.unique())]
+            exhausted_clones = not_last_two_time_points[['mouse_id', 'code']]\
+                .drop_duplicates()\
+                .assign(survived='Exhausted')
+            # Clones in 7 and 8 are survived
+            survived_clones = last_gens_count[last_gens_count[timepoint_col] == 2]\
                 [['mouse_id', 'code']].drop_duplicates()\
                 .assign(survived='Survived')
-            exhaust_df = last_labeled_df.merge(
+            
+
+            surv_df = last_labeled_df.merge(
                 survived_clones,
-                how='left',
+                how='inner',
                 validate='m:1'
-            ).fillna('Exhausted')
-
-
-
+            )
+            ex_df = last_labeled_df.merge(
+                exhausted_clones,
+                how='inner',
+                validate='m:1'
+            )
+            exhaust_df = pd.concat([surv_df, ex_df])
 
     exhaust_df = exhaust_df[
         ['mouse_id', 'group', 'code', timepoint_col, 'total_time_change', 'time_change', 'isLast', 'survived']
@@ -2176,3 +2192,19 @@ def label_lymphoid_comitted(
         'bias_category'
     ] = 'LC'
     return labeled_bias_df
+
+
+def shannon_diversity_wrapper(data):
+    return alpha_diversity('shannon', data.percent_engraftment.tolist())
+
+
+def calculate_shannon_diversity(
+    clonal_abundance_df: pd.DataFrame,
+    group_cols: list,
+    ) -> pd.DataFrame:
+    diversity_df = pd.DataFrame(
+        clonal_abundance_df.groupby(group_cols)\
+            .apply(shannon_diversity_wrapper)
+    ).reset_index().rename(columns={0: 'Shannon Diversity'})
+    return diversity_df
+
