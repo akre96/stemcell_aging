@@ -8,6 +8,8 @@ import os
 import numpy as np
 import scipy.stats as stats
 import pandas as pd
+import matplotlib as mpl
+mpl.use('agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from colorama import init, Fore, Back, Style
@@ -386,6 +388,7 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
                                  timepoint_col: str,
                                  threshold_column: str = 'percent_engraftment',
                                  lineage_bias: bool = False,
+                                 by_mouse: bool = True,
                                  ) -> pd.DataFrame:
     """ Finds clones enriched at a specific time point for a cell type
 
@@ -398,17 +401,18 @@ def find_enriched_clones_at_time(input_df: pd.DataFrame,
 
     Keyword Arguments:
         lineage_bias {bool} -- Checks if running lineage bias data (default: False)
+        by_mouse {bool} -- If timepoint first or last, finds it by mouse not by clone
 
     Returns:
         pd.DataFrame -- DataFrame with only clones enriched at specified timepoint
     """
-    if enrichment_time == 'last':
-        time_df = pd.DataFrame()
-        for _, m_df in input_df.groupby('mouse_id'):
-            last_time = m_df[timepoint_col].max()
-            time_df = time_df.append(m_df[m_df[timepoint_col] == last_time])
-    else:
-        time_df = input_df[input_df[timepoint_col] == int(enrichment_time)]
+
+    time_df = get_clones_at_timepoint(
+        input_df,
+        timepoint_col,
+        enrichment_time,
+        by_mouse,
+    )
     enriched_at_time_df = time_df[time_df[threshold_column] > enrichment_threshold].drop_duplicates(['code', 'mouse_id'])
 
     if lineage_bias:
@@ -425,7 +429,8 @@ def combine_enriched_clones_at_time(
         timepoint_col: str,
         thresholds: Dict[str, float],
         analyzed_cell_types: List[str],
-        lineage_bias: bool = False
+        lineage_bias: bool = False,
+        by_mouse: bool = True,
     ) -> pd.DataFrame:
     """ wrapper of find_enriched_clones_at_time() to combine entries from multiple cell types
 
@@ -446,9 +451,17 @@ def combine_enriched_clones_at_time(
                 lin_type = 'myeloid'
             if cell_type == 'b':
                 lin_type = 'lymphoid'
-            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, timepoint_col=timepoint_col, lineage_bias=lineage_bias, threshold_column=lin_type+'_percent_abundance')
+            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, by_mouse=by_mouse, timepoint_col=timepoint_col, lineage_bias=lineage_bias, threshold_column=lin_type+'_percent_abundance')
         else:
-            enriched_cell_df = find_enriched_clones_at_time(input_df, enrichment_time, thresholds[cell_type], cell_type, timepoint_col=timepoint_col, lineage_bias=lineage_bias)
+            enriched_cell_df = find_enriched_clones_at_time(
+                input_df,
+                enrichment_time,
+                thresholds[cell_type],
+                cell_type,
+                by_mouse=by_mouse,
+                timepoint_col=timepoint_col,
+                lineage_bias=lineage_bias
+            )
         all_enriched_df = all_enriched_df.append(enriched_cell_df)
     return all_enriched_df
 

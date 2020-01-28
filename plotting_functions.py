@@ -10401,6 +10401,8 @@ def plot_compare_change_contrib(
 
     for ct, c_df in filt_gxd.groupby('cell_type'):
         fig, ax = plt.subplots(figsize=(8,8))
+        order = ['Unchanged', 'Lymphoid', 'Myeloid']
+        hue_order = ['aging_phenotype', 'no_change']
         filled = fill_mouse_id_zeroes(
             c_df,
             info_cols=['cell_type', 'group'],
@@ -10413,7 +10415,8 @@ def plot_compare_change_contrib(
             data=filled,
             y='percent_engraftment',
             x='change_type',
-            order=['Lymphoid', 'Myeloid', 'Unchanged'],
+            order=order,
+            hue_order=hue_order,
             capsize=.1,
             errwidth=3,
             hue='group',
@@ -10425,8 +10428,9 @@ def plot_compare_change_contrib(
             data=filled,
             y='percent_engraftment',
             x='change_type',
-            order=['Lymphoid', 'Myeloid', 'Unchanged'],
+            order=order,
             hue='group',
+            hue_order=hue_order,
             palette=COLOR_PALETTES['group'],
             ci=None,
             zorder=1,
@@ -10476,6 +10480,7 @@ def plot_compare_change_contrib(
 def plot_survival_line(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
+        by_group: bool,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
@@ -10499,6 +10504,11 @@ def plot_survival_line(
         clonal_abundance_df,
         timepoint_col
     )
+    clonal_abundance_df = remove_gen_8_5(
+        clonal_abundance_df,
+        timepoint_col,
+        False,
+    )
     survival_df = label_exhausted_clones(
         None,
         clonal_abundance_df,
@@ -10508,6 +10518,11 @@ def plot_survival_line(
         'Exhausted',
         'Survived'
     ])]
+    if by_group:
+        hue = 'group'
+    else:
+        hue = 'mouse_id'
+
     fig, axes = plt.subplots(ncols=2, nrows=2, figsize=(16,16))
     plt.subplots_adjust(hspace=.5)
     i=0
@@ -10527,16 +10542,39 @@ def plot_survival_line(
             y='percent_engraftment',
             estimator=None,
             units='code',
-            hue='mouse_id',
-            palette=COLOR_PALETTES['mouse_id'],
+            hue=hue,
+            palette=COLOR_PALETTES[hue],
             ax=ax,
-            alpha=0.5
+            alpha=0.3
         )
+        sns.lineplot(
+            data=s_df,
+            x=timepoint_col,
+            y='percent_engraftment',
+            hue=hue,
+            palette=['white','white'],
+            ax=ax,
+            ci=None,
+            lw=10,
+        )
+        sns.lineplot(
+            data=s_df,
+            x=timepoint_col,
+            y='percent_engraftment',
+            hue=hue,
+            palette=COLOR_PALETTES[hue],
+            ax=ax,
+            ci=None,
+            lw=6,
+        )
+        ax.legend().remove()
         sns.despine()
         ax.set_title(s + ' ' + ct)
     fname = os.path.join(
         save_path,
-        'survival_line_abundance.' + save_format
+        'survival_line_abundance_'
+            + hue
+            + '.' + save_format
     ) 
     save_plot(fname, save, save_format)
 
@@ -10829,3 +10867,105 @@ def plot_diversity_index(
             + '.' + save_format
 
         save_plot(file_name, save, save_format)
+
+def plot_expanded_at_time_abundance(
+        clonal_abundance_df: pd.DataFrame,
+        timepoint_col: str,
+        timepoint: Any,
+        by_group: bool,
+        thresholds: Dict,
+        save: bool = False,
+        save_path: str = './output',
+        save_format: str = 'png',
+):
+    sns.set_context(
+        'paper',
+        rc={
+            'lines.linewidth': 3,
+            'axes.linewidth': 3,
+            'axes.labelsize': 24,
+            'xtick.major.width': 5,
+            'ytick.major.width': 5,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'medium',
+        }
+
+    )
+
+    clonal_abundance_df = remove_month_17_and_6(
+        clonal_abundance_df,
+        timepoint_col
+    )
+    clonal_abundance_df = remove_gen_8_5(
+        clonal_abundance_df,
+        timepoint_col,
+        False,
+    )
+    expanded_at_time = combine_enriched_clones_at_time(
+        clonal_abundance_df,
+        timepoint,
+        timepoint_col,
+        thresholds,
+        analyzed_cell_types=['gr', 'b'],
+        by_mouse=True,
+    )
+    if by_group:
+        hue = 'group'
+    else:
+        hue = 'mouse_id'
+
+    fig, axes = plt.subplots(ncols=2, nrows=1, figsize=(16,8))
+    plt.subplots_adjust(hspace=.5)
+    i=0
+    for (ct), s_df in expanded_at_time.groupby(['cell_type']):
+        if ct not in ['gr', 'b']:
+            continue
+        ax = axes.flatten()[i]
+        i += 1
+        if ct == 'gr':
+            ax.set_yscale('symlog', linthreshy=10E-4)
+        else:
+            ax.set_yscale('symlog', linthreshy=10E-3)
+
+        sns.lineplot(
+            data=s_df,
+            x=timepoint_col,
+            y='percent_engraftment',
+            estimator=None,
+            units='code',
+            hue=hue,
+            palette=COLOR_PALETTES[hue],
+            ax=ax,
+            alpha=0.3
+        )
+        sns.lineplot(
+            data=s_df,
+            x=timepoint_col,
+            y='percent_engraftment',
+            hue=hue,
+            palette=['white','white'],
+            ax=ax,
+            ci=None,
+            lw=10,
+        )
+        sns.lineplot(
+            data=s_df,
+            x=timepoint_col,
+            y='percent_engraftment',
+            hue=hue,
+            palette=COLOR_PALETTES[hue],
+            ax=ax,
+            ci=None,
+            lw=6,
+        )
+        ax.legend().remove()
+        sns.despine()
+        ax.set_title(str(timepoint) + ' ' + ct)
+    fname = os.path.join(
+        save_path,
+        'expanded_line_abundance_'
+        + hue + '_' + str(timepoint)
+        + '.' + save_format
+    )
+    save_plot(fname, save, save_format)

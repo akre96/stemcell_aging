@@ -575,3 +575,31 @@ def plot_sig_genes(sig_gene_expression: pd.DataFrame, comp: List, palette: Dict,
     sns.despine()
     fmt.change_axis_linewidth(ax, linewidth)
     ax.set_xlabel('')
+
+def labels_in_data_summary_stat(
+        experiment_data_dir: str,
+        replicates: List[str],
+        labels_df: pd.DataFrame,
+        group_vars: List = ['mouse_id'],
+    ):
+    for replicate in replicates:
+        file_name = os.path.join(
+            experiment_data_dir,
+            replicate + '_bridged.csv'
+        )
+        rna_df = rna_seq_normalized_matrix_to_long(file_name)
+        cell_clones_df = rna_df[['CBC', 'code']]
+        labeled_rna_df = cell_clones_df.merge(
+            labels_df,
+            how='inner',
+            validate='m:m'
+        )
+        print('\n', replicate, 'Unique Clones Per Mouse:')
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+            print(
+                pd.DataFrame(
+                    labeled_rna_df.groupby(group_vars)[
+                        ['code', 'CBC']
+                    ].nunique().reset_index()
+                )
+            )

@@ -1,10 +1,12 @@
 import pandas as pd
 from pandas.util.testing import assert_series_equal
 import numpy.testing as npt
-from ..aggregate_functions import filter_threshold, count_clones, find_enriched_clones_at_time, combine_enriched_clones_at_time
+import sys,os
+sys.path.append(os.getcwd())
+from aggregate_functions import filter_threshold, count_clones, find_enriched_clones_at_time, combine_enriched_clones_at_time
 
 TEST_DATA = pd.read_csv('test/test_data/test_all_long.csv')
-REAL_DATA = pd.read_csv('test/test_data/Ania_M_all_percent-engraftment_100818_long.csv')
+REAL_DATA = pd.read_csv('test/test_data/Ania_M_all OT2.0 rerun_percent-engraftment_NO filter_080819_long.csv')
 TIMEPOINT_COL = 'day'
 
 

@@ -20,6 +20,9 @@ import sys
 from colorama import init, Fore, Back, Style
 import pandas as pd
 import numpy as np
+import matplotlib as mpl
+mpl.use('MacOSX')
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 from data_types import y_col_type, timepoint_type, change_type, change_status
@@ -268,11 +271,35 @@ def main():
         print('Mice found in lineage bias data:', ', '.join(lineage_bias_df.mouse_id.unique()))
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
 
+    if graph_type in ['expanded_at_time_abundance']:
+        save_path = args.output_dir + os.sep + 'expanded_at_time_abundance'
+
+        thresholds = {'gr': 0.0, 'b': 0.0}
+
+        if args.abundance_cutoff:
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=args.abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=[args.myeloid_cell, args.lymphoid_cell]
+            )
+
+        plot_expanded_at_time_abundance(
+            present_clones_df,
+            timepoint_col,
+            args.timepoint,
+            args.by_group,
+            thresholds,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['survival_line']:
         save_path = args.output_dir + os.sep + 'survival_line'
         plot_survival_line(
             present_clones_df,
             timepoint_col,
+            by_group=args.by_group,
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -296,7 +323,6 @@ def main():
                 merge_type='inner',
                 min_time_difference=mtd,
             )
-        group = args.group
         timepoint = 'last'
         if args.timepoint:
             timepoint = args.timepoint
