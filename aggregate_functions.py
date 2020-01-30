@@ -2221,3 +2221,41 @@ def calculate_shannon_diversity(
     ).reset_index().rename(columns={0: 'Shannon Diversity'})
     return diversity_df
 
+
+def get_n_most_abundant_at_time(
+    clonal_abundance_df: pd.DataFrame,
+    n: int,
+    timepoint_col: str,
+    timepoint: Any,
+    by_mouse: bool,
+    ) -> pd.DataFrame:
+    """ returns all data from top n clones per cell type at a timepoint
+    
+    Arguments:
+        clonal_abundance_df {pd.DataFrame}
+        n {int} -- number of top clones
+        timepoint_col {str} -- column to find time
+        timepoint {Any} -- time at which to be top
+        by_mouse {bool} -- look at time points per mouse
+    
+    Returns:
+        pd.DataFrame
+    """
+    time_clones = get_clones_at_timepoint(
+        clonal_abundance_df,
+        timepoint_col,
+        timepoint,
+        by_mouse
+    ).sort_values(by='percent_engraftment', ascending=False)
+    top_n = pd.DataFrame(
+        time_clones.groupby(['mouse_id', 'cell_type'])\
+            .head(n)
+    ).reset_index()
+    return clonal_abundance_df.merge(
+        top_n[['mouse_id', 'code', 'cell_type']],
+        how='inner',
+        validate='m:1',
+    )
+
+
+

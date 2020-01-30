@@ -707,6 +707,16 @@ def anova_oneway(
     overall_context: str,
     show_ns: bool,
 ) -> None:
-    comp = pairwise_tukeyhsd(data[value_col], data[category_col])
-    print(overall_context)
-    print(comp)
+    F, p = stats.f_oneway(
+        *[data[data[category_col] == cat][value_col] for cat in data[category_col].unique()]
+    )
+    print_p_value(
+        '\n' + overall_context + ' One Way ANOVA' ,
+        p,
+        show_ns=show_ns
+
+    )
+    if p < 0.05:
+        comp = pairwise_tukeyhsd(data[value_col], data[category_col])
+        print(comp)
+        print(data.groupby(category_col).nunique())

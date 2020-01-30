@@ -17,11 +17,14 @@ import json
 import glob
 import os
 import sys
+import platform
 from colorama import init, Fore, Back, Style
 import pandas as pd
 import numpy as np
 import matplotlib as mpl
-mpl.use('MacOSX')
+if platform.system() == 'Darwin':
+    print(Fore.YELLOW + 'USING MACOSX BACKEND FOR MATPLOTLIB')
+    mpl.use('MacOSX')
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -123,6 +126,7 @@ def main():
     parser.add_argument('--cache', dest='cache', help='Use Cached Data', action="store_true")
     parser.add_argument('--cache-dir', dest='cache_dir', help='Where cache data is stored', default='/home/sakre/Data/cache')
     parser.add_argument('-y', '--y-col', dest='y_col', help='Which column to plot as y-axis for certain plots', required=False, default='lineage_bias', type=y_col_type)
+    parser.add_argument('-n', dest='n', help='Integer value', required=False, type=int)
 
     # Init colorama
     init(autoreset=True)
@@ -290,6 +294,7 @@ def main():
             args.timepoint,
             args.by_group,
             thresholds,
+            n=args.n,
             save=args.save,
             save_path=save_path,
             save_format='png'

@@ -7,6 +7,7 @@ from typing import List, Tuple, Dict, Any
 from collections import OrderedDict
 from itertools import combinations
 import os
+import platform
 import json
 import pandas as pd
 import numpy as np
@@ -17,7 +18,10 @@ from statsmodels.sandbox.regression.predstd import wls_prediction_std
 from sklearn.svm import LinearSVC
 from sklearn.cluster import KMeans
 import matplotlib as mpl
-#mpl.use('Qt5Agg')
+from colorama import init, Fore, Back, Style
+if platform.system() == 'Darwin':
+    print(Fore.YELLOW + 'USING MACOSX BACKEND FOR MATPLOTLIB')
+    mpl.use('MacOSX')
 import matplotlib.ticker as ticker
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -2380,8 +2384,6 @@ def plot_bias_change_cutoff(
     plt.scatter(x_c, y_c, c='k')
     plt.axvline(x_c[0], c='k')
     sns.despine()
-    locs, labels = plt.xticks()
-    locs = locs + [x_c[0]]
     plt.xticks([0, x_c[0], 2])
 
     if group != 'all':
@@ -3129,7 +3131,6 @@ def plot_bias_dist_mean_abund_group_vs(
             #ncol=2)
 
     min_max_change = [bias_change_cutoff, -1 * bias_change_cutoff]
-    ymin, ymax = plt.ylim()
     sns.despine()
     plt.axvline(min_max_change[0], linestyle='dashed', c='k')
     plt.axvline(min_max_change[1], linestyle='dashed', c='k')
@@ -8355,7 +8356,7 @@ def plot_abundance_change_changed_group_grid(
     else:
         print(Fore.RED + 'MAPPING TO FACETGRID') 
         g.map(
-            sns.boxenplot,
+            violin_mean,
             "change-group",
             "value",
             order=col_order,
@@ -8493,6 +8494,7 @@ def plot_hsc_and_blood_clone_count(
     ax = plt.gca()
     order=['HSC', 'Blood Last']
     y_col = 'code'
+    counts = counts[counts.sample_type.isin(order)]
 
     show_ns = True
     stat_tests.rel_ttest_group_time(
@@ -9636,7 +9638,7 @@ def plot_abundance_clones_per_mouse(
     if by_group:
         group_col = 'group'
     else:
-        raise ValueError('Not implemented plotting if its not by group')
+        raise ValueError('Not implemented plotting if its not by group.\n\tTry re-running with both --by-group and --by-mouse flags')
 
     filtered_df = remove_month_17_and_6(
         clonal_abundance_df,
@@ -10642,7 +10644,6 @@ def plot_count_by_change(
         fill_cats=change_marked_df.change_type.unique(),
         fill_val=0,
     )
-    print(count_df.sort_values(by='mouse_id'))
     desc_add = 'count'
     y_desc = '# Of Clones'
     mouse_markers = True
@@ -10874,6 +10875,7 @@ def plot_expanded_at_time_abundance(
         timepoint: Any,
         by_group: bool,
         thresholds: Dict,
+        n: int,
         save: bool = False,
         save_path: str = './output',
         save_format: str = 'png',
@@ -10902,14 +10904,27 @@ def plot_expanded_at_time_abundance(
         timepoint_col,
         False,
     )
-    expanded_at_time = combine_enriched_clones_at_time(
-        clonal_abundance_df,
-        timepoint,
-        timepoint_col,
-        thresholds,
-        analyzed_cell_types=['gr', 'b'],
-        by_mouse=True,
-    )
+    if n:
+        print(Fore.YELLOW + '\tPlotting N Most Abundant: ' + str(n))
+        expanded_at_time = get_n_most_abundant_at_time(
+            clonal_abundance_df,
+            n,
+            timepoint_col,
+            timepoint,
+            by_mouse=True,
+        )
+        desc = '_n-'+str(n)
+    else:
+        expanded_at_time = combine_enriched_clones_at_time(
+            clonal_abundance_df,
+            timepoint,
+            timepoint_col,
+            thresholds,
+            analyzed_cell_types=['gr', 'b'],
+            by_mouse=True,
+        )
+        desc = '_gr-'+round(thresholds['gr'],2)\
+             + '_b-'+round(thresholds['b'],2)
     if by_group:
         hue = 'group'
     else:
@@ -10962,10 +10977,13 @@ def plot_expanded_at_time_abundance(
         ax.legend().remove()
         sns.despine()
         ax.set_title(str(timepoint) + ' ' + ct)
+        if n:
+            ax.set_title(str(timepoint) + ' ' + ct + ' n:' + str(n))
     fname = os.path.join(
         save_path,
         'expanded_line_abundance_'
         + hue + '_' + str(timepoint)
+        + desc
         + '.' + save_format
     )
     save_plot(fname, save, save_format)
