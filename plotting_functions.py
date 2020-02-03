@@ -3888,6 +3888,7 @@ def plot_not_survived_count_box(
     not_survived_df = not_survived_df.assign(
         last_timepoint= lambda x: (x.time_change + min_timepoint).astype('int32').astype(str)
     )
+    not_survived_df = not_survived_df[not_survived_df.survived == 'Exhausted']
 
     # Plot All Clones
     count_df = pd.DataFrame(not_survived_df.groupby(
@@ -3931,7 +3932,7 @@ def plot_not_survived_count_box(
                 value_col='code',
                 timepoint_col='last_timepoint',
                 overall_context=group.title() + ' Exhausted Clone Count',
-                show_ns=False,
+                show_ns=True,
             )
     else:
         ax = sns.boxplot(
@@ -5043,7 +5044,7 @@ def plot_clone_count_swarm(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
-    save_labels = True
+    save_labels = False
     sns.set_context(
         'paper',
         rc={
@@ -5598,7 +5599,8 @@ def plot_clone_count_bar_first_last(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
-    save_labels = True
+    save_labels = False
+
     threshold_df = filter_cell_type_threshold(
         clonal_abundance_df,
         thresholds, 
@@ -6525,12 +6527,16 @@ def exhaust_persist_abund(
         filename_addon='mean'
         survival_sum_per_mouse = pd.DataFrame(
             survival_df.groupby(['mouse_id', timepoint_col, 'group', 'survived'])[y_col].mean()
-            )[y_col].unstack(
-                    fill_value=0
-                ).stack().reset_index(name=y_col)
-
-        survival_sum_per_mouse = survival_sum_per_mouse[['mouse_id', 'group', 'survived', y_col]].drop_duplicates()
-        survival_cell_df = survival_sum_per_mouse
+            ).reset_index()
+        survival_mean_filled = fill_mouse_id_zeroes(
+            survival_sum_per_mouse,
+            ['group', 'cell_type'],
+            fill_col=y_col,
+            fill_cat_col='survived',
+            fill_cats=survival_sum_per_mouse.survived.unique(),
+            fill_val=0,
+        )
+        survival_cell_df = survival_mean_filled
     elif by_count:
         filename_addon='count'
         y_col = 'code'
@@ -6607,7 +6613,11 @@ def exhaust_persist_abund(
         dodge = False
 
     if not by_count:
-        ax.set_yscale('symlog', linthreshy=10e-3)
+        survival_cell_df[y_col] = np.log10(
+            10**(-3) + survival_cell_df[y_col]
+        )
+        ax.set_ylim([-3.1, 1.1])
+        ax.set_yticks([-3, -2, -1, 0, 1])
 
     medianprops = dict(
         linewidth=0,
@@ -6617,47 +6627,39 @@ def exhaust_persist_abund(
         linewidth=3,
         color='black'
     )
-    sns.boxplot(
-        x=x_col,
-        y=y_col,
-        order=order,
-        data=survival_cell_df,
-        hue=hue_col,
-        hue_order=hue_order,
-        dodge=dodge,
-        showbox=False,
-        whiskerprops={
-            "alpha": 0
-        },
-        ax=ax,
-        showcaps=False,
-        showmeans=True,
-        meanline=True,
-        meanprops=meanprops,
-        medianprops=medianprops,
-        fliersize=0,
-    )
 
 
     if by_count or by_sum:
-        for mouse_id, m_df in survival_cell_df.groupby('mouse_id'):
-            sns.stripplot(
-                x=x_col,
-                y=y_col,
-                order=order,
-                data=m_df,
-                hue=hue_col,
-                hue_order=hue_order,
-                palette=palette,
-                marker=MARKERS['mouse_id'][mouse_id],
-                linewidth=1,
-                ax=ax,
-                size=15,
-                dodge=dodge,
-                zorder=0,
-                alpha=0.8,
-            )
+        stripplot_mouse_markers_with_mean(
+            survival_cell_df,
+            x_col,
+            y_col,
+            ax,
+            hue_col,
+            hue_order,
+            order,
+        )
     else:
+        sns.boxplot(
+            x=x_col,
+            y=y_col,
+            order=order,
+            data=survival_cell_df,
+            hue=hue_col,
+            hue_order=hue_order,
+            dodge=dodge,
+            showbox=False,
+            whiskerprops={
+                "alpha": 0
+            },
+            ax=ax,
+            showcaps=False,
+            showmeans=True,
+            meanline=True,
+            meanprops=meanprops,
+            medianprops=medianprops,
+            fliersize=0,
+        )
         sns.swarmplot(
             x=x_col,
             y=y_col,
@@ -6726,7 +6728,7 @@ def exhaust_persist_hsc_abund(
         }
     )
 
-    save_labels = True
+    save_labels = False
     clonal_abundance_df = remove_month_17_and_6(
         clonal_abundance_df,
         timepoint_col,
@@ -8612,9 +8614,11 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
             'figure.titlesize': 'small',
         }
     )
-    tenx_mice_only = False
-    plot_b = False
-    show_0 = True
+    tenx_mice_only = False # Plot only 10X sequenced mice
+    plot_b = False # Plots only B abundance on Y-axis, if cell_type gr, plots B abundance of isolated clones
+    show_0 = True # Show symlog plot with 0 abundant HSCs
+    save_labels = False # Save code-hsc abundance isolated labels
+    plot_boundary = False # Plot decision boundary
 
     clonal_abundance_df = remove_month_17(
         clonal_abundance_df,
@@ -8682,13 +8686,14 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
     )
     with_boundary_df['in_boundary'] = with_boundary_df[y_col] < with_boundary_df['boundary']
 
-    labels_df = with_boundary_df[['code', 'mouse_id', 'group', 'in_boundary']].drop_duplicates()
-    label_path = os.path.join(
-        save_path,
-        cell_type + '_hsc_bound_labels.csv'
-    )
-    print(Fore.YELLOW + 'Saving labels to: ' + label_path)
-    labels_df.to_csv(label_path, index=False)
+    if save_labels:
+        labels_df = with_boundary_df[['code', 'mouse_id', 'group', 'in_boundary']].drop_duplicates()
+        label_path = os.path.join(
+            save_path,
+            cell_type + '_hsc_bound_labels.csv'
+        )
+        print(Fore.YELLOW + 'Saving labels to: ' + label_path)
+        labels_df.to_csv(label_path, index=False)
     # PLOTS B ABUNDANCE FOR CELLS IN GR ISOLATED
     if by_group:
         hue_col = 'group'
@@ -8706,12 +8711,6 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
         alt_ct_df = clonal_abundance_df[
             clonal_abundance_df.cell_type.isin(['b', 'hsc'])
         ]
-        #alt_ct_df = filter_cell_type_threshold(
-            #clonal_abundance_df,
-            #thresholds,
-            #analyzed_cell_types=['b', 'hsc']
-        #)
-
         y_col = 'b' + '_percent_engraftment'
         wide_alt_ct_abundance_df = abundance_to_long_by_cell_type(
             alt_ct_df,
@@ -8838,12 +8837,13 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
     )
     ax.xaxis.set_major_formatter(ticks)
     ax.yaxis.set_major_formatter(ticks)
-    # UNCOMMENT TO PLOT DECISION BOUNDARY
-    #ax.plot(
-        #boundary['hsc_percent_engraftment'],
-        #boundary['boundary'],
-        #c='#d63031'
-    #)
+    if plot_boundary:
+        rel_boundary = boundary[boundary['boundary'] > 0]
+        ax.plot(
+            rel_boundary['hsc_percent_engraftment'],
+            rel_boundary['boundary'],
+            c='#d63031'
+        )
     sns.despine()
     ax.set_xlabel('HSC Abundance')
     ax.set_ylabel(cell_type.title() + ' Abundance')
@@ -9768,15 +9768,16 @@ def plot_percent_balanced_expanded(
     )
 
     filt_time_abundance = remove_month_17(clonal_abundance_df, timepoint_col)
+    filt_time_bias = remove_month_17(lineage_bias_df, timepoint_col)
 
     first = get_clones_at_timepoint(
-        clonal_abundance_df,
+        filt_time_abundance,
         timepoint_col,
         'first',
         by_mouse=True
     )
     last = get_clones_at_timepoint(
-        clonal_abundance_df,
+        filt_time_abundance,
         timepoint_col,
         'last',
         by_mouse=True
@@ -10227,7 +10228,7 @@ def plot_clone_count_swarm_mean_first_last(
         save_path: str = './output',
         save_format: str = 'png'
     ) -> None:
-    save_labels = True
+    save_labels = False
     threshold_df = filter_cell_type_threshold(
         clonal_abundance_df,
         thresholds, 

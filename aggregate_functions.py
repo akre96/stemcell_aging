@@ -1424,7 +1424,6 @@ def define_bias_category(lineage_bias: float) -> str:
     balanced_value_min = sin(2 * (balanced_angle_min - (pi/4)))
     balanced_angle_max = 3*pi/8
     balanced_value_max = sin(2 * (balanced_angle_max - (pi/4)))
-    balanced_angle = pi/4
     comit_val = 1
     
     #if lineage_bias >= comit_val:

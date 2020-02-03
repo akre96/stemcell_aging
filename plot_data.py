@@ -86,14 +86,14 @@ def main():
         
 
     """
-    root_data_dir = '/Users/akre96/Data/HSC_aging_project/aging_and_10x'
+    root_data_dir = '/Users/akre96/Data/HSC_aging_project/aging_10x_2020'
     parser = argparse.ArgumentParser(description="Plot input data")
-    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default=root_data_dir+'/Ania_M_all OT2.0 rerun_percent-engraftment_NO filter_080819_long.csv')
+    parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default=root_data_dir+'/Ania_M_allAnia OT2.0 rerun_percent-engraftment_NO filter_013120_long.csv')
     parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default=root_data_dir+'/rest_of_clones')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default=root_data_dir+'/lineage_bias/lineage_bias.csv')
-    parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default=root_data_dir+'/aging_10x_WBC.txt')
-    parser.add_argument('--gfp', dest='gfp', help='Path to txt containing FACS GFP data', default=root_data_dir+'/aging_10x_GFP.txt')
-    parser.add_argument('--donor', dest='donor', help='Path to txt containing FACS Donor Chimerism data', default=root_data_dir+'/aging_10x_Donor.txt')
+    parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default=root_data_dir+'/WBCs D122 D274 D365 D420 080719.txt')
+    parser.add_argument('--gfp', dest='gfp', help='Path to txt containing FACS GFP data', default=root_data_dir+'/GFP  D122 D274 D365 D420 080719.txt')
+    parser.add_argument('--donor', dest='donor', help='Path to txt containing FACS Donor Chimerism data', default=root_data_dir+'/donor chimersim D122 D274 D365 D420 for step7 013120.txt')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default=root_data_dir+'/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
@@ -984,8 +984,7 @@ def main():
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
             )
-            
-        plot_clone_count_swarm_mean_first_last(
+        plot_clone_count_bar_first_last(
             present_clones_df,
             timepoint_col,
             thresholds,
@@ -995,6 +994,17 @@ def main():
             save_path=save_path,
             save_format='png'
         )
+            
+        #plot_clone_count_swarm_mean_first_last(
+            #present_clones_df,
+            #timepoint_col,
+            #thresholds,
+            #abundance_cutoff=abundance_cutoff,
+            #analyzed_cell_types=list(thresholds.keys()),
+            #save=args.save,
+            #save_path=save_path,
+            #save_format='png'
+        #)
     if graph_type in ['clone_count_swarm_vs_ct']:
         save_path = args.output_dir + os.sep + 'clone_count_swarm_vs_cell-type'
 
