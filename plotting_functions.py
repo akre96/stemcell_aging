@@ -3878,38 +3878,35 @@ def plot_not_survived_count_box(
         clonal_abundance_df,
         timepoint_col,
     )
-    labeled_df = label_exhausted_clones(
-        None,
-        clonal_abundance_df,
-        timepoint_col
+    filt_abundance_df = clonal_abundance_df[
+        clonal_abundance_df.percent_engraftment > 0
+    ]
+    last_clones = get_clones_at_timepoint(
+        filt_abundance_df,
+        timepoint_col,
+        timepoint='last',
+        by_mouse=False,
     )
-    not_survived_df = labeled_df[labeled_df.time_change == labeled_df.total_time_change]
-    min_timepoint = clonal_abundance_df[timepoint_col].min()
-    not_survived_df = not_survived_df.assign(
-        last_timepoint= lambda x: (x.time_change + min_timepoint).astype('int32').astype(str)
-    )
-    not_survived_df = not_survived_df[not_survived_df.survived == 'Exhausted']
-
     # Plot All Clones
-    count_df = pd.DataFrame(not_survived_df.groupby(
-        ['mouse_id', 'group', 'last_timepoint', 'time_change']).code.nunique()
-        ).reset_index().sort_values(by='time_change')
+    count_df = pd.DataFrame(last_clones.groupby(
+        ['mouse_id', 'group', timepoint_col]).code.nunique()
+        ).reset_index()
     count_df = fill_mouse_id_zeroes(
         count_df,
         info_cols=['group'],
         fill_col='code',
-        fill_cat_col='last_timepoint',
-        fill_cats=count_df.last_timepoint.unique(),
+        fill_cat_col=timepoint_col,
+        fill_cats=count_df[timepoint_col].unique(),
         fill_val=0,
     )
     plt.figure(figsize=(8,6))
     file_name_addon =''
     if by_group:
         ax = sns.boxplot(
-            x='last_timepoint',
+            x=timepoint_col,
             y='code',
             hue='group',
-            order=count_df.last_timepoint.unique(),
+            order=count_df.sort_values(by=timepoint_col)[timepoint_col].unique(),
             hue_order=['aging_phenotype', 'no_change'],
             data=count_df,
             palette=COLOR_PALETTES['group']
@@ -3918,7 +3915,7 @@ def plot_not_survived_count_box(
         stat_tests.ind_ttest_group_time(
             data=count_df,
             test_col='code',
-            timepoint_col='last_timepoint',
+            timepoint_col=timepoint_col,
             overall_context='Exhausted Clone Count',
             show_ns=True,
         )
@@ -3930,15 +3927,15 @@ def plot_not_survived_count_box(
                 merge_type='outer',
                 fill_na=0,
                 value_col='code',
-                timepoint_col='last_timepoint',
+                timepoint_col=timepoint_col,
                 overall_context=group.title() + ' Exhausted Clone Count',
                 show_ns=True,
             )
     else:
         ax = sns.boxplot(
-            x='last_timepoint',
+            x=timepoint_col,
             y='code',
-            order=count_df.last_timepoint.unique(),
+            order=count_df[timepoint_col].unique(),
             data=count_df,
             palette=COLOR_PALETTES[timepoint_col]
         )
@@ -3949,13 +3946,13 @@ def plot_not_survived_count_box(
             merge_type='outer',
             fill_na=0,
             value_col='code',
-            timepoint_col='last_timepoint',
+            timepoint_col=timepoint_col,
             overall_context='Exhausted Clone Count',
             show_ns=False,
         )
     _, max_codes = plt.ylim()
     ax.set_ylim(0, max_codes)
-    ax.set_ylabel('# Of Exhausted Clones')
+    ax.set_ylabel('# Of Clones With Last Time Point')
 
     ax.set_xlabel('End Point (' + timepoint_col.title() + ')')
     plt.title(

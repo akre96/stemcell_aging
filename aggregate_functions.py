@@ -282,12 +282,13 @@ def get_clones_at_timepoint(
             raise ValueError('N to ' + str(timepoint) + ' Not Implemented')
 
     elif timepoint == 'last':
-        filt_df = find_last_clones(
-            input_df,
-            timepoint_col
-        )
         if by_mouse:
             filt_df = find_last_clones_in_mouse(
+                input_df,
+                timepoint_col
+            )
+        else:
+            filt_df = find_last_clones(
                 input_df,
                 timepoint_col
             )
