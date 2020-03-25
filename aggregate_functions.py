@@ -549,9 +549,16 @@ def filter_mice_with_n_timepoints(input_df: pd.DataFrame, n_timepoints: int = 4,
     """
 
     output_df = pd.DataFrame()
-    for _, group in input_df.groupby(['mouse_id']):
+    pass_mice = []
+    # Allow mice if serial transplant and 8 time points
+    if (time_col == 'gen') and (n_timepoints == 8):
+        pass_mice = [ 'M1', 'M10', 'M5', 'M12', 'M3', 'M16', 'M7', 'M6']
+    for mouse_id, group in input_df.groupby(['mouse_id']):
         if group[time_col].nunique() >= n_timepoints:
             output_df = output_df.append(group)
+        elif mouse_id in pass_mice:
+                print(n_timepoints, time_col + 's', 'not found, but adding mouse data:', mouse_id)
+                output_df = output_df.append(group)
     return output_df
 
 def find_top_percentile_threshold(input_df: pd.DataFrame, percentile: float, cell_types: List[str] = ['gr', 'b']) -> Dict[str, float]:
@@ -1254,13 +1261,18 @@ def calculate_first_last_bias_change(
         lineage_bias_df: pd.DataFrame,
         timepoint_col: str,
         by_mouse: bool,
-        exclude_month_17: bool = True
+        exclude_month_17: bool = True,
     ):
     group_cols = ['mouse_id', 'code', 'group']
     if exclude_month_17 and timepoint_col == 'month':
         if 17 in lineage_bias_df.month.unique():
             print(Fore.YELLOW + 'EXCLUDING MONTH 17 FROM BIAS CHANGE')
             lineage_bias_df = lineage_bias_df[lineage_bias_df.month != 17]
+    if timepoint_col == 'gen':
+        print(Fore.YELLOW + 'ONLY KEEPING GEN 1 and 8')
+        lineage_bias_df = lineage_bias_df[
+            lineage_bias_df[timepoint_col].isin([1,8])
+        ]
 
     lineage_bias_at_first_df = get_clones_at_timepoint(
         lineage_bias_df,
@@ -1285,8 +1297,8 @@ def calculate_first_last_bias_change(
         bias_change=lambda x: x.lineage_bias_last - x.lineage_bias_first,
         time_change=lambda x: x[timepoint_col+'_last'] - x[timepoint_col+'_first'],
     )
-    print(bias_change_df[bias_change_df.mouse_id == 'M3026'][['bias_change', 'time_change']].drop_duplicates())
     bias_change_df = bias_change_df[bias_change_df['time_change'] != 0]
+    print(bias_change_df.groupby('mouse_id').code.nunique())
     return bias_change_df
 def calculate_first_last_bias_change_with_avg_data(
     lineage_bias_df: pd.DataFrame,
@@ -1582,7 +1594,6 @@ def calculate_survival_perc(
             ['survived', 'time_change', 'bias_category', timepoint_col, 'mouse_id', 'group']
         ).code.nunique()
     ).reset_index()
-    print(survival_counts)
     survived = survival_counts[survival_counts['survived'] == 'Survived'].rename(
         columns={'code': 'survived_count'}
     )
@@ -1592,9 +1603,9 @@ def calculate_survival_perc(
     survival_perc = survived.merge(
         exhausted,
         on=['mouse_id', 'bias_category', 'time_change', timepoint_col, 'group'],
-        how='inner',
+        how='outer',
         validate='1:1'
-    ).assign(
+    ).fillna(0).assign(
         exhausted_perc=lambda x: 100 * x.exhausted_count / (x.exhausted_count + x.survived_count),
         survived_perc=lambda x: 100 * x.survived_count / (x.exhausted_count + x.survived_count)
     )
@@ -1674,7 +1685,7 @@ def exhausted_clones_without_MPPs(
         if not g_df[(g_df[timepoint_col] == 9)].empty:
             if not g_df[(g_df[timepoint_col] == 4)].empty:
                 # If clone has the last timepoint for a mouse,
-                if g_df[timepoint_col].nunique() > 2 and not g_df[g_df.mouse_time_desc.isin(['Last'])].empty:
+                if (g_df[timepoint_col].nunique() > 2) and not g_df[g_df.mouse_time_desc.isin(['Last'])].empty:
                     temp_df = g_df.assign(exhausted=False, survived='Survived')
                 else:
                     temp_df = g_df.assign(exhausted=True, survived='Exhausted')
@@ -2061,7 +2072,6 @@ def label_exhausted_clones(
         add_labels_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
-        only_last_gen: bool = False,
     ) -> pd.DataFrame:
     """ Add exhaustion/survival labels to clones
     
@@ -2152,7 +2162,7 @@ def label_exhausted_clones(
     input_with_labels = add_labels_df.merge(
         exhaust_df,
         how='inner',
-        validate='m:1'
+        #validate='m:1'
     )
     print('\tLength before adding exhaustion labels:', len(add_labels_df))
     print('\tLength after adding exhaustion labels:', len(input_with_labels))

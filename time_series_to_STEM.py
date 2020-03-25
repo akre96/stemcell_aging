@@ -5,13 +5,13 @@ import numpy as np
 import aggregate_functions as agg
 
 
-root_dir = '/home/sakre/Data/aging_and_10x'
-data = pd.read_csv(root_dir + '/Ania_M_all OT2.0 rerun_percent-engraftment_NO filter_080819_long.csv')
+root_dir = '/Users/akre96/Data/HSC_aging_project/aging_10x_2020'
+data = pd.read_csv(root_dir + '/Ania_M_allAnia OT2.0 rerun_percent-engraftment_NO filter_013120_long.csv')
 timepoint_col = 'month'
 data['month'] = agg.day_to_month(data['day'])
 
 p_anywhere_filter = 0.01
-change_p = 0.05
+change_p = 0.01
 
 data = agg.remove_month_17_and_6(
     data,

@@ -31,7 +31,7 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
         one_timepoint_cols = one_timepoint_data.columns
         if one_timepoint_cols.empty:
             continue
-        day = int(one_timepoint_cols[0][1:])
+        day = int(one_timepoint_cols[0].split('.')[0][1:])
         month = int(round(day/30))
 
         for cell_type in analyzed_cell_types:

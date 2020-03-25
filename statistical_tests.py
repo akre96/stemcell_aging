@@ -7,23 +7,35 @@ from statsmodels.stats.anova import AnovaRM
 from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from colorama import init, Fore, Back, Style
+from decimal import Decimal
 
 init(autoreset=True)
 
 def replace_underscore_dot(string: Any):
     return str(string).replace('_', ' ').replace('.', '-').title()
 
-def print_p_value(context: str, p_value: float, mean: float = None, show_ns: bool = False):
+def print_p_value(context: str, p_value: float, mean: float = None, show_ns: bool = False, raw_p: float = None):
     """ Print P-Value, styke by significance
     
     Arguments:
         context {str} -- What to print just before P-Value
         p_value {float}
     """
+    context = context.replace('aging_phenotype', 'E-MOLD')
+    context = context.replace('Aging_Phenotype', 'E-MOLD')
+    context = context.replace('Aging Phenotype', 'E-MOLD')
+    context = context.replace('no_change', 'D-MOLD')
+    context = context.replace('No_Change', 'D-MOLD')
+    context = context.replace('No Change', 'D-MOLD')
+    p_value_sn = '%.2E' % Decimal(p_value)
     text = context \
-            + ' P-Value: ' + str(p_value)
+            + ' P-Value: ' + str(p_value_sn)
     if mean is not None:
-        text += ' Mean Difference: ' + str(mean)
+        mean_sn =  '%.2E' % Decimal(mean)
+        text += ' Mean Difference: ' + str(mean_sn)
+    if raw_p is not None:
+        raw_p_sn =  '%.2E' % Decimal(raw_p)
+        text += ' Raw P: ' + str(raw_p_sn)
 
     if p_value < 0.001:
         print(
@@ -200,13 +212,14 @@ def ind_ttest_between_groups_at_each_time(
         alpha=0.05,
         method='bonferroni'
         )[1]
-    comp_p = zip(comparisons, corr_vals, means)
-    for (comp, p, mean) in comp_p:
+    comp_p = zip(comparisons, corr_vals, means, raw_p_vals)
+    for (comp, p, mean, raw_p) in comp_p:
         print_p_value(
             comp,
             p,
             mean=mean,
-            show_ns=show_ns
+            show_ns=show_ns,
+            raw_p=raw_p
 
         )
 
@@ -558,7 +571,6 @@ def one_way_ANOVArm(
             value_vars=times,
             value_name=value_col
         )
-
     model = AnovaRM(data, value_col, id_col, within=[timepoint_col])
     res = model.fit()
     p_value = res.anova_table['Pr > F'].tolist()
@@ -615,11 +627,12 @@ def one_way_ANOVArm(
             alpha=0.05,
             method='bonferroni'
             )[1]
-        comp_p = zip(comparisons, corr_vals)
-        for (comp, p) in comp_p:
+        comp_p = zip(comparisons, corr_vals, raw_p_vals)
+        for (comp, p, raw_p) in comp_p:
             print_p_value(
                 '\t' + overall_context + ' ' + comp,
                 p,
+                raw_p=raw_p,
                 show_ns=show_ns
 
             )

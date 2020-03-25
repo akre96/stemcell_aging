@@ -91,9 +91,10 @@ def main():
     parser.add_argument('-i', '--input', dest='input', help='Path to folder containing long format step7 output', default=root_data_dir+'/Ania_M_allAnia OT2.0 rerun_percent-engraftment_NO filter_013120_long.csv')
     parser.add_argument('-r', '--rest', dest='rest_of_clones', help='Path to folder containing data on "rest of clones" abundnace and bias', default=root_data_dir+'/rest_of_clones')
     parser.add_argument('-l', '--lineage-bias', dest='lineage_bias', help='Path to csv containing lineage bias data', default=root_data_dir+'/lineage_bias/lineage_bias.csv')
-    parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default=root_data_dir+'/WBCs D122 D274 D365 D420 080719.txt')
-    parser.add_argument('--gfp', dest='gfp', help='Path to txt containing FACS GFP data', default=root_data_dir+'/GFP  D122 D274 D365 D420 080719.txt')
-    parser.add_argument('--donor', dest='donor', help='Path to txt containing FACS Donor Chimerism data', default=root_data_dir+'/donor chimersim D122 D274 D365 D420 for step7 013120.txt')
+    parser.add_argument('-c', '--count', dest='cell_count', help='Path to txt containing FACS cell count data', default=root_data_dir+'/WBC_combined.txt')
+    parser.add_argument('--gfp', dest='gfp', help='Path to txt containing FACS GFP data', default=root_data_dir+'/GFP_combined.txt')
+    parser.add_argument('--donor', dest='donor', help='Path to txt containing FACS Donor Chimerism data', default=root_data_dir+'/donor_combined.txt')
+    parser.add_argument('--group-file', dest='group_file', help='Path to csv containing mouse to group mapping data', default=root_data_dir+'/mouse_id_group.csv')
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default=root_data_dir+'/Graphs')
     parser.add_argument('-s', '--save', dest='save', help='Set flag if you want to save output graphs', action="store_true")
     parser.add_argument('-g', '--graph', dest='graph_type', help='Type of graph to output', default='default')
@@ -135,6 +136,22 @@ def main():
     options = args.options
     input_df = pd.read_csv(args.input)
     raw_lineage_bias_df = pd.read_csv(args.lineage_bias)
+    group_map = pd.read_csv(args.group_file)
+
+    if 'group' in input_df.columns:
+        input_df = input_df.drop(columns='group')
+    if 'group' in raw_lineage_bias_df.columns:
+        raw_lineage_bias_df = raw_lineage_bias_df.drop(columns='group')
+    input_df = input_df.merge(
+        group_map,
+        how='left',
+        validate='m:1'
+    )
+    raw_lineage_bias_df = raw_lineage_bias_df.merge(
+        group_map,
+        how='left',
+        validate='m:1'
+    )
 
     analyzed_cell_types = [args.myeloid_cell, args.lymphoid_cell]
     cell_count_df = parse_wbc_count_file(args.cell_count, [args.myeloid_cell, 'hsc', args.lymphoid_cell, 'wbc'])
@@ -274,6 +291,39 @@ def main():
         )
         print('Mice found in lineage bias data:', ', '.join(lineage_bias_df.mouse_id.unique()))
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
+
+    if graph_type in ['extreme_bias_percent_time']:
+        save_path = args.output_dir + os.sep + 'extreme_bias_perc'
+
+        timepoint = 'first'
+        if args.timepoint:
+            timepoint = args.timepoint
+        
+        extreme_bias_threshold = 0.9
+        if args.bias_cutoff:
+            extreme_bias_threshold = args.bias_cutoff
+
+        thresholds = {'gr': 0.0, 'b': 0.0}
+
+        if args.abundance_cutoff:
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=args.abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=[args.myeloid_cell, args.lymphoid_cell]
+            )
+        
+        plot_extreme_bias_percent_time(
+            lineage_bias_df,
+            timepoint_col,
+            timepoint,
+            extreme_bias_threshold,
+            abundance_thresholds=thresholds,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
 
     if graph_type in ['expanded_at_time_abundance']:
         save_path = args.output_dir + os.sep + 'expanded_at_time_abundance'
@@ -559,9 +609,9 @@ def main():
         thresholds = {'gr': 0.0, 'b': 0.0, 'hsc': 0.0}
 
         if options != 'default':
-            n_clusters = int(options)
+            alpha = float(options)
         else:
-            n_clusters = 2
+            alpha = 0.1
 
         if args.abundance_cutoff:
             abundance_cutoff = args.abundance_cutoff
@@ -569,12 +619,13 @@ def main():
                 present_clones_df,
                 abundance_cutoff=abundance_cutoff,
                 timepoint_col=timepoint_col,
-                analyzed_cell_types=[args.myeloid_cell_type, args.lymphoid_cell_type, 'hsc']
+                analyzed_cell_types=[args.myeloid_cell, args.lymphoid_cell, 'hsc']
             )
         for cell_type in ['gr', 'b']:
             plot_hsc_vs_cell_type_abundance_bootstrapped(
                 present_clones_df,
                 timepoint_col,
+                alpha=alpha,
                 by_group=args.by_group,
                 thresholds=thresholds,
                 cell_type=cell_type,
@@ -1030,10 +1081,6 @@ def main():
         )
     if graph_type in ['clone_count_swarm']:
         save_path = args.output_dir + os.sep + 'clone_count_swarm'
-
-        if timepoint_col == 'gen':
-            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
-
         abundance_cutoff = 0.0
         thresholds = {'gr': 0.0, 'b': 0.0}
         if args.abundance_cutoff:
@@ -1321,8 +1368,6 @@ def main():
     if graph_type in ['hsc_abund_bias_last']:
         save_path = args.output_dir + os.sep + 'hsc_abund_bias_last' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')
-        if timepoint_col == 'gen':
-            lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
         mtd=3
         if args.options != 'default':
             mtd = int(args.options)
@@ -1330,6 +1375,7 @@ def main():
             lineage_bias_df,
             present_clones_df,
             timepoint_col,
+            group=args.group,
             mtd=mtd,
             change_type=args.change_type,
             by_group=args.by_group,
@@ -1349,6 +1395,7 @@ def main():
             save=args.save,
             save_path=save_path
         )
+
     if graph_type in ['not_survived_abund']:
         save_path = args.output_dir + os.sep + 'not_survived_abundance' \
             + os.sep + str(args.filter_bias_abund).replace('.', '-')

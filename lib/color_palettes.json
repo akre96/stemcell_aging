@@ -10,10 +10,10 @@
         "Total" : "#930230"
     },
     "group": {
-        "no_change" : "#f5883f",
-        "aging_phenotype" : "#2ab0cc",
-        "No Change" : "#f5883f",
-        "Aging Phenotype" : "#2ab0cc",
+        "no_change" : "#ff793f",
+        "aging_phenotype" : "#227093",
+        "No Change" : "#ff793f",
+        "Aging Phenotype" : "#227093",
         "None": "#484848"
     },
     "change_status_3": [
@@ -22,8 +22,8 @@
         "#ff6547"
     ],
     "change_status": {
-        "Unchanged": "deepskyblue",
-        "Changed": "firebrick",
+        "Unchanged": "#2d3436",
+        "Changed": "#e84393",
         "Unknown": "#353b48"
     },
     "change_status_2": [
