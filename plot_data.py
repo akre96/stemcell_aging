@@ -186,12 +186,6 @@ def main():
         filt_0_out_exempt=False
     )
 
-    #min_hsc_per_mouse = calc_min_hsc_per_mouse(
-        #args.cell_count,
-        #args.gfp,
-        #args.donor,
-        #tenx_hsc_counts_file='~/Data/tenx_hsc_counts.csv'
-        #)
 
     lineage_bias_df = raw_lineage_bias_df
     ## EXLCUDE MICE
@@ -382,19 +376,29 @@ def main():
         if args.timepoint:
             timepoint = args.timepoint
 
-        gfp_donor = parse_wbc_count_file(
+        donor_data = parse_wbc_count_file(
             args.donor,
             [args.myeloid_cell, args.lymphoid_cell],
             sep='\t',
             data_type='donor_perc'
-        ).merge(
-            parse_wbc_count_file(
-                args.gfp,
-                [args.myeloid_cell, args.lymphoid_cell],
-                sep='\t',
-                data_type='gfp_perc'
-            ),
+        )
+        gfp_data = parse_wbc_count_file(
+            args.gfp,
+            [args.myeloid_cell, args.lymphoid_cell],
+            sep='\t',
+            data_type='gfp_perc'
+        )
+        if timepoint_col == 'month':
+            gfp_data[timepoint_col] = day_to_month(gfp_data['day'])
+            donor_data[timepoint_col] = day_to_month(donor_data['day'])
+        elif timepoint_col == 'gen':
+            gfp_data[timepoint_col] = day_to_gen(gfp_data['day'])
+            donor_data[timepoint_col] = day_to_gen(donor_data['day'])
+
+        gfp_donor = donor_data.merge(
+            gfp_data,
             how='inner',
+            on=['mouse_id', timepoint_col, 'cell_type'],
             validate='1:1'
         )
         gfp_donor['gfp_x_donor'] = gfp_donor['gfp_perc'] * gfp_donor['donor_perc'] / (100 * 100)
@@ -2311,19 +2315,29 @@ def main():
         if args.timepoint:
             timepoint = args.timepoint
 
-        gfp_donor = parse_wbc_count_file(
+        donor_data = parse_wbc_count_file(
             args.donor,
             [args.myeloid_cell, args.lymphoid_cell],
             sep='\t',
             data_type='donor_perc'
-        ).merge(
-            parse_wbc_count_file(
-                args.gfp,
-                [args.myeloid_cell, args.lymphoid_cell],
-                sep='\t',
-                data_type='gfp_perc'
-            ),
+        )
+        gfp_data = parse_wbc_count_file(
+            args.gfp,
+            [args.myeloid_cell, args.lymphoid_cell],
+            sep='\t',
+            data_type='gfp_perc'
+        )
+        if timepoint_col == 'month':
+            gfp_data[timepoint_col] = day_to_month(gfp_data['day'])
+            donor_data[timepoint_col] = day_to_month(donor_data['day'])
+        elif timepoint_col == 'gen':
+            gfp_data[timepoint_col] = day_to_gen(gfp_data['day'])
+            donor_data[timepoint_col] = day_to_gen(donor_data['day'])
+
+        gfp_donor = donor_data.merge(
+            gfp_data,
             how='inner',
+            on=['mouse_id', timepoint_col, 'cell_type'],
             validate='1:1'
         )
         gfp_donor['gfp_x_donor'] = gfp_donor['gfp_perc'] * gfp_donor['donor_perc'] / (100 * 100)

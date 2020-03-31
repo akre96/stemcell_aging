@@ -742,7 +742,6 @@ def percentile_sum_engraftment(input_df: pd.DataFrame, timepoint_col: str, cell_
 def calculate_bias_change_cutoff(
         bias_change_df: pd.DataFrame,
         min_time_difference: int,
-        return_kde: bool = False,
         timepoint=None,
         **kde_kwargs
     ) -> Tuple:
@@ -766,17 +765,14 @@ def calculate_bias_change_cutoff(
             timepoint
         )
         print(bias_change_df)
-    kde = sns.kdeplot(
-        bias_change_df.bias_change.abs(),
-        kernel='gau',
-        shade=True,
-        color='silver',
-        alpha=.3,
-        **kde_kwargs
-        )
     
     # C0 KDE of all clones
-    x, y = kde.get_lines()[0].get_data()
+    kde = stats.gaussian_kde(
+        bias_change_df.bias_change.abs(),
+        bw_method='scott'
+    )
+    x = np.linspace(-.5, 2.5, 100)
+    y = kde.pdf(x)
     y_peak = y.argmax() + 1
 
     # C1 KDE of "unchanged" clones
@@ -788,9 +784,6 @@ def calculate_bias_change_cutoff(
     y2 = y - y1
 
     x_c, y_c = intersection(x, y1, x, y2)
-
-    if not return_kde:
-        plt.close()
 
     if len(x_c) > 1:
         print(Fore.YELLOW + Style.BRIGHT + 'Warning: Too many change cutoff candidates found')
@@ -1670,14 +1663,14 @@ def exhausted_clones_without_MPPs(
     if timepoint_col != 'month':
         raise ValueError('Current Method Only Available for Time Course Data')
 
-    present_clones_df = clonal_abundance_df[clonal_abundance_df.percent_engraftment > 0.01] 
     with_time_labels_df = filter_first_last_by_mouse(
-        present_clones_df,
+        clonal_abundance_df,
         timepoint_col,
         include_middle=True,
     )
+    present_clones_df = with_time_labels_df[with_time_labels_df.percent_engraftment >= 0.01] 
     exhaustion_df = pd.DataFrame()
-    for _, g_df in with_time_labels_df.groupby(['code', 'mouse_id', 'group']):
+    for _, g_df in present_clones_df.groupby(['code', 'mouse_id', 'group']):
         if g_df[timepoint_col].nunique() < 2:
             continue
 
@@ -1685,7 +1678,7 @@ def exhausted_clones_without_MPPs(
         if not g_df[(g_df[timepoint_col] == 9)].empty:
             if not g_df[(g_df[timepoint_col] == 4)].empty:
                 # If clone has the last timepoint for a mouse,
-                if (g_df[timepoint_col].nunique() > 2) and not g_df[g_df.mouse_time_desc.isin(['Last'])].empty:
+                if not g_df[g_df.mouse_time_desc.isin(['Last'])].empty:
                     temp_df = g_df.assign(exhausted=False, survived='Survived')
                 else:
                     temp_df = g_df.assign(exhausted=True, survived='Exhausted')
@@ -1722,35 +1715,6 @@ def abundance_to_long_by_cell_type(
     return temp_df
 
 
-def add_exhaustion_labels(
-        input_df: pd.DataFrame,
-        timepoint_col: str,
-    ) -> pd.DataFrame:
-
-    if timepoint_col == 'month':
-        input_df = exhausted_clones_without_MPPs(
-            input_df,
-            timepoint_col
-        )
-    with_labels_df = add_time_difference(
-        input_df,
-        timepoint_col
-    )
-
-    with_labels_df = with_labels_df.assign(
-        isLast=lambda x: x.total_time_change == x.time_change
-    )
-    if timepoint_col != 'month':
-        survived = pd.DataFrame()
-        not_survived = with_labels_df[with_labels_df.isLast].assign(
-            survived='Exhausted'
-        )
-        survived = with_labels_df[~with_labels_df.isLast].assign(
-            survived='Survived'
-        )
-        survival_df = survived.append(not_survived)
-        return survival_df
-    return with_labels_df
 
 def mark_outliers(input_df: pd.DataFrame, outlier_df: pd.DataFrame):
     outlier_mask = outlier_df['unadj_p'] < 0.05
@@ -1991,32 +1955,47 @@ def fill_mouse_id_zeroes(
         fill_col: str,
         fill_cat_col: str,
         fill_cats: List[str],
-        fill_val: Any = 0
+        fill_val: Any = 0,
+        mice_to_fill: List = None,
     ) -> pd.DataFrame:
 
     if 'mouse_id' in info_cols:
         raise ValueError('Mouse ID Cannot be in info cols')
 
     filled_df = pd.DataFrame()
-    for mouse_id, m_df in clonal_abundance_df.groupby(['mouse_id']):
-        for cat in fill_cats:
-            if m_df[m_df[fill_cat_col] == cat].empty:
-                fill_vals = pd.DataFrame.from_dict(
-                    {
-                        'mouse_id': [mouse_id],
-                        fill_col: [fill_val],
-                        fill_cat_col: [cat],
-                    }
-                )
-                filled_df = filled_df.append(fill_vals)
+    if mice_to_fill is not None:
+        for mouse_id in mice_to_fill:
+            m_df = clonal_abundance_df[clonal_abundance_df.mouse_id == mouse_id]
+            for cat in fill_cats:
+                if m_df[m_df[fill_cat_col] == cat].empty:
+                    fill_vals = pd.DataFrame.from_dict(
+                        {
+                            'mouse_id': [mouse_id],
+                            fill_col: [fill_val],
+                            fill_cat_col: [cat],
+                        }
+                    )
+                    filled_df = filled_df.append(fill_vals)
+    else:
+        for mouse_id, m_df in clonal_abundance_df.groupby(['mouse_id']):
+            for cat in fill_cats:
+                if m_df[m_df[fill_cat_col] == cat].empty:
+                    fill_vals = pd.DataFrame.from_dict(
+                        {
+                            'mouse_id': [mouse_id],
+                            fill_col: [fill_val],
+                            fill_cat_col: [cat],
+                        }
+                    )
+                    filled_df = filled_df.append(fill_vals)
     if filled_df.empty:
         return clonal_abundance_df
     with_info = filled_df.merge(
         clonal_abundance_df[info_cols + ['mouse_id']].drop_duplicates(),
         on=['mouse_id'],
-        how='inner',
+        how='left',
     )
-    return clonal_abundance_df.append(with_info)
+    return clonal_abundance_df.append(with_info).drop_duplicates()
 
 def filter_low_abund_hsc(
         min_hsc_per_mouse: pd.DataFrame,
@@ -2102,10 +2081,15 @@ def label_exhausted_clones(
         exhaust_df = abundance_with_time_difference.assign(
             isLast=lambda x: x.total_time_change == x.time_change
         )
+    elif timepoint_col == 'gen':
+        exhaust_df = exhausted_clones_serial_transplant(
+            no_hsc_df,
+            timepoint_col
+        )
     else:
         exhaust_df = pd.DataFrame()
         no_hsc_df = no_hsc_df[
-            no_hsc_df.percent_engraftment > 0.01
+            no_hsc_df.percent_engraftment >= 0.01
         ]
         abundance_with_time_difference = add_time_difference(
             no_hsc_df,
@@ -2122,38 +2106,6 @@ def label_exhausted_clones(
             survived='Survived'
         )
         exhaust_df = survived.append(not_survived)
-        if timepoint_col == 'gen':
-            last_two_time_points = no_hsc_df[no_hsc_df['gen'].isin([7, 8])]
-
-            # Count number times clone in last 2 gens
-            last_gens_count = pd.DataFrame(
-                last_two_time_points.groupby(
-                    ['mouse_id', 'code']
-                )[timepoint_col].nunique()
-            ).reset_index()
-
-            # Clones not in last two time points are exhausted
-            not_last_two_time_points = no_hsc_df[~no_hsc_df.code.isin(last_two_time_points.code.unique())]
-            exhausted_clones = not_last_two_time_points[['mouse_id', 'code']]\
-                .drop_duplicates()\
-                .assign(survived='Exhausted')
-            # Clones in 7 and 8 are survived
-            survived_clones = last_gens_count[last_gens_count[timepoint_col] == 2]\
-                [['mouse_id', 'code']].drop_duplicates()\
-                .assign(survived='Survived')
-            
-
-            surv_df = last_labeled_df.merge(
-                survived_clones,
-                how='inner',
-                validate='m:1'
-            )
-            ex_df = last_labeled_df.merge(
-                exhausted_clones,
-                how='inner',
-                validate='m:1'
-            )
-            exhaust_df = pd.concat([surv_df, ex_df])
 
     exhaust_df = exhaust_df[
         ['mouse_id', 'group', 'code', timepoint_col, 'total_time_change', 'time_change', 'isLast', 'survived']
@@ -2162,11 +2114,59 @@ def label_exhausted_clones(
     input_with_labels = add_labels_df.merge(
         exhaust_df,
         how='inner',
-        #validate='m:1'
     )
     print('\tLength before adding exhaustion labels:', len(add_labels_df))
     print('\tLength after adding exhaustion labels:', len(input_with_labels))
     return input_with_labels
+
+def exhausted_clones_serial_transplant(
+    no_hsc_df: pd.DataFrame,
+    timepoint_col: str,
+    ):
+    if timepoint_col != 'gen':
+        raise ValueError('Time point column must be gen, recieved ' + str(timepoint_col) )
+    present_no_hsc_df = no_hsc_df[no_hsc_df.percent_engraftment >= 0.01]
+    last_two_time_points = present_no_hsc_df[present_no_hsc_df['gen'].isin([7, 8])]
+
+    # Count number times clone in last 2 gens
+    last_gens_count = pd.DataFrame(
+        last_two_time_points.groupby(
+            ['mouse_id', 'code']
+        )[timepoint_col].nunique()
+    ).reset_index()
+
+    # Clones not in last two time points are exhausted
+    not_last_two_time_points = present_no_hsc_df[~present_no_hsc_df.code.isin(last_two_time_points.code.unique())]
+    exhausted_clones = not_last_two_time_points[['mouse_id', 'code']]\
+        .drop_duplicates()\
+        .assign(survived='Exhausted')
+
+    # Clones in 7 and 8 are survived
+    survived_clones = last_gens_count[last_gens_count[timepoint_col] == 2]\
+        [['mouse_id', 'code']].drop_duplicates()\
+        .assign(survived='Survived')
+    
+    abundance_with_time_difference = add_time_difference(
+        present_no_hsc_df,
+        timepoint_col
+    )
+
+    last_labeled_df = abundance_with_time_difference.assign(
+        isLast=lambda x: x.total_time_change == x.time_change
+    )
+
+    surv_df = last_labeled_df.merge(
+        survived_clones,
+        how='inner',
+        validate='m:1'
+    )
+    ex_df = last_labeled_df.merge(
+        exhausted_clones,
+        how='inner',
+        validate='m:1'
+    )
+    return pd.concat([surv_df, ex_df])
+
 
 def remove_gen_8_5(
     input_df: pd.DataFrame,

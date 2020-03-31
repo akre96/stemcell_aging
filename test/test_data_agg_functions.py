@@ -1,5 +1,5 @@
 import pandas as pd
-from pandas.util.testing import assert_series_equal
+from pandas.testing import assert_series_equal
 import numpy.testing as npt
 import sys,os
 sys.path.append(os.getcwd())

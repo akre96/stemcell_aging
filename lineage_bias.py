@@ -14,6 +14,7 @@ from math import pi, sin, atan
 import pandas as pd
 import progressbar
 from parse_facs_data import parse_wbc_count_file
+import warnings
 
 def calc_angle(m_value: float, l_value: float) -> float:
     """ Calculates angle towards myeloid bias
@@ -130,14 +131,12 @@ def create_lineage_bias_df(
             raise ValueError('Multiple codes found for group')
 
         lineage_bias_df = lineage_bias_df.append(new_row, sort=False, ignore_index=True)
-
     return lineage_bias_df
 
 
 def calculate_baseline_counts(present_df: pd.DataFrame,
                               cell_counts_df: pd.DataFrame,
                               baseline_timepoint: int = 4,
-                              baseline_column: str = 'month'
                              ) -> pd.DataFrame:
     """ Appends column of cell counts to step7 long form data
 
@@ -147,13 +146,12 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
 
     Keyword Arguments:
         baseline_timepoint {int} -- timepoint to use as reference (default: {4})
-        baseline_column {str} --  column to look for timepoint in (default: {'month'})
 
     Returns:
         pd.DataFrame -- present_df with column of cell_count used in normalization
     """
 
-
+    baseline_column = 'day'
     if baseline_timepoint is None:
         print(' - Baseline time point not stet --> normalizing to mouse FACS data at each time point')
         with_baseline_counts_df = present_df.merge(cell_counts_df[['mouse_id', 'cell_type', 'cell_count', baseline_column]], how='left', on=['mouse_id', 'cell_type', baseline_column])
@@ -162,9 +160,9 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
         min_tp = pd.DataFrame(
             present_df.groupby(['mouse_id'])[baseline_column].min()
         ).reset_index()
-        tp_cell_counts = cell_counts_df.merge(
-            min_tp,
-            how='inner',
+        tp_cell_counts = min_tp.merge(
+            cell_counts_df,
+            how='left',
         )
         print(' - Baseline set by mouse as follows:')
         for m, m_df in tp_cell_counts.groupby('mouse_id'):
@@ -172,7 +170,7 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
 
         with_baseline_counts_df = present_df.merge(
             tp_cell_counts[['mouse_id', 'cell_type', 'cell_count']].drop_duplicates(),
-            how='inner',
+            how='left',
             validate='m:1'
         )
 
@@ -180,6 +178,9 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
         timepoint_df = cell_counts_df.loc[cell_counts_df[baseline_column] == baseline_timepoint]
         with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])
 
+    na_mice = with_baseline_counts_df[with_baseline_counts_df.cell_count.isna()].mouse_id.unique()
+    if na_mice:
+        warnings.warn('WARNING: Mice with no baseline cell counts found: ' + str(na_mice))
     return with_baseline_counts_df
 
 def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.DataFrame:
@@ -196,19 +197,9 @@ def normalize_to_baseline_counts(with_baseline_counts_df: pd.DataFrame) -> pd.Da
     return norm_data_df
 
 
-def main():
+def main(args):
     """ Calculate and save lineage bias
     """
-
-    parser = argparse.ArgumentParser(description="Calculate lineage bias and change in lineage bias over time at thresholds")
-    parser.add_argument('-i', '--input', dest='input', help='Path to file containing consolidated long format step7 output', required=True)
-    parser.add_argument('-c', '--counts', dest='counts_file', help='Path to txt containing FACS cell count data', required=True)
-    parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
-    parser.add_argument('--baseline-timepoint', dest='baseline_timepoint', help='baseline time point for lineage bias. None if normalize at each time', required=False)
-    parser.add_argument('--lymph', '--lymphoid-cell-type', dest='lymphoid_cell_type', help='Cell to use for lymphoid representative', default='b', required=False)
-    parser.add_argument('--myel', '--myeloid-cell-type', dest='myeloid_cell_type', help='Cell to use for myeloid representative', default='gr', required=False)
-
-    args = parser.parse_args()
 
     input_df = pd.read_csv(args.input)
     lymphoid_cell_type = args.lymphoid_cell_type
@@ -240,7 +231,6 @@ def main():
     with_baseline_counts_df = calculate_baseline_counts(
         input_df,
         cell_count_data,
-        baseline_column=time_column,
         baseline_timepoint=base_time_point
         )
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)
@@ -254,6 +244,14 @@ def main():
     lineage_bias_df.to_csv(lineage_bias_file_name, index=False)
 
 
-
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description="Calculate lineage bias and change in lineage bias over time at thresholds")
+    parser.add_argument('-i', '--input', dest='input', help='Path to file containing consolidated long format step7 output', required=True)
+    parser.add_argument('-c', '--counts', dest='counts_file', help='Path to txt containing FACS cell count data', required=True)
+    parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', default='output/lineage_bias')
+    parser.add_argument('--baseline-timepoint', dest='baseline_timepoint', help='baseline time point for lineage bias. None if normalize at each time', required=False)
+    parser.add_argument('--lymph', '--lymphoid-cell-type', dest='lymphoid_cell_type', help='Cell to use for lymphoid representative', default='b', required=False)
+    parser.add_argument('--myel', '--myeloid-cell-type', dest='myeloid_cell_type', help='Cell to use for myeloid representative', default='gr', required=False)
+
+    args = parser.parse_args()
+    main(args)

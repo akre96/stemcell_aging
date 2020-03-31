@@ -32,7 +32,6 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
         if one_timepoint_cols.empty:
             continue
         day = int(one_timepoint_cols[0].split('.')[0][1:])
-        month = int(round(day/30))
 
         for cell_type in analyzed_cell_types:
             cell_type_col_name = [re.match(cell_type.lower(), x.lower()) is not None for x in one_timepoint_cols]
@@ -41,10 +40,9 @@ def parse_wbc_count_file(wbc_count_file_path: str, analyzed_cell_types: List[str
             if not any(cell_type_col_name):
                 continue
 
-            cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id','day','month','cell_type',data_type])
+            cell_type_timepoint_data = pd.DataFrame(columns=['mouse_id', 'day', 'cell_type', data_type])
             cell_type_timepoint_data['mouse_id'] = one_timepoint_data[one_timepoint_cols[0]].str.replace(" ", "")
             cell_type_timepoint_data['day'] = day
-            cell_type_timepoint_data['month'] = month
             cell_type_timepoint_data['cell_type'] = cell_type.lower()
             cell_type_col = one_timepoint_cols[cell_type_col_name]
             cell_type_timepoint_data[data_type] = one_timepoint_data[cell_type_col]

@@ -1147,7 +1147,8 @@ def plot_change_contributions(
     changed_sum_with_gxd = changed_sum_df.merge(
         gfp_donor,
         how='inner',
-        validate='m:1'
+        validate='m:1',
+        on=['mouse_id', timepoint_col]
     )
 
     timepoint_df = get_clones_at_timepoint(
@@ -1176,6 +1177,7 @@ def plot_change_contributions(
 
     filt_gxd = filt_gxd.assign(total=100)
     filt_gxd = filt_gxd.sort_values(by='percent_engraftment', ascending=False)
+    print(filt_gxd.groupby('mouse_id')[timepoint_col].unique())
 
     for group, g_df in filt_gxd.groupby('group'):
         avg_per_group = pd.DataFrame(
@@ -2376,9 +2378,12 @@ def plot_bias_change_cutoff(
     x, y, y1, y2, x_c, y_c, kde = calculate_bias_change_cutoff(
         bias_change_df,
         min_time_difference=min_time_difference,
-        return_kde=True,
         timepoint=timepoint,
     )
+    yfill = y
+    yfill[-1] = 0
+    plt.fill(x, yfill, c='silver', alpha=0.3)
+    plt.plot(x, y, c='silver', alpha=0.3)
     plt.plot(x, y1, c=COLOR_PALETTES['change_status']['Unchanged'])
     plt.plot(x, y2, c=COLOR_PALETTES['change_status']['Changed'])
     plt.scatter(x_c, y_c, c='k')
@@ -2390,7 +2395,6 @@ def plot_bias_change_cutoff(
         plt.title(' Group: ' + y_col_to_title(group) + timepoint_text)
     plt.xlabel('Magnitude of Lineage Bias Change')
     plt.ylabel('Relative Clone Count')
-    kde.legend_.remove()
 
     fname = save_path + os.sep \
         + 'bias_change_cutoff_a' + str(abundance_cutoff).replace('.', '-') \
@@ -10524,12 +10528,13 @@ def plot_compare_change_contrib(
         percent_of_total=percent_of_total
     )
     changed_sum_df = changed_sum_df[changed_sum_df.cell_type.isin(['gr', 'b'])]
+
     changed_sum_with_gxd = changed_sum_df.merge(
         gfp_donor,
         how='inner',
-        validate='m:1'
+        validate='m:1',
+        on=['mouse_id', timepoint_col]
     )
-
     timepoint_df = get_clones_at_timepoint(
         changed_sum_with_gxd,
         timepoint_col,
@@ -10539,6 +10544,7 @@ def plot_compare_change_contrib(
 
     print('FILTERING FOR MICE FOUND IN FIRST AND LAST TIMEPOINT ABOVE GFP x DONOR THRESHOLD' )
     mice_left = changed_marked_df.mouse_id.unique()
+    t_dfs = []
     for t in ['first', 'last']:
         t_df = get_clones_at_timepoint(
             changed_sum_with_gxd,
@@ -10547,13 +10553,43 @@ def plot_compare_change_contrib(
             by_mouse=True,
         )
         t_filt_gxd = t_df[t_df.gfp_x_donor >= gfp_donor_thresh]
+        t_filt_gxd['time'] = t
         mice_left = [m for m in mice_left if m in t_filt_gxd.mouse_id.unique()]
+        t_dfs.append(t_filt_gxd)
+    t_dfs = pd.concat(t_dfs, sort=False)
+    for ct, c_df in t_dfs.groupby('cell_type'):
+        tps = []
+        for t, t_df in c_df.groupby('time'):
+            mice_to_fill = t_dfs.mouse_id.unique()
+            filled = fill_mouse_id_zeroes(
+                t_df,
+                mice_to_fill=mice_to_fill,
+                info_cols=['cell_type', 'group', 'time'],
+                fill_col='percent_engraftment',
+                fill_cat_col='change_type',
+                fill_cats=['Lymphoid', 'Myeloid', 'Unchanged'],
+                fill_val=0,
+            )
+            tps.append(filled[filled.mouse_id.isin(mice_left)])
+        time_dfs = pd.concat(tps, sort=False)
+        print(time_dfs.groupby(['mouse_id', 'group']).time.unique())
+        for ch, ch_df in time_dfs.groupby('change_type'):
+            stat_tests.rel_ttest_group_time(
+                data=ch_df,
+                match_cols=['mouse_id', 'group'],
+                merge_type='inner',
+                fill_na=None,
+                test_col='percent_engraftment',
+                timepoint_col='time',
+                overall_context=ct + ' ' + ch + ' percent abundance by bias',
+                show_ns=True
+            )
+
     
 
     filt_gxd = timepoint_df[timepoint_df.mouse_id.isin(mice_left)]
     print('Pre-filt gxd mice:', timepoint_df.mouse_id.nunique())
     print('Post-filt gxd mice:', filt_gxd.mouse_id.nunique())
-
 
     for ct, c_df in filt_gxd.groupby('cell_type'):
         fig, ax = plt.subplots(figsize=(8,8))
