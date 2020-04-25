@@ -45,5 +45,9 @@
         "M2012": "D",
         "M2059": "o",
         "M2061": "p"
+    },
+    "survived": {
+        "Exhausted": "o",
+        "Survived": "s"
     }
 }
