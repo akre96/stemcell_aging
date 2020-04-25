@@ -294,7 +294,9 @@ def get_clones_at_timepoint(
                 timepoint_col
             )
         else:
-            filt_df = input_df.sort_values(timepoint_col).groupby(['mouse_id', 'code']).first()
+            filt_df = pd.DataFrame(
+                input_df.sort_values(timepoint_col).groupby(['mouse_id', 'code']).first()
+            ).reset_index()
     else:
         filt_df = input_df[input_df[timepoint_col] == int(timepoint)]
     return filt_df

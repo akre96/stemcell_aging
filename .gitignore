@@ -32,3 +32,6 @@ output
 
 # PyCharm Files
 .idea
+
+# MACOSX Files
+.DS_Store

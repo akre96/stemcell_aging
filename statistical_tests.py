@@ -8,6 +8,7 @@ from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.multicomp import pairwise_tukeyhsd
 from colorama import init, Fore, Back, Style
 from decimal import Decimal
+import pingouin as pg
 
 init(autoreset=True)
 
@@ -179,7 +180,7 @@ def ind_ttest_between_groups_at_each_time(
     ):
     print(
         Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Independent T-Test on ' 
+        + '\nPerforming Bonferonni Corrected Independent T-Test on ' 
         + overall_context
         + ' between ' + group_col.title() + 's at each ' + replace_underscore_dot(timepoint_col)
     )
@@ -201,8 +202,8 @@ def ind_ttest_between_groups_at_each_time(
             mean_diff = g1_df[test_col].mean() \
                 - g2_df[test_col].mean()
             context: str = '\t' + timepoint_col.title() + ' ' + str(time) + ' '\
-                + g1 + ': ' + str(n0) \
-                + ', ' + g2 + ': ' + str(n1)
+                + str(g1) + ': ' + str(n0) \
+                + ', ' + str(g2) + ': ' + str(n1)
             raw_p_vals.append(p_value)
             comparisons.append(context)
             means.append(mean_diff)
@@ -467,8 +468,8 @@ def ranksums_test_group(
         mean_diff = g1_df[test_col].mean() \
             - g2_df[test_col].mean()
         context: str = '\t'\
-            + g1 + ': ' + str(n0) \
-            + ', ' + g2 + ': ' + str(n1)
+            + str(g1) + ': ' + str(n0) \
+            + ', ' + str(g2) + ': ' + str(n1)
         raw_p_vals.append(p_value)
         comparisons.append(context)
         means.append(mean_diff)
@@ -478,11 +479,12 @@ def ranksums_test_group(
         alpha=0.05,
         method='bonferroni'
         )[1]
-    comp_p = zip(comparisons, corr_vals, means)
-    for (comp, p, mean) in comp_p:
+    comp_p = zip(comparisons, corr_vals, means, raw_p_vals)
+    for (comp, p, mean, raw_p) in comp_p:
         print_p_value(
             comp,
             p,
+            raw_p=raw_p,
             mean=mean,
             show_ns=show_ns
 
@@ -733,3 +735,13 @@ def anova_oneway(
         comp = pairwise_tukeyhsd(data[value_col], data[category_col])
         print(comp)
         print(data.groupby(category_col).nunique())
+
+def two_way_ANOVA_rm(data, cat1, cat2, test_col, subject_col):
+    aov = pg.rm_anova(
+        data=data,
+        dv=test_col,
+        within=[cat1, cat2],
+        subject=subject_col,
+        detailed=True,
+    )
+    print(aov)

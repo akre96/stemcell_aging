@@ -22,10 +22,6 @@ from colorama import init, Fore, Back, Style
 import pandas as pd
 import numpy as np
 import matplotlib as mpl
-if platform.system() == 'Darwin':
-    print(Fore.YELLOW + 'USING MACOSX BACKEND FOR MATPLOTLIB')
-    mpl.use('MacOSX')
-
 import matplotlib.pyplot as plt
 import seaborn as sns
 from data_types import y_col_type, timepoint_type, change_type, change_status
@@ -178,7 +174,7 @@ def main():
 
 
 
-    present_clones_df = filter_clones_threshold_anytime(
+    present_clones_df = agg.filter_clones_threshold_anytime(
         input_df,
         presence_thresholds,
         analyzed_cell_types=input_df.cell_type.unique(),
@@ -275,16 +271,36 @@ def main():
 
     if args.filter_bias_abund:
         print(' - Lineage Bias Min Abundance set to: ' + str(args.filter_bias_abund))
-        lineage_bias_df = filter_lineage_bias_cell_type_ratio_per_mouse(
+        lineage_bias_df = agg.filter_lineage_bias_cell_type_ratio_per_mouse(
             lineage_bias_df,
             timepoint_col,
             cell_count_df,
             args.filter_bias_abund,
             myeloid_cell=args.myeloid_cell,
-            lymphoid_cell=args.lymphoid_cell,
-        )
+            lymphoid_cell=args.lymphoid_cell,)
         print('Mice found in lineage bias data:', ', '.join(lineage_bias_df.mouse_id.unique()))
     print('Mice found in abundance data:', ', '.join(present_clones_df.mouse_id.unique()))
+
+    if graph_type in ['mouse_marker_legend']:
+        save_path = args.output_dir + os.sep + 'legends'
+        mouse_marker_legend(
+            present_clones_df,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+
+    if graph_type in ['blood_bias_abundance_time']:
+        save_path = args.output_dir + os.sep + 'blood_bias_abundance_time'
+        plot_blood_bias_abundance_time(
+            present_clones_df,
+            lineage_bias_df,
+            timepoint_col,
+            by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
 
     if graph_type in ['extreme_bias_percent_time']:
         save_path = args.output_dir + os.sep + 'extreme_bias_perc'
@@ -650,6 +666,30 @@ def main():
             timepoint_col,
             exclude_timepoints=exclude_timepoints,
             by_group=args.by_group,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
+    if graph_type in ['abundance_change_stable_group_grid']:
+        save_path = args.output_dir + os.sep + 'abundance_change_stable_group_grid'
+        mtd = 0
+        if args.options != 'default':
+            mtd = int(args.options)
+        if args.change_type is None:
+            ct = 'Unchanged'
+        else:
+            ct = args.change_type
+        timepoint = 'first'
+        if args.timepoint is not None:
+            timepoint = args.timepoint
+
+        plot_abundance_change_stable_group_grid(
+            lineage_bias_df,
+            timepoint_col,
+            timepoint=timepoint,
+            change_type=ct,
+            mtd=mtd,
+            by_mouse=args.by_mouse,
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -1327,6 +1367,25 @@ def main():
                 save_format='png'
             )
 
+    if graph_type in ['changed_status_bias_at_time']:
+        save_path = args.output_dir + os.sep + 'change_status_bias_at_time'
+
+        mtd = 3
+        if args.options != 'default':
+            mtd = int(args.options)
+        timepoint = 'first'
+        if args.timepoint is not None:
+            timepoint = args.timepoint
+
+        plot_change_status_bias_at_time(
+            lineage_bias_df,
+            timepoint_col,
+            mtd,
+            timepoint,
+            args.by_group,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['changed_status_overtime']:
         save_path = args.output_dir + os.sep + 'change_status' \
             + os.sep + args.y_col + '_lbf' + str(args.filter_bias_abund).replace('.', '-')
@@ -1383,6 +1442,7 @@ def main():
             mtd=mtd,
             change_type=args.change_type,
             by_group=args.by_group,
+            by_count=args.by_count,
             save=args.save,
             save_path=save_path
         )
