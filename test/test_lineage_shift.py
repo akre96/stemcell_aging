@@ -37,7 +37,9 @@ lineage_stable_clone = pd.DataFrame.from_dict({
     'code': ['lineage_stable_01'] * 3
 })
 
-## Test clones for full bias change cutoff
+
+
+# Test clones for full bias change cutoff
 n_stable = 90
 n_myeloid = 5
 n_lymphoid = 5
@@ -52,11 +54,35 @@ ts = []
 for df in tests:
     df = df.copy()
     df['type'] = df['code']
-    df['code'] = df['code'].astype(str) + str(i)
+    df['code'] = df['code'].astype(str) + '-' + str(i)
     ts.append(df)
     i += 1
 test_df = pd.concat(ts)
 
+lymphoid_shift_abundance = pd.DataFrame.from_dict({
+    'mouse_id': ['test'] * 2,
+    'month': [15] * 2,
+    'group': ['E-MOLD'] * 2,
+    'percent_engraftment': [.1, .2],
+    'cell_type': ['gr', 'b'],
+    'code': ['lymphoid_shifting-' + str(n_stable + n_myeloid)] * 2
+})
+myeloid_shift_abundance = pd.DataFrame.from_dict({
+    'mouse_id': ['test'] * 2,
+    'month': [15] * 2,
+    'group': ['E-MOLD'] * 2,
+    'percent_engraftment': [.2, .3],
+    'cell_type': ['gr', 'b'],
+    'code': ['myeloid_shifting-' + str(n_stable)] * 2
+})
+ideal_lineage_stable_abundance = pd.DataFrame.from_dict({
+    'mouse_id': ['test'] * 2,
+    'month': [15] * 2,
+    'group': ['E-MOLD'] * 2,
+    'percent_engraftment': [.7, .5],
+    'cell_type': ['gr', 'b'],
+    'code': ['lineage_stable_0-0'] * 2
+})
 
 def test_calculate_lymphoid_bias_change():
     result = agg.calculate_first_last_bias_change(
@@ -137,3 +163,45 @@ def test_mark_change():
     assert change_type['Unchanged'] == n_stable
     assert change_type['Lymphoid'] == n_lymphoid
     assert change_type['Myeloid'] == n_myeloid
+
+def test_changed_contribution():
+    abundance_data = pd.concat([
+        myeloid_shift_abundance,
+        lymphoid_shift_abundance,
+        ideal_lineage_stable_abundance,
+    ])
+    bias_change_df = agg.calculate_first_last_bias_change(
+        test_df,
+        'month',
+        True,
+        True
+    )
+    change_marked = agg.mark_changed(
+        abundance_data,
+        bias_change_df,
+        3,
+    )
+    result = agg.sum_abundance_by_change(
+        change_marked,
+        percent_of_total=True,
+        timepoint_col='month'
+    )
+
+    print(result)
+    # Check that each cell type adds to 100%
+    assert result.groupby('cell_type').percent_engraftment.sum().tolist() == [100, 100]
+
+    assert result[
+        (result.change_type == 'Myeloid') &
+        (result.cell_type == 'gr')
+    ]['percent_engraftment'].values[0] == 20
+
+    assert result[
+        (result.change_type == 'Lymphoid') &
+        (result.cell_type == 'gr')
+    ]['percent_engraftment'].values[0] == 10
+
+    assert result[
+        (result.change_type == 'Unchanged') &
+        (result.cell_type == 'gr')
+    ]['percent_engraftment'].values[0] == 70

@@ -25,7 +25,6 @@ def main():
     parser.add_argument('--donor', dest='donor_file', help='Path to file containing donor chimerism data', required=True)
     parser.add_argument('--group', dest='group_file', help='Path to csv file with columns for mouse_id and group', required=False)
     parser.add_argument('-o', '--output-dir', dest='output_dir', help='Directory to send output files to', required=True)
-    parser.add_argument('-t', '--timepoint-col', dest='timepoint_col', help='Column to look for time in', required=True)
     parser.add_argument('-b', '--baseline-timepoint', dest='baseline_timepoint', help='Timepoint to set as baseline value for normalization', required=False)
     parser.add_argument('--lymph', '--lymphoid-cell-type', dest='lymphoid_cell_type', help='Cell to use for lymphoid representative', default='b', required=False)
     parser.add_argument('--myel', '--myeloid-cell-type', dest='myeloid_cell_type', help='Cell to use for myeloid representative', default='gr', required=False)
@@ -55,10 +54,10 @@ def main():
 
     full_df = with_percent_df.merge(
         GFP_df,
-        on=['mouse_id', 'cell_type', 'day', 'month']
+        on=['mouse_id', 'cell_type', 'day']
     ).merge(
         donor_df,
-        on=['mouse_id', 'cell_type', 'day', 'month']
+        on=['mouse_id', 'cell_type', 'day']
     )
 
     unbarcoded_df = full_df.assign(percent_engraftment=lambda x: calculate_unbarcoded_abundance(x))
@@ -88,9 +87,8 @@ def main():
         base_time_point = input_df['day'].min()
 
     with_baseline_counts_df = calculate_baseline_counts(
-        rest_of_clones_df[['code', 'mouse_id', 'cell_type', 'day', 'month', 'group', 'percent_engraftment']],
+        rest_of_clones_df[['code', 'mouse_id', 'cell_type', 'day', 'group', 'percent_engraftment']],
         WBC_df,
-        baseline_column=args.timepoint_col,
         baseline_timepoint=base_time_point
         )
     norm_data_df = normalize_to_baseline_counts(with_baseline_counts_df)

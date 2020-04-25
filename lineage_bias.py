@@ -179,7 +179,9 @@ def calculate_baseline_counts(present_df: pd.DataFrame,
         with_baseline_counts_df = present_df.merge(timepoint_df[['mouse_id', 'cell_type', 'cell_count']], how='left', on=['mouse_id', 'cell_type'])
 
     na_mice = with_baseline_counts_df[with_baseline_counts_df.cell_count.isna()].mouse_id.unique()
-    if na_mice:
+    if na_mice.any():
+        print('Mice days with NA baseline counts: ')
+        print(with_baseline_counts_df[with_baseline_counts_df.cell_count.isna()].groupby('mouse_id').day.unique())
         warnings.warn('WARNING: Mice with no baseline cell counts found: ' + str(na_mice))
     return with_baseline_counts_df
 

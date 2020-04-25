@@ -8,14 +8,9 @@ import os
 import numpy as np
 import scipy.stats as stats
 import pandas as pd
-import matplotlib as mpl
-mpl.use('agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
-from colorama import init, Fore, Back, Style
+from colorama import init, Fore, Style
 from skbio.diversity import alpha_diversity
 from intersection.intersection import intersection
-from data_types import timepoint_type
 from parse_facs_data import parse_wbc_count_file
 import progressbar
 
@@ -1995,6 +1990,10 @@ def fill_mouse_id_zeroes(
         on=['mouse_id'],
         how='left',
     )
+    if with_info[info_cols].isna().any(axis=None):
+        print(Fore.YELLOW + 'Warning: NA Values in info cols')
+        for col in info_cols:
+            print(with_info.groupby('mouse_id')[col].unique())
     return clonal_abundance_df.append(with_info).drop_duplicates()
 
 def filter_low_abund_hsc(
