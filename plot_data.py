@@ -2588,6 +2588,17 @@ def main():
             cache_dir=args.cache_dir,
             cached_change=bias_change_df
         )
+        plot_bias_change_cutoff_hist(
+            lineage_bias_df=lineage_bias_df,
+            thresholds=thresholds,
+            timepoint_col=timepoint_col,
+            timepoint=args.timepoint,
+            abundance_cutoff=abundance_cutoff,
+            group=args.group,
+            min_time_difference=min_time_difference,
+            save=args.save,
+            save_path=save_path,
+        )
             
 
 

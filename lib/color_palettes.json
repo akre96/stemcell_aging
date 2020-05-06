@@ -15,7 +15,7 @@
         "No Change" : "#ff793f",
         "Aging Phenotype" : "#227093",
         "None": "#484848",
-        "young": "black"
+        "young": "#353b48"
     },
     "change_status_3": [
         "#8cc35c",

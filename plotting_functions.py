@@ -2367,27 +2367,29 @@ def plot_bias_change_cutoff(
     if group != 'all':
         bias_change_df = bias_change_df.loc[bias_change_df.group == group]
 
-    plt.subplots(figsize=(6,5))
+    fig, ax = plt.subplots(figsize=(6,5))
     x, y, y1, y2, x_c, y_c, kde = agg.calculate_bias_change_cutoff(
         bias_change_df,
         min_time_difference=min_time_difference,
         timepoint=timepoint,
     )
-    yfill = y
-    yfill[-1] = 0
-    plt.fill(x, yfill, c='silver', alpha=0.3)
-    plt.plot(x, y, c='silver', alpha=0.3)
-    plt.plot(x, y1, c=COLOR_PALETTES['change_status']['Unchanged'])
-    plt.plot(x, y2, c=COLOR_PALETTES['change_status']['Changed'])
-    plt.scatter(x_c, y_c, c='k')
-    plt.axvline(x_c[0], c='k')
+    fill_ind = ((x>=0) * (x<=2))
+    yfill = y[fill_ind].copy()
+    bot = np.zeros(yfill.shape)
+    print(x[fill_ind], yfill, bot)
+    ax.fill_between(x[fill_ind], yfill, bot, color='silver', alpha=0.3)
+    ax.plot(x, y, c='silver', alpha=0.3)
+    ax.plot(x, y1, c=COLOR_PALETTES['change_status']['Unchanged'])
+    ax.plot(x, y2, c=COLOR_PALETTES['change_status']['Changed'])
+    ax.scatter(x_c, y_c, c='k')
+    ax.axvline(x_c[0], c='k')
     sns.despine()
     plt.xticks([0, x_c[0], 2])
 
     if group != 'all':
         plt.title(' Group: ' + y_col_to_title(group) + timepoint_text)
     plt.xlabel('Magnitude of Lineage Bias Change')
-    plt.ylabel('Relative Clone Count')
+    plt.ylabel('Probability Density')
 
     fname = save_path + os.sep \
         + 'bias_change_cutoff_a' + str(abundance_cutoff).replace('.', '-') \
@@ -4043,6 +4045,8 @@ def plot_hsc_abund_bias_at_last(
     if group != 'all':
         lineage_bias_df = lineage_bias_df[lineage_bias_df.group == group]
         clonal_abundance_df = clonal_abundance_df[clonal_abundance_df.group == group]
+    lineage_bias_df = agg.remove_month_17(lineage_bias_df, timepoint_col)
+    clonal_abundance_df = agg.remove_month_17(clonal_abundance_df, timepoint_col)
     sns.set_context(
         'paper',
         rc={
@@ -4133,7 +4137,7 @@ def plot_hsc_abund_bias_at_last(
         )
         data_df = count_df
 
-
+    print(data_df.mouse_id.unique())
     if by_group:
         _, ax = plt.subplots(figsize=(6,5))
         #stripplot_mouse_markers_with_mean(
@@ -8895,7 +8899,8 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
     plot_boundary = False # Plot decision boundary
     plot_upper = False # Plot decision boundary upper
     mark_decision = False # Wether to create bootstrap confidence intervals or na
-    plot_young = True # wether to import and also plot young mice
+    plot_young = False # wether to import and also plot young mice
+    do_stats = False 
 
     
     clonal_abundance_df = agg.remove_month_17(
@@ -9107,13 +9112,14 @@ def plot_hsc_vs_cell_type_abundance_bootstrapped(
                 1: 'Lower Right'
             }
         )
-        stat_tests.ind_ttest_between_groups_at_each_time(
-            data=percent_in[percent_in.in_boundary == 1],
-            test_col='perc_bound',
-            timepoint_col='bound_desc',
-            overall_context=cell_type + ' in Boundary',
-            show_ns=True
-        )
+        if do_stats:
+            stat_tests.ind_ttest_between_groups_at_each_time(
+                data=percent_in[percent_in.in_boundary == 1],
+                test_col='perc_bound',
+                timepoint_col='bound_desc',
+                overall_context=cell_type + ' in Boundary',
+                show_ns=True
+            )
     else:
         totals_in_out = agg.fill_mouse_id_zeroes(
             totals_in_out,
@@ -12189,7 +12195,7 @@ def plot_change_status_bias_at_time(
         fig, ax = plt.subplots(figsize=(6,5))
         sns.heatmap(
             piv[change_order].reindex(bias_order),
-            cmap='cividis',
+            cmap='magma',
             vmin=0,
             vmax=45,
             ax=ax
@@ -12210,3 +12216,107 @@ def plot_change_status_bias_at_time(
             + '_' + timepoint_col[0] +  str(timepoint) \
             + '.' + save_format
         save_plot(fname, save, save_format)
+
+def plot_bias_change_cutoff_hist(
+        lineage_bias_df: pd.DataFrame,
+        thresholds: Dict[str, float],
+        timepoint_col: str,
+        timepoint: float = None,
+        abundance_cutoff: float = 0.0,
+        group: str = 'all',
+        min_time_difference: int = 0,
+        save: bool = False,
+        save_path: str = 'output',
+        save_format: str = 'png',
+    ) -> None:
+    """ Plots histogram of bias change annotated with line to cut "change" vs "non change" clones
+
+    Arguments:
+        lineage_bias_df {pd.DataFrame} -- dataframe of lineage bias information
+        thresholds {Dict[str,float]} -- thresholds used to filter
+        abundance_cutoff {float} -- abundance cutoff used to generate thresholds
+
+    Keyword Arguments:
+        absolute_value {bool} -- Whether plot is done on magnitude, or including direction (default: {False})
+        group {str} --  Group filtered for (default: {'all'})
+        min_time_difference {int} -- Minimum days of seperation for bias change (280ish for 10 months)
+        save {bool} --  Wether to save plot (default: {False})
+        save_path {str} -- Where to save plot (default: {'output'})
+        save_format {str} --  What file format to save plot (default: {'png'})
+    """
+
+    sns.set_context(
+        'paper',
+        font_scale=2,
+        rc={
+            'lines.linewidth': 3,
+            'lines.markersize': 6,
+            'axes.linewidth': 3,
+            'axes.labelsize': 20,
+            'xtick.major.width': 3,
+            'ytick.major.width': 3,
+            'xtick.labelsize': 24,
+            'ytick.labelsize': 24,
+            'figure.titlesize': 'small',
+        }
+    )
+
+
+    filt_lineage_bias_df = agg.filter_lineage_bias_anytime(
+        lineage_bias_df,
+        thresholds=thresholds
+    )
+    bias_change_df = agg.calculate_first_last_bias_change(
+        filt_lineage_bias_df,
+        timepoint_col,
+        by_mouse=False,
+        )
+        
+    timepoint_text = ''
+    if timepoint is not None:
+        bias_change_df = agg.filter_bias_change_timepoint(
+            bias_change_df,
+            timepoint
+        )
+        timepoint_text = ' - Clones Must have First or Last Time at: ' +str(timepoint)
+    bias_change_df = bias_change_df[bias_change_df.time_change >= min_time_difference]
+    if group != 'all':
+        bias_change_df = bias_change_df.loc[bias_change_df.group == group]
+
+    fig, ax = plt.subplots(figsize=(6,5))
+    _, _, _, _, x_c, _, _ = agg.calculate_bias_change_cutoff(
+        bias_change_df,
+        min_time_difference=min_time_difference,
+        timepoint=timepoint,
+    )
+    alpha = 0.5
+    c_u = mpl.colors.to_rgba(COLOR_PALETTES['change_status']['Unchanged'], alpha)
+    ax.hist(
+        bias_change_df[bias_change_df.bias_change.abs() < x_c[0]].bias_change,
+        range=(-2,2),
+        facecolor=c_u,
+        edgecolor=COLOR_PALETTES['change_status']['Unchanged'],
+        lw=2
+    ) 
+    c_c = mpl.colors.to_rgba(COLOR_PALETTES['change_status']['Changed'], alpha)
+    ax.hist(
+        bias_change_df[bias_change_df.bias_change.abs() >= x_c[0]].bias_change,
+        range=(-2,2),
+        facecolor=c_c,
+        edgecolor=COLOR_PALETTES['change_status']['Changed'],
+        lw=2
+    ) 
+    ax.set_xlabel('Lineage Bias Change')
+    ax.set_ylabel('Clone Count')
+    #ax.axvline(x_c[0], c='gray', ls='--')
+    #ax.axvline(-x_c[0], c='gray', ls='--')
+    ax.set_xticks([-2, -1, 0, 1, 2])
+    sns.despine()
+
+    fname = save_path + os.sep \
+        + 'bias_change_cutoff_hist_a' + str(abundance_cutoff).replace('.', '-') \
+        + '_' + group \
+        + '_mtd' + str(min_time_difference) \
+        + '_' + timepoint_col[0] + str(timepoint) \
+        + '.' + save_format
+    save_plot(fname, save, save_format)
