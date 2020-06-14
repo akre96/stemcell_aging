@@ -4055,8 +4055,9 @@ def plot_hsc_abund_bias_at_last(
             'axes.labelsize': 20,
             'xtick.major.width': 5,
             'ytick.major.width': 5,
-            'ytick.minor.width': 5,
-            'ytick.minor.size': 5,
+            'ytick.major.size': 8,
+            'ytick.minor.width': 0,
+            'ytick.minor.size': 0,
             'xtick.labelsize': 20,
             'ytick.labelsize': 20,
             'figure.titlesize': 'small',
@@ -4271,7 +4272,8 @@ def plot_hsc_abund_bias_at_last(
                 group_col='bias_category'
             )
             ax.set(yscale='log')
-            ax.set_yticks([10E-1, 10E-2, 10E-3,])
+            ax.set_yticks([1, 10E-1, 10E-2, 10E-3,])
+            ax.set_ylim([10e-3, 1.5])
         else:
             #LOG TO LINEAR
             stat_tests.one_way_ANOVArm(
@@ -11338,6 +11340,13 @@ def plot_expanded_at_time_abundance(
             8,
             timepoint_col,
         )
+    elif timepoint_col == 'month':
+        print('Filtering for mice with all 4 timepoints')
+        clonal_abundance_df =agg.filter_mice_with_n_timepoints(
+            clonal_abundance_df,
+            4,
+            timepoint_col,
+        )
     if n:
         print(Fore.YELLOW + '\tplotting n most abundant: ' + str(n))
         expanded_at_time = agg.get_n_most_abundant_at_time(
@@ -11364,8 +11373,8 @@ def plot_expanded_at_time_abundance(
     else:
         hue = 'mouse_id'
 
-    fig, axes = plt.subplots(ncols=2, nrows=1, figsize=(16,8))
-    plt.subplots_adjust(hspace=.5)
+    fig, axes = plt.subplots(ncols=2, nrows=1, figsize=(18,8))
+    plt.subplots_adjust(hspace=.2, wspace=.3)
     i=0
     for (ct), s_df in expanded_at_time.groupby(['cell_type']):
         print(s_df.groupby(timepoint_col).mouse_id.unique())
@@ -11387,7 +11396,8 @@ def plot_expanded_at_time_abundance(
             hue=hue,
             palette=COLOR_PALETTES[hue],
             ax=ax,
-            alpha=0.50
+            alpha=0.50,
+            lw=2,
         )
         sns.lineplot(
             data=s_df,
