@@ -2019,170 +2019,6 @@ def main():
             cache_dir=args.cache_dir,
         )
 
-    if graph_type in ['bias_change_gen_between_kde']:
-        save_path = args.output_dir + os.sep + 'bias_change_kde_between'
-        thresholds = {
-            'gr': 0.0,
-            'b': 0.0
-            }
-        abundance_cutoff = 0.0
-
-
-        if args.abundance_cutoff:
-            abundance_cutoff = args.abundance_cutoff
-            _, thresholds = calculate_thresholds_sum_abundance(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                timepoint_col=timepoint_col,
-            )
-
-        bias_change_df = between_gen_bias_change(
-            lineage_bias_df,
-            absolute=args.magnitude
-        )
-        
-        plot_bias_change_time_kdes(
-            bias_change_df,
-            first_timepoint=first_timepoint,
-            absolute_value=args.magnitude,
-            group=args.group,
-            save=args.save,
-            save_path=save_path,
-        )
-    if graph_type in ['bias_change_gen_across_kde']:
-        save_path = args.output_dir + os.sep + 'bias_change_kde_across'
-        thresholds = {
-            'gr': 0.0,
-            'b': 0.0
-            }
-        abundance_cutoff = 0.0
-
-
-        if args.abundance_cutoff:
-            abundance_cutoff = args.abundance_cutoff
-            _, thresholds = calculate_thresholds_sum_abundance(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                timepoint_col=timepoint_col,
-            )
-
-        bias_change_df = across_gen_bias_change(
-            lineage_bias_df,
-            absolute=args.magnitude
-        )
-        
-        plot_bias_change_time_kdes(
-            bias_change_df,
-            first_timepoint=first_timepoint,
-            absolute_value=args.magnitude,
-            group=args.group,
-            save=args.save,
-            save_path=save_path,
-        )
-
-    if graph_type in ['change_across_gens']:
-        save_path = args.output_dir + os.sep + 'bias_across'
-        thresholds = {
-            'gr': 0.0,
-            'b': 0.0
-            }
-        abundance_cutoff = 0.0
-
-
-        if args.abundance_cutoff:
-            abundance_cutoff = args.abundance_cutoff
-            _, thresholds = calculate_thresholds_sum_abundance(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                timepoint_col=timepoint_col,
-            )
-        if args.magnitude:
-            plot_bias_change_across_gens(
-                lineage_bias_df,
-                abundance_cutoff=abundance_cutoff,
-                thresholds=thresholds,
-                magnitude=True,
-                group=args.group,
-                by_clone=args.by_clone,
-                save=args.save,
-                save_path=save_path,
-            )
-        plot_bias_change_across_gens(
-            lineage_bias_df,
-            abundance_cutoff=abundance_cutoff,
-            thresholds=thresholds,
-            magnitude=False,
-            group=args.group,
-            by_clone=args.by_clone,
-            save=args.save,
-            save_path=save_path,
-        )
-
-    if graph_type in ['change_between_gens']:
-        save_path = args.output_dir + os.sep + 'bias_between'
-        thresholds = {
-            'gr': 0.0,
-            'b': 0.0
-            }
-        abundance_cutoff = 0.0
-
-        if args.abundance_cutoff:
-            abundance_cutoff = args.abundance_cutoff
-            _, thresholds = calculate_thresholds_sum_abundance(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                timepoint_col=timepoint_col
-            )
-
-        if args.plot_rest:
-            print('Plotting Rest of Clones (untracked)')
-            print(rest_of_clones_bias_df.group)
-            plot_bias_change_between_gen(
-                rest_of_clones_bias_df,
-                abundance_cutoff=abundance_cutoff,
-                thresholds=thresholds,
-                magnitude=True,
-                group=args.group,
-                by_clone=args.by_clone,
-                legend='brief',
-                style='code',
-                save=args.save,
-                save_path=save_path + '_rest',
-            )
-            plot_bias_change_between_gen(
-                rest_of_clones_bias_df,
-                abundance_cutoff=abundance_cutoff,
-                thresholds=thresholds,
-                legend='brief',
-                style='code',
-                magnitude=False,
-                group=args.group,
-                by_clone=args.by_clone,
-                save=args.save,
-                save_path=save_path + '_rest',
-            )
-        else:
-            plot_bias_change_between_gen(
-                lineage_bias_df,
-                abundance_cutoff=abundance_cutoff,
-                thresholds=thresholds,
-                magnitude=True,
-                group=args.group,
-                by_clone=args.by_clone,
-                save=args.save,
-                save_path=save_path,
-            )
-            plot_bias_change_between_gen(
-                lineage_bias_df,
-                abundance_cutoff=abundance_cutoff,
-                thresholds=thresholds,
-                magnitude=False,
-                group=args.group,
-                by_clone=args.by_clone,
-                save=args.save,
-                save_path=save_path,
-            )
-
     if graph_type in ['swarm_abund_cut']:
         abundance_cutoff = 0
         thresholds = {
@@ -2437,35 +2273,6 @@ def main():
             )
 
 
-    if graph_type in ['range_bias_month']:
-        save_path = args.output_dir + os.sep + 'Lineage_Bias_Line_Plot'
-        filt_df = find_clones_bias_range_at_time(
-            lineage_bias_df,
-            month=4,
-            min_bias=.45,
-            max_bias=.75,
-        )
-        group = 'no_change'
-        plot_lineage_bias_violin(
-            filt_df,
-            timepoint_col,
-            group=group,
-            save=args.save,
-            save_path=save_path,
-            save_format='png',
-        )
-        plot_lineage_bias_abundance_3d(filt_df, group=group)
-        group = 'aging_phenotype'
-        plot_lineage_bias_violin(
-            filt_df,
-            timepoint_col,
-            group=group,
-            save=args.save,
-            save_path=save_path,
-            save_format='png',
-        )
-        plot_lineage_bias_abundance_3d(filt_df, group=group)
-        
 
     if graph_type in ['bias_violin']:
         if args.options == 'default':
@@ -2480,74 +2287,6 @@ def main():
             save_path=save_path,
             save_format='png',
             timepoint_col=timepoint_col,
-        )
-
-    if graph_type in ['max_eng_mouse']:
-        save_path = args.output_dir + os.sep + 'Max_Engraftment'
-        percentile = .95
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
-        filtered_df = filter_cell_type_threshold(present_clones_df, thresholds=dominant_thresholds, analyzed_cell_types=['gr', 'b'])
-        if args.options == 'default':
-            group = 'all'
-        else:
-            group = args.options
-        cell_type = 'b'
-        plot_max_engraftment_by_mouse(
-            filtered_df,
-            title='Abundance > '
-            + str(round(dominant_thresholds[cell_type], 2))
-            + ' % WBC, Percentile: '
-            + str(round(100*percentile, 2)),
-            group=group,
-            cell_type=cell_type,
-            percentile=percentile,
-            save=args.save,
-            save_path=save_path
-        )
-        cell_type = 'gr'
-        plot_max_engraftment_by_mouse(
-            filtered_df,
-            title='Abundance > '
-            + str(round(dominant_thresholds[cell_type], 2))
-            + ' % WBC, Percentile: '
-            + str(round(100*percentile, 2)),
-            group=group,
-            cell_type=cell_type,
-            percentile=percentile,
-            save=args.save,
-            save_path=save_path
-        )
-    if graph_type in ['max_eng_group']:
-        save_path = args.output_dir + os.sep + 'Max_Engraftment'
-        percentile = .95
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
-        filtered_df = filter_cell_type_threshold(present_clones_df, thresholds=dominant_thresholds, analyzed_cell_types=['gr', 'b'])
-
-        cell_type = 'gr'
-        plot_max_engraftment_by_group(
-            filtered_df,
-            title='Abundance > '
-            + str(round(dominant_thresholds[cell_type], 2))
-            + ' % WBC, Percentile: '
-            + str(round(100*percentile, 2)),
-            cell_type=cell_type,
-            percentile=percentile,
-            save=args.save,
-            save_path=save_path
-        )
-        cell_type = 'b'
-        plot_max_engraftment_by_group(
-            filtered_df,
-            title='Abundance > '
-            + str(round(dominant_thresholds[cell_type], 2))
-            + ' % WBC, Percentile: '
-            + str(round(100*percentile, 2)),
-            cell_type=cell_type,
-            percentile=percentile,
-            save=args.save,
-            save_path=save_path
         )
 
 
@@ -2624,90 +2363,6 @@ def main():
                     save_path=save_path
                 )
                     
-    if graph_type == 'max_engraftment':
-        plot_max_engraftment(present_clones_df, title='All Present Clones')
-
-        percentile = .95
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
-        filtered_df = filter_cell_type_threshold(present_clones_df, thresholds=dominant_thresholds, analyzed_cell_types=['gr', 'b'])
-        plot_max_engraftment(filtered_df,
-                             title='Filtered by gr > '
-                             + str(round(dominant_thresholds['gr'], 2))
-                             + ', b > '
-                             + str(round(dominant_thresholds['b'], 2))
-                             + ' % WBC, Percentile: '
-                             + str(round(100*percentile, 2)),
-                             percentile=percentile,
-                             save=args.save,
-                             save_path=args.output_dir + os.sep + 'Max_Engraftment',
-        )
-
-
-    if graph_type == 'bias_time_abund':
-        plot_lineage_bias_abundance_3d(lineage_bias_df, by_day=args.by_day)
-        plot_lineage_bias_abundance_3d(lineage_bias_df, by_day=args.by_day, group='aging_phenotype')
-        plot_lineage_bias_abundance_3d(lineage_bias_df, by_day=args.by_day, group='no_change')
-
-    if graph_type == 'counts_at_perc':
-        percentile = .95
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
-
-        for cell_type, threshold in dominant_thresholds.items():
-            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
-        line = args.by_clone
-        plot_counts_at_percentile(present_clones_df,
-                                  percentile=percentile,
-                                  thresholds=dominant_thresholds,
-                                  analyzed_cell_types=analysed_cell_types,
-                                  save=args.save,
-                                  line=line,
-                                  save_path=args.output_dir + os.sep + 'Clone_Count_at_Thresholds_Over_Time',
-                                  group=args.group,
-                                 )
-
-    # Venn diagram of present clones
-    if graph_type == 'venn':
-        venn_barcode_in_time(present_clones_df,
-                             analysed_cell_types,
-                             save=args.save,
-                             save_path=args.output_dir + os.sep + 'Venn_Presence_At_Time',
-                             save_format='png',
-                             group='no_change'
-                            )
-        venn_barcode_in_time(present_clones_df,
-                             analysed_cell_types,
-                             save=args.save,
-                             save_path=args.output_dir + os.sep + 'Venn_Presence_At_Time',
-                             save_format='png',
-                             group='aging_phenotype'
-                            )
-        #venn_barcode_in_time(present_clones_df,
-                             #analysed_cell_types,
-                             #save=args.save,
-                             #save_path=args.output_dir + os.sep + 'Venn_Presence_At_Time',
-                             #save_format='png',
-                             #group='all'
-                            #)
-    # heatmap present clones
-    if graph_type == 'cluster':
-        clustermap_clone_abundance(present_clones_df,
-                                   analysed_cell_types,
-                                   normalize=True,
-                                   save=args.save,
-                                   save_path=args.output_dir + os.sep + 'Heatmap_Clone_Abundance',
-                                   save_format='png',
-                                   group='aging_phenotype',
-                                  )
-        clustermap_clone_abundance(present_clones_df,
-                                   analysed_cell_types,
-                                   normalize=True,
-                                   save=args.save,
-                                   save_path=args.output_dir + os.sep + 'Heatmap_Clone_Abundance',
-                                   save_format='png',
-                                   group='no_change',
-                                  )
 
     # Count clones by threshold
     if graph_type == 'clone_count_bar':
@@ -2792,40 +2447,6 @@ def main():
                 abundance=abundance_cutoff,
             )
 
-    if graph_type == 'perc_bias_month':
-        percentile = .995
-        month = 4
-        if args.options == 'default':
-            percentile = .995
-        else:
-            percentile = float(args.options)
-
-        print('Percentile set to: ' + str(percentile))
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
-
-        for cell_type, threshold in dominant_thresholds.items():
-            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
-
-        for cell_type in ['gr', 'b']:
-            filt_lineage_bias_gr_df = combine_enriched_clones_at_time(
-                                                                    input_df=lineage_bias_df,
-                                                                    enrichment_time=month,
-                                                                    thresholds=dominant_thresholds,
-                                                                    timepoint_col='month',
-                                                                    lineage_bias=True,
-                                                                    analyzed_cell_types=[cell_type],
-            )
-            plot_lineage_average(filt_lineage_bias_gr_df,
-                                clonal_abundance_df=present_clones_df,
-                                title_addon='Filtered by clones with > ' + str(round(dominant_thresholds[cell_type], 2)) + '% WBC abundance in ' + cell_type.title() + ' at Month ' + str(month),
-                                save=args.save,
-                                timepoint=month,
-                                timepoint_col=timepoint,
-                                save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/' + cell_type,
-                                save_format='png',
-                                percentile=percentile
-                                )
 
     if graph_type == 'abundant_at_last':
         abundance_cutoff = 0
@@ -2866,36 +2487,6 @@ def main():
             )
 
         
-    if graph_type == 'top_perc_bias':
-        if args.options == 'default':
-            percentile = .995
-        else:
-            percentile = float(args.options)
-
-        print('Percentile set to: ' + str(percentile))
-        present_at_month_4 = present_clones_df.loc[present_clones_df.month == 4]
-        dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile)
-
-        for cell_type, threshold in dominant_thresholds.items():
-            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
-
-        for cell_type in ['gr', 'b']:
-            filt_lineage_bias_df = clones_enriched_at_last_timepoint(
-                input_df=present_clones_df,
-                timepoint_col=timepoint_col,
-                lineage_bias_df=lineage_bias_df,
-                thresholds=dominant_thresholds,
-                lineage_bias=True,
-                cell_type=cell_type,
-            )
-            plot_lineage_bias_line(
-                filt_lineage_bias_df,
-                title_addon='Filtered by clones with > ' + str(round(dominant_thresholds[cell_type], 2)) + '% WBC abundance in ' + cell_type.title() + ' at last timepoint',
-                save=args.save,
-                save_path=args.output_dir + os.sep + 'Lineage_Bias_Line_Plot/'+cell_type,
-                save_format='png',
-                percentile=percentile
-            )
 
     # Lineage Bias Line Plots by threshold
     if graph_type == 'lineage_bias_line':
@@ -2915,38 +2506,6 @@ def main():
                               )
 
     # Abundant clones at specific time
-    if graph_type == 'engraftment_time':
-        if args.abundance_cutoff:
-            print('Thresholds calculated based on cumulative abundance')
-            abundance_cutoff = args.abundance_cutoff
-            _, dominant_thresholds = calculate_thresholds_sum_abundance(
-                present_clones_df,
-                abundance_cutoff=abundance_cutoff,
-                timepoint_col=timepoint_col,
-            )
-        else:
-            percentile = 0.995
-            print('Percentile Set To: ' + str(percentile))
-            present_at_month_4 = present_clones_df.loc[present_clones_df[timepoint_col] == first_timepoint]
-            dominant_thresholds = find_top_percentile_threshold(present_at_month_4, percentile=percentile, cell_types=analyzed_cell_types)
-
-        print(dominant_thresholds)
-        for cell_type, threshold in dominant_thresholds.items():
-            print('Threshold for ' + cell_type + ' cells: ' + str(round(threshold, 2)) + '% WBC')
-
-        timepoint = first_timepoint
-        if args.timepoint:
-            timepoint = args.timepoint
-        plot_clone_enriched_at_time(present_clones_df,
-                                    [timepoint],
-                                    dominant_thresholds,
-                                    analyzed_cell_types=analyzed_cell_types,
-                                    timepoint_col=timepoint_col,
-                                    save=args.save,
-                                    save_path=args.output_dir + os.sep + 'Dominant_Clone_Abundance_Over_Time',
-                                    save_format='png',
-                                    by_clone=args.by_clone,
-                                   )
     
     if plt.get_fignums():
         if not args.save:
