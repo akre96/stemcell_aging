@@ -558,6 +558,7 @@ def one_way_ANOVArm(
     match_cols: List[str],
     merge_type: str,
     fill_na: Any,
+    do_pairwise: bool = True,
 ) -> None:
     if fill_na is not None:
         index_cols = list(set([id_col] + match_cols))
@@ -589,7 +590,7 @@ def one_way_ANOVArm(
         show_ns=show_ns,
     )
     times = data[timepoint_col].unique()
-    if (p_value[0] < 0.05) or show_ns:
+    if ((p_value[0] < 0.05) or show_ns) and do_pairwise:
         raw_p_vals = []
         comparisons = []
         for (t1, t2) in combinations(times, 2):
@@ -650,11 +651,13 @@ def friedman_wilcoxonSignedRank(
     merge_type: str,
     fill_na: Any,
     aggfunc: Any = np.mean,
+    do_pairwise: bool = True
 ) -> None:
-    print(
-        Fore.CYAN + Style.BRIGHT 
-        + '\nPerforming Friedman Chi-squared and bonferroni adjusted Wilcoxon Signed Rank Test for ' + overall_context.title()
-    )
+    if do_pairwise:
+        print(
+            Fore.CYAN + Style.BRIGHT 
+            + '\nPerforming Friedman Chi-squared and bonferroni adjusted Wilcoxon Signed Rank Test for ' + overall_context.title()
+        )
     measurements = data.pivot_table(
         values=value_col,
         index=id_col,
@@ -670,7 +673,7 @@ def friedman_wilcoxonSignedRank(
         show_ns=show_ns,
     )
     times = data[timepoint_col].unique()
-    if (p_value < 0.05) or show_ns:
+    if ((p_value < 0.05) or show_ns) and do_pairwise:
         raw_p_vals = []
         comparisons = []
         for (t1, t2) in combinations(times, 2):

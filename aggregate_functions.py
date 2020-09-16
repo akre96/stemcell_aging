@@ -263,6 +263,9 @@ def get_clones_at_timepoint(
         by_mouse: bool,
         n: Any = None,
     ) -> pd.DataFrame:
+    if timepoint_col == 'month' and timepoint == 'first':
+        timepoint = 9
+        print(Fore.RED + 'First month changed to month 9')
     if n is not None:
         if timepoint == 'last':
             if by_mouse:
@@ -837,6 +840,7 @@ def mark_changed(
             1: 'Myeloid'
         })
     )
+
     with_change_df.loc[~with_change_df.changed, 'change_type'] = 'Unchanged'
     with_change_df.loc[with_change_df.bias_change.isna(), 'change_type'] = 'Unknown'
     with_change_df.loc[with_change_df.bias_change.isna(), 'change_status'] = 'Unknown'
@@ -846,7 +850,8 @@ def mark_changed(
 def sum_abundance_by_change(
         with_change_contribution_df: pd.DataFrame,
         percent_of_total: bool = False,
-        timepoint_col: str = 'month'
+        timepoint_col: str = 'month',
+        change_col: str = 'change_type'
     ) -> pd.DataFrame:
     """ Cumulative abundance at percentiles
     
@@ -866,7 +871,7 @@ def sum_abundance_by_change(
         ).percent_engraftment.sum()).reset_index()
     by_change_sum = pd.DataFrame(
         with_change_contribution_df.groupby(
-            ['cell_type', 'group', 'mouse_id', timepoint_col, 'changed', 'change_type']
+            ['cell_type', 'group', 'mouse_id', timepoint_col, change_col]
             ).percent_engraftment.sum()
         ).reset_index()
     total_sum['changed'] = 'Total'
@@ -883,9 +888,7 @@ def sum_abundance_by_change(
     else:
         all_change_data_sum = total_sum.append(by_change_sum, ignore_index=True)
 
-    all_change_data_sum = all_change_data_sum.assign(
-        change_status=all_change_data_sum.changed.map({'Total': 'Total', False: 'Unchanged', True: 'Changed'})
-    )
+
     return all_change_data_sum
 
 def find_intersect(data, y, x_col: str = 'percentile', y_col: str = 'percent_sum_abundance'):
@@ -945,9 +948,11 @@ def calculate_thresholds_sum_abundance(
         + str(abundance_cutoff) + ' -- \n'
     )
     for cell_type in analyzed_cell_types:
-        month_4_cell_df = find_first_clones_in_mouse(
+        month_4_cell_df = get_clones_at_timepoint(
             input_df,
-            timepoint_col
+            timepoint_col,
+            'first',
+            by_mouse=True
         )
         month_4_cell_df = month_4_cell_df[month_4_cell_df.cell_type == cell_type]
         # USE LAST IF HSC DATA
@@ -1253,6 +1258,9 @@ def calculate_first_last_bias_change(
         by_mouse: bool,
         exclude_month_17: bool = True,
     ):
+    print(Fore.RED + ' FORCING BIAS CHANGE BY MOUSE')
+    by_mouse = True
+
     group_cols = ['mouse_id', 'code', 'group']
     if exclude_month_17 and timepoint_col == 'month':
         if 17 in lineage_bias_df.month.unique():
@@ -1264,6 +1272,13 @@ def calculate_first_last_bias_change(
             lineage_bias_df[timepoint_col].isin([1,8])
         ]
 
+    # TESTING MONTH 9 instead of FIRST
+   # lineage_bias_at_first_df = get_clones_at_timepoint(
+   #     lineage_bias_df,
+   #     timepoint_col,
+   #     'first',
+   #     by_mouse=by_mouse,
+   # )
     lineage_bias_at_first_df = get_clones_at_timepoint(
         lineage_bias_df,
         timepoint_col,
@@ -1630,14 +1645,26 @@ def filter_first_last_by_mouse(
     out_df = pd.DataFrame()
     for _ , m_df in input_df.groupby('mouse_id'):
         first_t = m_df[timepoint_col].min()
+        if timepoint_col == 'month':
+            first_t = 9
         last_t = m_df[timepoint_col].max()
         out_df = out_df.append(
-            m_df[m_df[timepoint_col] == first_t].assign(
+            get_clones_at_timepoint(
+                m_df,
+                timepoint_col,
+                'first',
+                by_mouse=True
+            ).assign(
                 mouse_time_desc='First'
             )
         )
         out_df = out_df.append(
-            m_df[m_df[timepoint_col] == last_t].assign(
+            get_clones_at_timepoint(
+                m_df,
+                timepoint_col,
+                'last',
+                by_mouse=True
+            ).assign(
                 mouse_time_desc='Last'
             )
         )
@@ -1652,6 +1679,7 @@ def filter_first_last_by_mouse(
 def exhausted_clones_without_MPPs(
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
+        present_thresh: float,
     ):
     if 'percent_engraftment' not in clonal_abundance_df.columns:
         print(clonal_abundance_df.columns)
@@ -1665,7 +1693,7 @@ def exhausted_clones_without_MPPs(
         timepoint_col,
         include_middle=True,
     )
-    present_clones_df = with_time_labels_df[with_time_labels_df.percent_engraftment >= 0.01] 
+    present_clones_df = with_time_labels_df[with_time_labels_df.percent_engraftment >= present_thresh] 
     exhaustion_df = pd.DataFrame()
     for _, g_df in present_clones_df.groupby(['code', 'mouse_id', 'group']):
         if g_df[timepoint_col].nunique() < 2:
@@ -1685,6 +1713,53 @@ def exhausted_clones_without_MPPs(
             continue
         exhaustion_df = exhaustion_df.append(temp_df)
     return exhaustion_df
+
+def label_activated_clones(
+    clonal_abundance_df: pd.DataFrame,
+    timepoint_col: str,
+    present_thresh: float,
+):
+    present_clones = clonal_abundance_df[
+        clonal_abundance_df.percent_engraftment >= present_thresh
+    ]
+    last_clones = get_clones_at_timepoint(
+        clonal_abundance_df,
+        timepoint_col,
+        'last',
+        by_mouse=True,
+    )
+    last_clones = last_clones[last_clones.percent_engraftment >= 0.01]
+    piv = present_clones.pivot_table(
+        index=['code', 'mouse_id'],
+        columns=timepoint_col,
+        values='percent_engraftment',
+        aggfunc=np.max,
+    )
+    # Activated clones are present at M12 or 15, NOT 4/9
+    if timepoint_col == 'month':
+        act_bool = (piv[[4, 9]].isna().sum(axis=1) == 2)
+        print(piv[[4, 9]].isna().sum(axis=1).describe())
+    if timepoint_col == 'gen':
+        act_bool = (piv[[1, 2]].isna().sum(axis=1) == 2)
+
+    activating = piv[act_bool].reset_index()[['code', 'mouse_id']]
+    activating = last_clones.merge(
+        activating,
+        how='inner',
+        validate='m:1'
+    )[['code', 'mouse_id']].drop_duplicates()
+    activating['survived'] = 'Activated'
+    labeled = clonal_abundance_df
+    for m, m_df in activating.groupby('mouse_id'):
+        labeled.loc[
+            (labeled.mouse_id == m) & labeled.code.isin(m_df.code.unique()),
+            'survived'
+        ] = 'Activated'
+
+    labeled.loc[labeled.survived.isna(), 'survived'] = 'Unknown'
+    return labeled
+        
+
 
 
 def abundance_to_long_by_cell_type(
@@ -1741,7 +1816,28 @@ def get_hsc_abundance_perc_per_mouse(
     )
     return hsc_data
 
-
+def filter_gxd_first_last(
+    abundance_with_gxd_df: pd.DataFrame,
+    timepoint_col: str,
+    threshold: float,
+) -> List[str]:
+    mice_left = abundance_with_gxd_df.mouse_id.unique()
+    abundance_with_gxd_df['gfp_x_donor'] = abundance_with_gxd_df['gfp_x_donor'].round(decimals=2) 
+    for t in ['first', 'last']:
+        t_df = get_clones_at_timepoint(
+            abundance_with_gxd_df,
+            timepoint_col,
+            t,
+            by_mouse=True,
+        )
+        t_df = t_df[t_df.cell_type.isin(['gr', 'b'])]
+        t_filt_gxd = t_df[t_df.gfp_x_donor >= threshold]
+        filt_agg = pd.DataFrame(
+            t_filt_gxd.groupby('mouse_id').cell_type.nunique()
+        ).reset_index()
+        filt_agg = filt_agg[filt_agg.cell_type == 2]
+        mice_left = [m for m in mice_left if m in filt_agg.mouse_id.unique()]
+    return mice_left
 
 def get_clones_exist_first_and_last_per_mouse(
         input_df: pd.DataFrame(),
@@ -2052,6 +2148,7 @@ def label_exhausted_clones(
         add_labels_df: pd.DataFrame,
         clonal_abundance_df: pd.DataFrame,
         timepoint_col: str,
+        present_thresh: float
     ) -> pd.DataFrame:
     """ Add exhaustion/survival labels to clones
     
@@ -2071,7 +2168,8 @@ def label_exhausted_clones(
     if timepoint_col == 'month':
         unlabeled_exhaust_df = exhausted_clones_without_MPPs(
             no_hsc_df,
-            timepoint_col
+            timepoint_col,
+            present_thresh
         )
     
         abundance_with_time_difference = add_time_difference(
@@ -2085,12 +2183,14 @@ def label_exhausted_clones(
     elif timepoint_col == 'gen':
         exhaust_df = exhausted_clones_serial_transplant(
             no_hsc_df,
-            timepoint_col
+            timepoint_col,
+            present_thresh=present_thresh,
+            match_aging=True,
         )
     else:
         exhaust_df = pd.DataFrame()
         no_hsc_df = no_hsc_df[
-            no_hsc_df.percent_engraftment >= 0.01
+            no_hsc_df.percent_engraftment >= present_thresh
         ]
         abundance_with_time_difference = add_time_difference(
             no_hsc_df,
@@ -2109,12 +2209,12 @@ def label_exhausted_clones(
         exhaust_df = survived.append(not_survived)
 
     exhaust_df = exhaust_df[
-        ['mouse_id', 'group', 'code', timepoint_col, 'total_time_change', 'time_change', 'isLast', 'survived']
+        ['mouse_id', 'group', 'code', 'survived']
         ].drop_duplicates()
 
     input_with_labels = add_labels_df.merge(
         exhaust_df,
-        how='inner',
+        how='left',
     )
     print('\tLength before adding exhaustion labels:', len(add_labels_df))
     print('\tLength after adding exhaustion labels:', len(input_with_labels))
@@ -2123,10 +2223,46 @@ def label_exhausted_clones(
 def exhausted_clones_serial_transplant(
     no_hsc_df: pd.DataFrame,
     timepoint_col: str,
+    present_thresh: float,
+    match_aging: bool = False,
     ):
     if timepoint_col != 'gen':
         raise ValueError('Time point column must be gen, recieved ' + str(timepoint_col) )
-    present_no_hsc_df = no_hsc_df[no_hsc_df.percent_engraftment >= 0.01]
+
+    if match_aging:
+        print('MATCHING AGING TYPE EXHAUSTION FOR S.T. DATA')
+        last_clones = get_clones_at_timepoint(no_hsc_df, timepoint_col, 'last', by_mouse=True)
+        last_clones = last_clones[last_clones.percent_engraftment >= present_thresh]
+
+        last_clones = last_clones[last_clones.gen >= 7]
+
+        grb_df = no_hsc_df[no_hsc_df.cell_type.isin(['gr','b'])]
+        grb_df = grb_df[grb_df.percent_engraftment >= present_thresh]
+
+        piv = grb_df[['mouse_id', 'code', 'gen', 'percent_engraftment']].pivot_table(
+            values='percent_engraftment',
+            index=['code', 'mouse_id'],
+            columns='gen',
+            aggfunc=np.max,
+        )
+        exh_bool = (
+            (piv[[1, 2]].isna().sum(axis=1) == 0) &
+            (piv[[7,8]].isna().sum(axis=1) == 0)
+        )
+        surv_bool = (
+            (piv[[1, 2]].isna().sum(axis=1) == 0)
+        )
+        exhausted = piv[exh_bool].reset_index()[['code', 'mouse_id']].drop_duplicates()
+        exhausted['survived'] = 'Exhausted'
+        exhausted = exhausted.merge(no_hsc_df, how='inner', validate='1:m')
+
+        survived = piv[surv_bool].reset_index()[['code', 'mouse_id']].drop_duplicates()
+        survived['survived'] = 'Survived'
+        survived = last_clones.merge(survived, how='inner', validate='m:1')
+        return pd.concat([exhausted, survived])
+
+
+    present_no_hsc_df = no_hsc_df[no_hsc_df.percent_engraftment >= present_thresh]
     last_two_time_points = present_no_hsc_df[present_no_hsc_df['gen'].isin([7, 8])]
 
     # Count number times clone in last 2 gens

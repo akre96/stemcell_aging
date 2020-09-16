@@ -1,7 +1,9 @@
 {
     "survived": {
-        "Exhausted": "#e0e0e0",
-        "Survived": "#484848"
+        "Exhausted": "#e84393",
+        "Survived": "black",
+        "Activated": "#44bd32",
+        "Unknown": "#718093"
     },
     "cell_type": {
         "gr" : "#FBCC04",
@@ -42,7 +44,7 @@
         "Myeloid": "#273c75",
         "Lymphoid": "#d72424",
         "Unchanged": "#e6e6e6",
-        "Unknown": "#353b48"
+        "Unknown": "#222f3e"
     },
     "time_point": "coolwarm",
     "mouse_id": {

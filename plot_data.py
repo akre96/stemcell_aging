@@ -13,27 +13,26 @@ Returns:
 """
 
 import argparse
-import json
 import glob
 import os
 import sys
-import platform
-from colorama import init, Fore, Back, Style
+from colorama import init, Fore, Style
 import pandas as pd
-import numpy as np
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from data_types import y_col_type, timepoint_type, change_type, change_status
 from lineage_bias import parse_wbc_count_file
-from aggregate_functions import filter_threshold, \
-    clones_enriched_at_last_timepoint, percentile_sum_engraftment, \
-    find_top_percentile_threshold, find_clones_bias_range_at_time, \
-    filter_cell_type_threshold, combine_enriched_clones_at_time, \
-    mark_changed, sum_abundance_by_change, between_gen_bias_change, \
-    calculate_thresholds_sum_abundance, filter_lineage_bias_threshold, \
-    across_gen_bias_change, day_to_month, \
-    day_to_gen, calculate_bias_change
+from aggregate_functions import (
+    clones_enriched_at_last_timepoint,
+    filter_cell_type_threshold,
+    combine_enriched_clones_at_time,
+    mark_changed,
+    calculate_thresholds_sum_abundance,
+    calculate_first_last_bias_change,
+    day_to_month,
+    day_to_gen
+)
+import aggregate_functions as agg
 from plotting_functions import *
 
      
@@ -110,6 +109,7 @@ def main():
     parser.add_argument('--change-type', dest='change_type', help='Set type (Lymphoid/Myeloid) of lineage bias changed clones to inspect for certain graphs', type=change_type, required=False)
     parser.add_argument('--bias-type', dest='bias_type', help='Set type [LC, LB, B, MB, MC] of lineage bias to inspect for certain graphs', required=False)
     parser.add_argument('--line', dest='line', help='Wether to use lineplot for certain graphs', action="store_true")
+    parser.add_argument('--pie', dest='pie', help='Wether to use pie chart for certain graphs', action="store_true")
     parser.add_argument('--by-group', dest='by_group', help='Whether to plot vs group istead of vs cell_type for certain graphs', action="store_true")
     parser.add_argument('--sum', dest='sum', help='Whether to plot sum abundance vs average abundance for certain graphs', action="store_true")
     parser.add_argument('--by-clone', dest='by_clone', help='Whether to plot clone color instead of group for certain graphs', action="store_true")
@@ -182,9 +182,8 @@ def main():
         filt_0_out_exempt=False
     )
 
-
     lineage_bias_df = raw_lineage_bias_df
-    ## EXLCUDE MICE
+    # EXLCUDE MICE
     excluded_mice = pd.read_csv('~/Data/HSC_aging_project/exclude_mice.csv')
     for mouse_id in excluded_mice.mouse_id.unique():
         if not present_clones_df[present_clones_df.mouse_id == mouse_id].empty:
@@ -204,7 +203,6 @@ def main():
 
     if options != 'default':
         print(Style.BRIGHT + ' -- Extra Options Set: ' + options + ' -- \n')
-
 
     if args.group != 'all':
         print(' - Group Filtering Set to: ' + args.group)
@@ -230,9 +228,7 @@ def main():
     if args.cache:
         print(' - Using Cached Data')
 
-
     rest_of_clones_abundance_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_abundance_long.csv')
-
     rest_of_clones_bias_df = pd.read_csv(args.rest_of_clones + os.sep + 'rest_of_clones_lineage_bias.csv')
 
 
@@ -243,8 +239,6 @@ def main():
     # Adds generation calculation for serial transplant data
     elif args.by_gen:
         print(' - Time By Generation Set \n')
-
-
         first_timepoint = 1
         timepoint_col = 'gen'
         lineage_bias_df = lineage_bias_df.assign(gen=lambda x: day_to_gen(x.day))
@@ -290,6 +284,31 @@ def main():
             save_format='png'
         )
 
+
+    if graph_type in ['clones_at_time_total_abundance']:
+        save_path = args.output_dir + os.sep + 'clones_at_time_total_abundance'
+        log_scale = False
+        if args.options == 'log':
+            log_scale = True
+
+        if args.pie:
+            plot_clones_at_time_total_abundance_heatmap(
+                present_clones_df,
+                timepoint_col,
+                by_average=args.by_average,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
+        else:
+            plot_clones_at_time_total_abundance(
+                present_clones_df,
+                timepoint_col,
+                log_scale,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
     if graph_type in ['blood_bias_abundance_time']:
         save_path = args.output_dir + os.sep + 'blood_bias_abundance_time'
         plot_blood_bias_abundance_time(
@@ -335,10 +354,25 @@ def main():
         )
 
 
+    if graph_type in ['abundance_lineplot']:
+        save_path = args.output_dir + os.sep + 'abundance_lineplot'
+
+        plot_abundance_lineplot(
+            present_clones_df,
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+            save_format='png'
+        )
     if graph_type in ['expanded_at_time_abundance']:
         save_path = args.output_dir + os.sep + 'expanded_at_time_abundance'
 
         thresholds = {'gr': 0.0, 'b': 0.0}
+        flip = False
+        if args.options == 'flip':
+            flip = True
+
 
         if args.abundance_cutoff:
             _, thresholds = calculate_thresholds_sum_abundance(
@@ -355,6 +389,9 @@ def main():
             args.by_group,
             thresholds,
             n=args.n,
+            flip_cell_type=flip,
+            by_mouse=args.by_mouse,
+            group=args.group,
             save=args.save,
             save_path=save_path,
             save_format='png'
@@ -372,22 +409,56 @@ def main():
 
     if graph_type in ['compare_change_contrib']:
         save_path = args.output_dir + os.sep + 'changed_contribution'
+        mtd = 1
+        if timepoint_col == 'month':
+            mtd = 3
+
+        bar_col = 'change_type'
+        bar_types = ['Lymphoid', 'Unchanged', 'Myeloid', 'Unknown']
+        # Remove a type to not include it from plotting
+        bar_types = ['Unchanged', 'Lymphoid', 'Myeloid']
+
         if args.options != 'default':
-            mtd = int(args.options)
-        if args.cache:
-            change_marked_df = pd.read_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv')
-        else:
+            if args.options in ['survived', 'change_type']:
+                bar_col = str(args.options)
+            else:
+                raise ValueError('Bar Col must be change_type or survived')
+
+        if bar_col == 'change_type':
             bias_change_df = calculate_first_last_bias_change(
                 lineage_bias_df,
                 timepoint_col=timepoint_col,
                 by_mouse=False,
             )
-            change_marked_df = mark_changed(
+            marked_df = mark_changed(
                 present_clones_df,
                 bias_change_df,
-                merge_type='inner',
+                merge_type='left',
                 min_time_difference=mtd,
             )
+            print('Change Cutoff:', marked_df.change_cutoff.unique()[0])
+        elif bar_col == 'survived':
+            bar_types = ['Exhausted', 'Survived', 'Unknown', 'Activated']
+            bar_types = ['Exhausted', 'Survived', 'Activated']
+            exhaust_labeled = agg.label_exhausted_clones(
+                None,
+                agg.remove_gen_8_5(
+                    agg.remove_month_17_and_6(
+                        present_clones_df,
+                        timepoint_col
+                    ),
+                    timepoint_col,
+                    keep_hsc=False
+                ),
+                timepoint_col
+            )
+            marked_df = agg.label_activated_clones(
+                exhaust_labeled,
+                timepoint_col
+            )
+            print('Exhaustion Labeling Results (unique clones):')
+            print(marked_df.groupby('survived').code.nunique())
+
         timepoint = 'last'
         if args.timepoint:
             timepoint = args.timepoint
@@ -418,18 +489,17 @@ def main():
             validate='1:1'
         )
         gfp_donor['gfp_x_donor'] = gfp_donor['gfp_perc'] * gfp_donor['donor_perc'] / (100 * 100)
-        gfp_donor = gfp_donor[['mouse_id', timepoint_col, 'gfp_x_donor']].drop_duplicates()
-        gfp_donor = pd.DataFrame(
-            gfp_donor.groupby(['mouse_id', timepoint_col]).gfp_x_donor.max()
-            ).reset_index()
-        print('Change Cutoff:', change_marked_df.change_cutoff.unique()[0])
+        gfp_donor = gfp_donor[['mouse_id', timepoint_col, 'cell_type', 'gfp_x_donor']].drop_duplicates()
+
         force_order = False
         if timepoint_col == 'month':
             force_order = True
         plot_compare_change_contrib(
-            change_marked_df,
+            marked_df,
             timepoint_col=timepoint_col,
             timepoint=timepoint,
+            bar_col=bar_col,
+            bar_types=bar_types,
             gfp_donor=gfp_donor,
             gfp_donor_thresh=args.threshold,
             save=args.save,
@@ -622,6 +692,38 @@ def main():
             save_format='png'
         )
 
+    if graph_type in ['hsc_to_ct_lb_change']:
+        save_path = args.output_dir + os.sep + 'hsc_to_ct_lb_change'
+
+        abundance_cutoff = .01
+        thresholds = {'gr': 0.0, 'b': 0.0, 'hsc': 0.0}
+
+        if options != 'default':
+            alpha = float(options)
+        else:
+            alpha = 0.1
+
+        if args.abundance_cutoff:
+            abundance_cutoff = args.abundance_cutoff
+            _, thresholds = calculate_thresholds_sum_abundance(
+                present_clones_df,
+                abundance_cutoff=abundance_cutoff,
+                timepoint_col=timepoint_col,
+                analyzed_cell_types=[args.myeloid_cell, args.lymphoid_cell, 'hsc']
+            )
+        for cell_type in ['gr', 'b']:
+            plot_hsc_vs_cell_type_lb_change(
+                present_clones_df,
+                lineage_bias_df,
+                timepoint_col,
+                alpha=alpha,
+                by_group=args.by_group,
+                thresholds=thresholds,
+                cell_type=cell_type,
+                save=args.save,
+                save_path=save_path,
+                save_format='png'
+            )
     if graph_type in ['hsc_to_ct_bootstrap']:
         save_path = args.output_dir + os.sep + 'hsc_to_ct_bootstrap'
 
@@ -644,6 +746,7 @@ def main():
         for cell_type in ['gr', 'b']:
             plot_hsc_vs_cell_type_abundance_bootstrapped(
                 present_clones_df,
+                lineage_bias_df,
                 timepoint_col,
                 alpha=alpha,
                 by_group=args.by_group,
@@ -1167,9 +1270,9 @@ def main():
         if timepoint_col == 'gen':
             lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
 
-        n = 5
-        if options != 'default':
-            n = int(options)
+        n = 3
+        if args.n:
+            n = int(args.n)
 
         plot_n_most_abundant_at_time(
             present_clones_df,
@@ -1186,8 +1289,8 @@ def main():
             lineage_bias_df = lineage_bias_df[lineage_bias_df.gen != 8.5]
 
         n = 5
-        if options != 'default':
-            n = int(options)
+        if args.n:
+            n = int(args.n)
 
         plot_n_most_abundant(
             present_clones_df,
@@ -1220,12 +1323,18 @@ def main():
         mtd = 0
         if args.options != 'default':
             mtd = int(args.options)
+            
 
+        if timepoint_col == 'month':
+            gxd_mice = ['M2012', 'M2059', 'M3010', 'M3013', 'M3016', 'M190', 'M2061', 'M3000', 'M3012', 'M3001', 'M3009', 'M3018', 'M3028']
+            print(Fore.YELLOW + 'Only using mice ' + str(gxd_mice))
         plot_count_by_change(
             lineage_bias_df,
-            present_clones_df,
+            present_clones_df,#[present_clones_df.mouse_id.isin(gxd_mice)],
             timepoint_col,
             mtd,
+            hscs=args.invert,
+            by_count=args.by_count,
             by_group=args.by_group,
             timepoint=args.timepoint,
             save=args.save,
@@ -1367,6 +1476,26 @@ def main():
                 save_format='png'
             )
 
+    if graph_type in ['changed_status_bias_at_time_abundance']:
+        save_path = args.output_dir + os.sep + 'change_status_bias_at_time_abundance'
+
+        mtd = 3
+        if args.options != 'default':
+            mtd = int(args.options)
+        
+        timepoint = 'last'
+        if args.timepoint:
+            timepoint = args.timepoint
+
+        plot_change_status_bias_at_time_abundance(
+            lineage_bias_df,
+            timepoint_col,
+            mtd,
+            timepoint,
+            args.by_group,
+            save=args.save,
+            save_path=save_path
+        )
     if graph_type in ['changed_status_bias_at_time']:
         save_path = args.output_dir + os.sep + 'change_status_bias_at_time'
 
@@ -1778,6 +1907,23 @@ def main():
                     save_path=save_path,
                 )
 
+    if graph_type in ['not_first_last_abundance']:
+        save_path = args.output_dir + os.sep + 'not_first_last_abundance'
+        plot_not_first_last_abundance(
+            present_clones_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+        )
+    if graph_type in ['activated_clone_bias']:
+        save_path = args.output_dir + os.sep + 'activated_clone_bias'
+        plot_activated_clone_bias(
+            present_clones_df,
+            lineage_bias_df,
+            timepoint_col,
+            save=args.save,
+            save_path=save_path,
+        )
     if graph_type in ['extreme_bias_abund']:
         save_path = args.output_dir + os.sep + 'extreme_bias_abundance'
         plot_extreme_bias_abundance(
@@ -2188,24 +2334,140 @@ def main():
             save_format='png',
         )
 
-    if graph_type in ['contrib_change_cell']:
-        save_path = args.output_dir + os.sep + 'changed_contribution'
+    if graph_type in ['hsc_abund_at_exh_lb']:
+        save_path = args.output_dir + os.sep + 'hsc_abund_at_exh_lb'
+        mtd = 1
+        if timepoint_col == 'month':
+            mtd = 3
+
+        bar_col = 'change_type'
+        bar_types = ['Lymphoid', 'Unchanged', 'Myeloid', 'Unknown']
+        # Remove a type to not include it from plotting
+        bar_types = ['Unchanged', 'Lymphoid', 'Myeloid']
+
         if args.options != 'default':
-            mtd = int(args.options)
-        if args.cache:
-            change_marked_df = pd.read_csv(args.cache_dir + os.sep + 'mtd' + str(mtd) + '_change_marked_df.csv')
-        else:
+            if args.options == 'survived':
+                bar_col = str(args.options)
+            else:
+                raise ValueError('Bar Col must be default or survived')
+
+        if bar_col == 'change_type':
             bias_change_df = calculate_first_last_bias_change(
                 lineage_bias_df,
                 timepoint_col=timepoint_col,
                 by_mouse=False,
             )
-            change_marked_df = mark_changed(
+            marked_df = mark_changed(
                 present_clones_df,
                 bias_change_df,
-                merge_type='inner',
+                merge_type='left',
                 min_time_difference=mtd,
             )
+            print('Change Cutoff:', marked_df.change_cutoff.unique()[0])
+        elif bar_col == 'survived':
+            bar_types = ['Exhausted', 'Survived', 'Activated', 'Unknown']
+            #bar_types = ['Exhausted', 'Survived', 'Activated']
+            exhaust_labeled = agg.label_exhausted_clones(
+                None,
+                agg.remove_gen_8_5(
+                    agg.remove_month_17_and_6(
+                        present_clones_df,
+                        timepoint_col
+                    ),
+                    timepoint_col,
+                    keep_hsc=False
+                ),
+                timepoint_col,
+                present_thresh=0.01,
+            )
+            marked_df = agg.label_activated_clones(
+                exhaust_labeled,
+                timepoint_col,
+                present_thresh=0.01,
+            )
+            print('Exhaustion Labeling Results (unique clones):')
+            print(marked_df.groupby('survived').code.nunique())
+        marked_df[['mouse_id', 'group', 'code', bar_col]].drop_duplicates().to_csv(
+            timepoint_col + '_' + bar_col + '.csv',
+            index=False,
+        )
+
+        gxd_mice = None
+        if timepoint_col == 'month':
+            gxd_mice = ['M2012', 'M2059', 'M3010', 'M3013', 'M3016', 'M190', 'M2061', 'M3000', 'M3012', 'M3001', 'M3009', 'M3018', 'M3028']
+            print(Fore.YELLOW + 'Only using mice ' + str(gxd_mice))
+
+        gxd_mice = None
+        plot_hsc_abund_at_exh_lb(
+            marked_df,
+            present_clones_df,
+            timepoint_col=timepoint_col,
+            gxd_mice=gxd_mice,
+            bar_col=bar_col,
+            bar_types=bar_types,
+            save=args.save,
+            save_path=save_path,
+            save_format='png',
+        )
+    if graph_type in ['contrib_change_cell']:
+        save_path = args.output_dir + os.sep + 'changed_contribution'
+        mtd = 1
+        if timepoint_col == 'month':
+            mtd = 3
+
+        present_threshold = 0.01
+        if args.abundance_cutoff:
+            present_threshold = args.abundance_cutoff
+
+
+        bar_col = 'change_type'
+        bar_types = ['Lymphoid', 'Unchanged', 'Myeloid', 'Unknown']
+        # Remove a type to not include it from plotting
+        bar_types = ['Lymphoid', 'Unchanged', 'Myeloid']
+
+        if args.options != 'default':
+            if args.options in ['survived', 'change_type']:
+                bar_col = str(args.options)
+            else:
+                raise ValueError('Bar Col must be change_type or survived')
+
+        if bar_col == 'change_type':
+            bias_change_df = calculate_first_last_bias_change(
+                lineage_bias_df,
+                timepoint_col=timepoint_col,
+                by_mouse=False,
+            )
+            marked_df = mark_changed(
+                present_clones_df,
+                bias_change_df,
+                merge_type='left',
+                min_time_difference=mtd,
+            )
+            marked_df[['mouse_id', 'group', 'code', bar_col]].drop_duplicates().to_csv('aging_OT_change_type.csv', index=False)
+            print('Change Cutoff:', marked_df.change_cutoff.unique()[0])
+        elif bar_col == 'survived':
+            bar_types = ['Exhausted', 'Survived', 'Unknown', 'Activated']
+            bar_types = ['Exhausted', 'Survived', 'Activated']
+            exhaust_labeled = agg.label_exhausted_clones(
+                None,
+                agg.remove_gen_8_5(
+                    agg.remove_month_17_and_6(
+                        present_clones_df,
+                        timepoint_col
+                    ),
+                    timepoint_col,
+                    keep_hsc=False
+                ),
+                timepoint_col,
+                present_thresh=present_threshold
+            )
+            marked_df = agg.label_activated_clones(
+                exhaust_labeled,
+                timepoint_col,
+                present_thresh=present_threshold,
+            )
+            print('Exhaustion Labeling Results (unique clones):')
+            print(marked_df.groupby('survived').code.nunique())
         group = args.group
         timepoint = 'last'
         if args.timepoint:
@@ -2237,24 +2499,41 @@ def main():
             validate='1:1'
         )
         gfp_donor['gfp_x_donor'] = gfp_donor['gfp_perc'] * gfp_donor['donor_perc'] / (100 * 100)
-        gfp_donor = gfp_donor[['mouse_id', timepoint_col, 'gfp_x_donor']].drop_duplicates()
-        gfp_donor = pd.DataFrame(
-            gfp_donor.groupby(['mouse_id', timepoint_col]).gfp_x_donor.max()
-            ).reset_index()
-        print('Change Cutoff:', change_marked_df.change_cutoff.unique()[0])
+        gfp_donor = gfp_donor[['mouse_id', 'cell_type', timepoint_col, 'gfp_x_donor']].drop_duplicates()
         force_order = False
-        if timepoint_col == 'month':
+        if timepoint_col in ['month', 'gen']:
             force_order = True
-        plot_change_contributions(change_marked_df,
-            timepoint_col=timepoint_col,
-            timepoint=timepoint,
-            gfp_donor=gfp_donor,
-            gfp_donor_thresh=args.threshold,
-            force_order=force_order,
-            save=args.save,
-            save_path=save_path,
-            save_format='png',
-        )
+        
+        if args.pie:
+            plot_change_contributions_pie(
+                marked_df,
+                timepoint_col=timepoint_col,
+                bar_col=bar_col,
+                bar_types=bar_types,
+                timepoint=timepoint,
+                gfp_donor=gfp_donor,
+                gfp_donor_thresh=args.threshold,
+                force_order=force_order,
+                present_thresh=present_threshold,
+                save=args.save,
+                save_path=save_path,
+                save_format='png',
+            )
+        else:
+            plot_change_contributions_refactor(
+                marked_df,
+                timepoint_col=timepoint_col,
+                bar_col=bar_col,
+                bar_types=bar_types,
+                timepoint=timepoint,
+                gfp_donor=gfp_donor,
+                gfp_donor_thresh=args.threshold,
+                force_order=force_order,
+                present_thresh=present_threshold,
+                save=args.save,
+                save_path=save_path,
+                save_format='png',
+            )
 
     if graph_type in ['sum_abundance']:
         save_path = args.output_dir + os.sep + 'abundance_at_percentile'
